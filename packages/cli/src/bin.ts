@@ -6,7 +6,7 @@ import { parseCommand, USAGE } from "./commands.js";
 import { formatModels, formatNodes } from "./format.js";
 import { lms } from "./lms.js";
 
-const gateway = new Gateway(process.env.GATEWAY_URL ?? "http://127.0.0.1:8787");
+const gateway = new Gateway(process.env.GATEWAY_URL ?? "http://127.0.0.1:8787", fetch, process.env.HARNESS_API_KEY || undefined);
 
 async function chatOnce(model: string, history: ChatMessage[]): Promise<void> {
   const reply = await gateway.chat(model, history);

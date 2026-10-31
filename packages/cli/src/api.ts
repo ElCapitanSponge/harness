@@ -1,4 +1,4 @@
-import type { ChatMessage, NodeRecord } from "@harness/core";
+import { authHeaders, type ChatMessage, type NodeRecord } from "@harness/core";
 
 export interface ChatReply {
   text: string;
@@ -10,10 +10,15 @@ export class Gateway {
   constructor(
     private baseUrl: string,
     private fetchImpl: typeof fetch = fetch,
+    private apiKey?: string,
   ) {}
 
   async nodes(): Promise<NodeRecord[]> {
-    const res = await this.fetchImpl(`${this.baseUrl}/nodes`, { signal: AbortSignal.timeout(5000) });
+    const res = await this.fetchImpl(`${this.baseUrl}/nodes`, {
+      headers: authHeaders(this.apiKey),
+      signal: AbortSignal.timeout(5000),
+    });
+    if (res.status === 401) throw new Error("gateway rejected the API key (set HARNESS_API_KEY)");
     if (!res.ok) throw new Error(`gateway returned ${res.status}`);
     return (await res.json()) as NodeRecord[];
   }
@@ -21,7 +26,7 @@ export class Gateway {
   async chat(model: string, messages: ChatMessage[]): Promise<ChatReply> {
     const res = await this.fetchImpl(`${this.baseUrl}/v1/chat/completions`, {
       method: "POST",
-      headers: { "content-type": "application/json" },
+      headers: { "content-type": "application/json", ...authHeaders(this.apiKey) },
       body: JSON.stringify({ model, messages }),
     });
     const body = (await res.json().catch(() => ({}))) as {

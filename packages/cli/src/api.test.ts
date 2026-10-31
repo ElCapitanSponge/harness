@@ -33,6 +33,23 @@ describe("Gateway.chat", () => {
   });
 });
 
+describe("Gateway auth", () => {
+  it("sends the bearer key on nodes and chat requests", async () => {
+    const f = respond([]);
+    const g = new Gateway("http://g", f, "k");
+    await g.nodes();
+    expect((f as unknown as ReturnType<typeof vi.fn>).mock.calls[0]?.[1].headers).toEqual({ authorization: "Bearer k" });
+
+    const f2 = respond({ choices: [{ message: { content: "x" } }] });
+    await new Gateway("http://g", f2, "k").chat("auto", [{ role: "user", content: "hi" }]);
+    expect((f2 as unknown as ReturnType<typeof vi.fn>).mock.calls[0]?.[1].headers).toMatchObject({ authorization: "Bearer k" });
+  });
+
+  it("explains a 401 from nodes", async () => {
+    await expect(new Gateway("http://g", respond({}, { ok: false, status: 401 })).nodes()).rejects.toThrow("API key");
+  });
+});
+
 describe("Gateway.nodes", () => {
   it("returns the node list", async () => {
     const nodes = [{ nodeId: "pc" }];

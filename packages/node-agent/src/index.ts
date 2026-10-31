@@ -1,4 +1,4 @@
-import { HEARTBEAT_INTERVAL_MS, type Heartbeat } from "@harness/core";
+import { HEARTBEAT_INTERVAL_MS, authHeaders, type Heartbeat } from "@harness/core";
 import { detectBusy } from "./busy.js";
 import { config } from "./config.js";
 import { listModels } from "./lmstudio.js";
@@ -24,11 +24,12 @@ async function beat(): Promise<void> {
   try {
     const res = await fetch(`${config.gatewayUrl}/nodes/heartbeat`, {
       method: "POST",
-      headers: { "content-type": "application/json" },
+      headers: { "content-type": "application/json", ...authHeaders(config.apiKey) },
       body: JSON.stringify(heartbeat),
       signal: AbortSignal.timeout(5000),
     });
-    if (!res.ok) console.warn(`[agent] gateway rejected heartbeat: ${res.status}`);
+    if (res.status === 401) console.warn("[agent] gateway rejected the API key (set HARNESS_API_KEY)");
+    else if (!res.ok) console.warn(`[agent] gateway rejected heartbeat: ${res.status}`);
   } catch (err) {
     console.warn(`[agent] gateway unreachable: ${(err as Error).message}`);
   }

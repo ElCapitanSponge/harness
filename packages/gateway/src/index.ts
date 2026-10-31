@@ -1,13 +1,18 @@
 import { serve } from "@hono/node-server";
 import { ChatRequest, Heartbeat } from "@harness/core";
 import { Hono } from "hono";
+import { assertSafeBinding, bearerAuth } from "./auth.js";
 import { runClaude, toOpenAIResponse } from "./claude.js";
+import { resolveHosts } from "./hosts.js";
 import { Registry } from "./registry.js";
 import { isClaudeModel, pickRoute } from "./router.js";
 
 const claudeBin = process.env.CLAUDE_BIN ?? "claude";
+const apiKey = process.env.HARNESS_API_KEY || undefined;
 const registry = new Registry();
 const app = new Hono();
+
+if (apiKey) app.use("*", bearerAuth(apiKey));
 
 app.post("/nodes/heartbeat", async (c) => {
   const parsed = Heartbeat.safeParse(await c.req.json());
@@ -57,5 +62,9 @@ app.post("/v1/chat/completions", async (c) => {
 });
 
 const port = Number(process.env.PORT ?? 8787);
-serve({ fetch: app.fetch, port, hostname: process.env.HOST ?? "127.0.0.1" });
-console.log(`[gateway] listening on ${process.env.HOST ?? "127.0.0.1"}:${port}`);
+const hosts = await resolveHosts(process.env.HOST ?? "127.0.0.1");
+assertSafeBinding(hosts, apiKey);
+for (const hostname of hosts) {
+  serve({ fetch: app.fetch, port, hostname });
+  console.log(`[gateway] listening on ${hostname}:${port} (${apiKey ? "api key required" : "no auth, loopback only"})`);
+}

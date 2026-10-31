@@ -1,5 +1,16 @@
 import { describe, expect, it } from "vitest";
-import { ChatRequest, Heartbeat } from "./index.js";
+import { ChatRequest, Heartbeat, authHeaders } from "./index.js";
+
+describe("authHeaders", () => {
+  it("builds a bearer header when a key is set", () => {
+    expect(authHeaders("k")).toEqual({ authorization: "Bearer k" });
+  });
+
+  it("returns no headers without a key", () => {
+    expect(authHeaders()).toEqual({});
+    expect(authHeaders("")).toEqual({});
+  });
+});
 
 describe("ChatRequest", () => {
   it("accepts a minimal request", () => {

@@ -43,3 +43,7 @@ export interface NodeRecord extends Heartbeat {
 
 export const HEARTBEAT_INTERVAL_MS = 10_000;
 export const NODE_TTL_MS = 30_000;
+
+export function authHeaders(apiKey?: string): Record<string, string> {
+  return apiKey ? { authorization: `Bearer ${apiKey}` } : {};
+}

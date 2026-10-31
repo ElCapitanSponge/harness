@@ -10,7 +10,7 @@
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "test": "vitest run",
     "test:watch": "vitest",
-    "harness": "tsx packages/cli/src/bin.ts",
+    "harness": "tsx --env-file-if-exists=.env packages/cli/src/bin.ts",
     "bench": "tsx scripts/bench.ts",
     "gateway": "pnpm --filter @harness/gateway start",
     "agent": "pnpm --filter @harness/node-agent start"
@@ -19,6 +19,7 @@
     "@types/node": "^22.10.0",
     "tsx": "^4.19.0",
     "typescript": "^5.7.0",
+    "undici": "^8.12.3",
     "vitest": "^5.0.5"
   }
 }

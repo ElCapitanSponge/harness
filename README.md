@@ -16,7 +16,7 @@ Each device runs a **node agent** that reports which models it has loaded and wh
 
 ## Status
 
-Early. Today it runs on a single machine, with the gateway bound to localhost. Planned: gateway auth, a Tailscale bind address, and nodes on additional devices (Mac, Linux, TrueNAS).
+Early. Today the gateway and one node agent run on a single machine and can be reached from other tailnet devices with an API key. Planned: a container image for TrueNAS, and node agents on additional devices (Mac, Linux). See issue #1.
 
 ## Requirements
 
@@ -76,7 +76,9 @@ If no idle node matches, the gateway returns `503`.
 
 | Variable | Used by | Default |
 |---|---|---|
-| `PORT`, `HOST` | gateway | `8787`, `127.0.0.1` |
+| `PORT` | gateway | `8787` |
+| `HOST` | gateway | `127.0.0.1`. Comma-separated listen addresses; `tailscale` means this machine's Tailscale IPv4 address. `0.0.0.0` and `::` are refused |
+| `HARNESS_API_KEY` | gateway, node agent, CLI | unset. Required for the gateway to listen on anything but loopback; clients send it as `Authorization: Bearer` |
 | `CLAUDE_BIN` | gateway | `claude` |
 | `GATEWAY_URL` | node agent, CLI | `http://localhost:8787` |
 | `INFERENCE_URL` | node agent | `http://localhost:1234` (LM Studio) |
@@ -99,9 +101,42 @@ Routing policy lives in `packages/gateway/src/router.ts`, separate from transpor
 
 The Claude backend only shells out to the official `claude` CLI, so requests use your own login and plan limits. It does not extract or proxy credentials. Usage is shared with everything else on that account.
 
+## Calling the gateway from another device (Tailscale)
+
+Until the gateway has its own always-on home, you can run it on the desktop and call it from any device on your tailnet.
+
+1. Copy `.env.example` to `.env` and set `HARNESS_API_KEY` (the example shows how to generate one). Keep `HOST=127.0.0.1,tailscale`.
+2. Make sure Tailscale is signed in on the desktop. If it is down, the gateway logs a warning and still serves loopback.
+3. Allow the port in through Windows Firewall, limited to tailnet addresses (run once, in an administrator PowerShell):
+
+   ```powershell
+   New-NetFirewallRule -DisplayName "harness gateway (Tailscale)" -Direction Inbound -Protocol TCP -LocalPort 8787 -RemoteAddress 100.64.0.0/10 -Action Allow
+   ```
+
+4. Start `pnpm gateway` and `pnpm agent`. The gateway logs the address it listens on.
+5. From the other device, use the desktop's Tailscale address or MagicDNS name:
+
+   ```bash
+   export HARNESS_URL=http://<desktop-tailscale-name-or-ip>:8787
+   export HARNESS_API_KEY=<the key from the desktop's .env>
+
+   curl "$HARNESS_URL/nodes" -H "authorization: Bearer $HARNESS_API_KEY"
+
+   curl "$HARNESS_URL/v1/chat/completions" \
+     -H "authorization: Bearer $HARNESS_API_KEY" -H "content-type: application/json" \
+     -d '{"model":"auto","messages":[{"role":"user","content":"hello"}]}'
+   ```
+
+   Any OpenAI-compatible client works too: set its base URL to `$HARNESS_URL/v1` and its API key to the harness key.
+
+Traffic between tailnet devices is already encrypted by Tailscale (WireGuard), so plain `http://` is fine on the tailnet. Never forward the port to the public internet or enable Tailscale Funnel for it.
+
 ## Security
 
-The gateway has no authentication yet. Keep it bound to `127.0.0.1` until auth and a Tailscale-only bind address are added, and do not expose the port publicly.
+- The gateway refuses to listen on any non-loopback address unless `HARNESS_API_KEY` is set, and never accepts `0.0.0.0` or `::`.
+- With a key set, every route requires `Authorization: Bearer <key>`, including node heartbeats.
+- The key lives in `.env`, which is git-ignored. Do not commit it or paste it into chats.
+- The Claude backend uses your own `claude` login, so anyone holding the harness key can spend your Claude plan. Treat the key accordingly.
 
 ## Contributing
 
