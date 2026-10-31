@@ -7,6 +7,10 @@ export class Registry {
     this.nodes.set(hb.nodeId, { ...hb, lastSeen: Date.now() });
   }
 
+  remove(nodeId: string): void {
+    this.nodes.delete(nodeId);
+  }
+
   live(): NodeRecord[] {
     const cutoff = Date.now() - NODE_TTL_MS;
     return [...this.nodes.values()].filter((n) => n.lastSeen >= cutoff);

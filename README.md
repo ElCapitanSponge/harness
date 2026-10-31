@@ -2,7 +2,7 @@
 
 A small TypeScript harness that pools local LLMs (via [LM Studio](https://lmstudio.ai)) and Claude (via the official `claude` CLI) behind a single OpenAI-compatible endpoint.
 
-Each device runs a **node agent** that reports which models it has loaded and whether it is busy (for example, a game is running). A **gateway** keeps a registry of live nodes and routes each request to a suitable idle one. Requests for `claude` go to the Claude CLI instead.
+Each device runs a **node agent** that reports which models it has loaded and whether it is busy (for example, a game is running). The agent dials out to the gateway over a WebSocket (`/tunnel`) and keeps it open, so a device is listed while it is connected and needs no inbound port for registration. A **gateway** keeps a registry of live nodes and routes each request to a suitable idle one. Requests for `claude` go to the Claude CLI instead.
 
 ```
             +-------------+        heartbeats         +-------------+
@@ -170,7 +170,7 @@ Traffic between tailnet devices is already encrypted by Tailscale (WireGuard), s
 ## Security
 
 - The gateway refuses to listen on any non-loopback address unless `HARNESS_API_KEY` is set, and never accepts `0.0.0.0` or `::`.
-- With a key set, every route requires `Authorization: Bearer <key>`, including node heartbeats.
+- With a key set, every route requires `Authorization: Bearer <key>`, including node heartbeats and the `/tunnel` WebSocket.
 - The key lives in `.env`, which is git-ignored. Do not commit it or paste it into chats.
 - The Claude backend uses your own `claude` login, so anyone holding the harness key can spend your Claude plan. Treat the key accordingly.
 

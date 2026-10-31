@@ -78,6 +78,12 @@ export interface NodeRecord extends Heartbeat {
   lastSeen: number;
 }
 
+// Messages a device sends over its outbound tunnel to the gateway.
+export const TunnelMessage = z.discriminatedUnion("type", [z.object({ type: z.literal("heartbeat"), heartbeat: Heartbeat })]);
+export type TunnelMessage = z.infer<typeof TunnelMessage>;
+
+export const TUNNEL_PATH = "/tunnel";
+
 export const HEARTBEAT_INTERVAL_MS = 10_000;
 export const NODE_TTL_MS = 30_000;
 

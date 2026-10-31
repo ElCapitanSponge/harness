@@ -1,9 +1,10 @@
-import { HEARTBEAT_INTERVAL_MS, authHeaders, type Heartbeat } from "@harness/core";
+import type { Heartbeat } from "@harness/core";
 import { detectBusy } from "./busy.js";
 import { config } from "./config.js";
 import { listModels } from "./lmstudio.js";
+import { connectTunnel } from "./tunnel.js";
 
-async function beat(): Promise<void> {
+async function collect(): Promise<Heartbeat> {
   const { busy, reason } = await detectBusy(config.gameProcesses);
   let models: Heartbeat["models"] = [];
   try {
@@ -11,8 +12,7 @@ async function beat(): Promise<void> {
   } catch (err) {
     console.warn(`[agent] inference server unreachable: ${(err as Error).message}`);
   }
-
-  const heartbeat: Heartbeat = {
+  return {
     nodeId: config.nodeId,
     kind: "local",
     baseUrl: config.inferenceUrl,
@@ -20,21 +20,7 @@ async function beat(): Promise<void> {
     busyReason: reason,
     models,
   };
-
-  try {
-    const res = await fetch(`${config.gatewayUrl}/nodes/heartbeat`, {
-      method: "POST",
-      headers: { "content-type": "application/json", ...authHeaders(config.apiKey) },
-      body: JSON.stringify(heartbeat),
-      signal: AbortSignal.timeout(5000),
-    });
-    if (res.status === 401) console.warn("[agent] gateway rejected the API key (set HARNESS_API_KEY)");
-    else if (!res.ok) console.warn(`[agent] gateway rejected heartbeat: ${res.status}`);
-  } catch (err) {
-    console.warn(`[agent] gateway unreachable: ${(err as Error).message}`);
-  }
 }
 
 console.log(`[agent] ${config.nodeId} -> ${config.gatewayUrl} (inference ${config.inferenceUrl})`);
-await beat();
-setInterval(beat, HEARTBEAT_INTERVAL_MS);
+connectTunnel({ gatewayUrl: config.gatewayUrl, apiKey: config.apiKey, heartbeat: collect });
