@@ -2,10 +2,10 @@ import { serve } from "@hono/node-server";
 import { ChatRequest, Heartbeat } from "@harness/core";
 import { Hono } from "hono";
 import { assertSafeBinding, bearerAuth } from "./auth.js";
-import { runClaude, toOpenAIResponse } from "./claude.js";
+import { runClaude, toOpenAIResponse, toSse } from "./claude.js";
 import { resolveHosts } from "./hosts.js";
 import { Registry } from "./registry.js";
-import { isClaudeModel, pickRoute } from "./router.js";
+import { CLAUDE_MODEL_IDS, isClaudeModel, pickRoute } from "./router.js";
 
 const claudeBin = process.env.CLAUDE_BIN ?? "claude";
 const apiKey = process.env.HARNESS_API_KEY || undefined;
@@ -24,10 +24,11 @@ app.post("/nodes/heartbeat", async (c) => {
 app.get("/nodes", (c) => c.json(registry.live()));
 
 app.get("/v1/models", (c) => {
-  const data = registry
+  const local = registry
     .live()
     .flatMap((n) => n.models.filter((m) => m.loaded).map((m) => ({ id: m.id, object: "model", owned_by: n.nodeId })));
-  return c.json({ object: "list", data });
+  const claude = CLAUDE_MODEL_IDS.map((id) => ({ id, object: "model", owned_by: "claude" }));
+  return c.json({ object: "list", data: [...local, ...claude] });
 });
 
 app.post("/v1/chat/completions", async (c) => {
@@ -35,8 +36,18 @@ app.post("/v1/chat/completions", async (c) => {
   if (!parsed.success) return c.json({ error: parsed.error.flatten() }, 400);
 
   if (isClaudeModel(parsed.data.model)) {
+    if (parsed.data.tools?.length) {
+      return c.json(
+        { error: { message: "Claude models do not take client-side tools through the gateway; run `harness code -m claude:<alias>` to use Claude Code locally" } },
+        400,
+      );
+    }
     try {
-      return c.json(toOpenAIResponse(await runClaude(claudeBin, parsed.data)), 200, { "x-harness-node": "claude" });
+      const result = await runClaude(claudeBin, parsed.data);
+      if (parsed.data.stream) {
+        return new Response(toSse(result), { headers: { "content-type": "text/event-stream", "x-harness-node": "claude" } });
+      }
+      return c.json(toOpenAIResponse(result), 200, { "x-harness-node": "claude" });
     } catch (err) {
       return c.json({ error: { message: (err as Error).message } }, 502);
     }

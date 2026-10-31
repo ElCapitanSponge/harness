@@ -1,6 +1,45 @@
 import type { ChatRequest } from "@harness/core";
 import { describe, expect, it, vi } from "vitest";
-import { buildArgs, runClaude, toOpenAIResponse, toPrompt } from "./claude.js";
+import { buildArgs, runClaude, toOpenAIResponse, toPrompt, toSse } from "./claude.js";
+import { CLAUDE_MODEL_IDS } from "./router.js";
+
+describe("toSse", () => {
+  const events = (s: string) => s.split("\n\n").filter(Boolean);
+
+  it("emits a content chunk, a stop chunk and [DONE]", () => {
+    const [first, stop, done] = events(toSse({ text: "pong", model: "claude:sonnet" }));
+    expect(JSON.parse(first!.replace("data: ", ""))).toMatchObject({
+      object: "chat.completion.chunk",
+      model: "claude:sonnet",
+      choices: [{ delta: { role: "assistant", content: "pong" }, finish_reason: null }],
+    });
+    expect(JSON.parse(stop!.replace("data: ", "")).choices[0].finish_reason).toBe("stop");
+    expect(done).toBe("data: [DONE]");
+  });
+});
+
+describe("claude model list", () => {
+  it("advertises plain claude and the common aliases", () => {
+    expect(CLAUDE_MODEL_IDS).toEqual(expect.arrayContaining(["claude", "claude:sonnet", "claude:opus", "claude:haiku"]));
+  });
+});
+
+describe("toPrompt with rich messages", () => {
+  it("reads text parts and ignores tool messages and null content", () => {
+    const out = toPrompt({
+      model: "claude",
+      messages: [
+        { role: "system", content: [{ type: "text", text: "be brief" }] },
+        { role: "user", content: [{ type: "text", text: "hello" }] },
+        { role: "assistant", content: null },
+        { role: "tool", tool_call_id: "1", content: "ignored" },
+        { role: "user", content: "again" },
+      ],
+    });
+    expect(out.system).toBe("be brief");
+    expect(out.prompt).toBe("User: hello\n\nAssistant: \n\nUser: again");
+  });
+});
 
 const req = (model: string, messages: ChatRequest["messages"]): ChatRequest => ({ model, messages });
 

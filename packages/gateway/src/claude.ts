@@ -1,5 +1,5 @@
 import { execFile } from "node:child_process";
-import type { ChatRequest } from "@harness/core";
+import { textOf, type ChatRequest } from "@harness/core";
 
 export type Exec = (bin: string, args: string[], input: string) => Promise<string>;
 
@@ -14,10 +14,12 @@ export const defaultExec: Exec = (bin, args, input) =>
   });
 
 export function toPrompt(req: ChatRequest): { system?: string; prompt: string } {
-  const system = req.messages.filter((m) => m.role === "system").map((m) => m.content).join("\n\n");
-  const turns = req.messages.filter((m) => m.role !== "system");
+  const system = req.messages.filter((m) => m.role === "system").map((m) => textOf(m.content)).join("\n\n");
+  const turns = req.messages.filter((m) => m.role === "user" || m.role === "assistant");
   const prompt =
-    turns.length === 1 ? turns[0]!.content : turns.map((m) => `${m.role === "user" ? "User" : "Assistant"}: ${m.content}`).join("\n\n");
+    turns.length === 1
+      ? textOf(turns[0]!.content)
+      : turns.map((m) => `${m.role === "user" ? "User" : "Assistant"}: ${textOf(m.content)}`).join("\n\n");
   return { system: system || undefined, prompt };
 }
 
@@ -42,6 +44,15 @@ export async function runClaude(bin: string, req: ChatRequest, exec: Exec = defa
     throw new Error(parsed.result ?? "claude returned no result");
   }
   return { text: parsed.result, model: parsed.model ?? req.model };
+}
+
+// Claude answers in one piece, so a streamed reply is a single content chunk, a stop chunk and [DONE].
+export function toSse(r: ClaudeResult): string {
+  const id = `chatcmpl-claude-${Date.now()}`;
+  const created = Math.floor(Date.now() / 1000);
+  const chunk = (delta: object, finish: string | null) =>
+    `data: ${JSON.stringify({ id, object: "chat.completion.chunk", created, model: r.model, choices: [{ index: 0, delta, finish_reason: finish }] })}\n\n`;
+  return chunk({ role: "assistant", content: r.text }, null) + chunk({}, "stop") + "data: [DONE]\n\n";
 }
 
 export function toOpenAIResponse(r: ClaudeResult) {

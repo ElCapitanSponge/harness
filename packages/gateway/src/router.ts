@@ -5,6 +5,9 @@ export interface Route {
   model: string;
 }
 
+// Advertised in /v1/models so chat apps can pick Claude from their model list.
+export const CLAUDE_MODEL_IDS = ["claude", "claude:sonnet", "claude:opus", "claude:haiku"];
+
 // Models named "claude" or "claude:<alias>" (e.g. claude:sonnet) go to the Claude backend.
 export function isClaudeModel(model: string): boolean {
   return model === "claude" || model.startsWith("claude:");
