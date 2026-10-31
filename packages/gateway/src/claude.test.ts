@@ -1,0 +1,75 @@
+import type { ChatRequest } from "@harness/core";
+import { describe, expect, it, vi } from "vitest";
+import { buildArgs, runClaude, toOpenAIResponse, toPrompt } from "./claude.js";
+
+const req = (model: string, messages: ChatRequest["messages"]): ChatRequest => ({ model, messages });
+
+describe("toPrompt", () => {
+  it("uses a single user message verbatim", () => {
+    expect(toPrompt(req("claude", [{ role: "user", content: "hello" }]))).toEqual({ system: undefined, prompt: "hello" });
+  });
+
+  it("splits system messages out and labels multi-turn history", () => {
+    const out = toPrompt(
+      req("claude", [
+        { role: "system", content: "be brief" },
+        { role: "user", content: "a" },
+        { role: "assistant", content: "b" },
+        { role: "user", content: "c" },
+      ]),
+    );
+    expect(out.system).toBe("be brief");
+    expect(out.prompt).toBe("User: a\n\nAssistant: b\n\nUser: c");
+  });
+});
+
+describe("buildArgs", () => {
+  it("runs headless with no tools or session persistence", () => {
+    const args = buildArgs(req("claude", [{ role: "user", content: "x" }]));
+    expect(args).toEqual(expect.arrayContaining(["-p", "--output-format", "json", "--no-session-persistence", "--tools", ""]));
+    expect(args).not.toContain("--model");
+  });
+
+  it("passes the alias after claude: as --model", () => {
+    const args = buildArgs(req("claude:sonnet", [{ role: "user", content: "x" }]));
+    expect(args.slice(args.indexOf("--model"), args.indexOf("--model") + 2)).toEqual(["--model", "sonnet"]);
+  });
+
+  it("appends the system prompt when present", () => {
+    const args = buildArgs(req("claude", [{ role: "user", content: "x" }]), "be brief");
+    expect(args).toEqual(expect.arrayContaining(["--append-system-prompt", "be brief"]));
+  });
+});
+
+describe("runClaude", () => {
+  const r = req("claude:sonnet", [{ role: "user", content: "hi" }]);
+
+  it("returns the result text and sends the prompt on stdin", async () => {
+    const exec = vi.fn().mockResolvedValue(JSON.stringify({ result: "hello!", model: "claude-sonnet" }));
+    await expect(runClaude("claude", r, exec)).resolves.toEqual({ text: "hello!", model: "claude-sonnet" });
+    expect(exec).toHaveBeenCalledWith("claude", expect.any(Array), "hi");
+  });
+
+  it("throws when the CLI reports an error", async () => {
+    const exec = vi.fn().mockResolvedValue(JSON.stringify({ is_error: true, result: "Not logged in" }));
+    await expect(runClaude("claude", r, exec)).rejects.toThrow("Not logged in");
+  });
+
+  it("throws when the CLI output has no result", async () => {
+    const exec = vi.fn().mockResolvedValue("{}");
+    await expect(runClaude("claude", r, exec)).rejects.toThrow("no result");
+  });
+
+  it("propagates spawn failures", async () => {
+    const exec = vi.fn().mockRejectedValue(new Error("spawn claude ENOENT"));
+    await expect(runClaude("claude", r, exec)).rejects.toThrow("ENOENT");
+  });
+});
+
+describe("toOpenAIResponse", () => {
+  it("wraps text in an OpenAI chat completion", () => {
+    const out = toOpenAIResponse({ text: "yo", model: "m" });
+    expect(out.object).toBe("chat.completion");
+    expect(out.choices[0]?.message).toEqual({ role: "assistant", content: "yo" });
+  });
+});
