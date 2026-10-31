@@ -47,8 +47,13 @@ describe("assertSafeBinding", () => {
     expect(() => assertSafeBinding(["127.0.0.1", "100.64.0.5"], "k")).not.toThrow();
   });
 
-  it("never allows wildcard addresses, even with a key", () => {
+  it("refuses wildcard addresses unless explicitly allowed, even with a key", () => {
     expect(() => assertSafeBinding(["0.0.0.0"], "k")).toThrow("wildcard");
     expect(() => assertSafeBinding(["::"], "k")).toThrow("wildcard");
+  });
+
+  it("allows a wildcard address only with both the opt-in and a key", () => {
+    expect(() => assertSafeBinding(["0.0.0.0"], "k", true)).not.toThrow();
+    expect(() => assertSafeBinding(["0.0.0.0"], undefined, true)).toThrow("HARNESS_API_KEY");
   });
 });

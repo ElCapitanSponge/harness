@@ -1,0 +1,26 @@
+# Gateway image. No secrets are baked in: pass HARNESS_API_KEY at run time.
+FROM node:22-slim
+
+ENV NODE_ENV=production
+RUN corepack enable
+WORKDIR /app
+
+# Install only what the gateway needs (core + gateway workspaces) from the lockfile.
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+COPY packages/core/package.json packages/core/
+COPY packages/gateway/package.json packages/gateway/
+RUN pnpm install --frozen-lockfile --filter @harness/gateway... --prod=false
+
+COPY packages/core packages/core
+COPY packages/gateway packages/gateway
+
+# Inside a container the port is published on the host's Tailscale address, so listen on all
+# container interfaces. The gateway still refuses to start without HARNESS_API_KEY.
+ENV HOST=0.0.0.0 \
+    PORT=8787 \
+    HARNESS_ALLOW_ANY_INTERFACE=1
+
+EXPOSE 8787
+USER node
+WORKDIR /app/packages/gateway
+CMD ["pnpm", "exec", "tsx", "src/index.ts"]
