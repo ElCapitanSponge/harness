@@ -11,6 +11,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "harness": "tsx packages/cli/src/bin.ts",
+    "bench": "tsx scripts/bench.ts",
     "gateway": "pnpm --filter @harness/gateway start",
     "agent": "pnpm --filter @harness/node-agent start"
   },
