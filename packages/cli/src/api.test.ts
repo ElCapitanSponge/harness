@@ -33,6 +33,31 @@ describe("Gateway.chat", () => {
   });
 });
 
+describe("Gateway.complete", () => {
+  const msgs = [{ role: "user" as const, content: "hi" }];
+  const tool = { type: "function" as const, function: { name: "read_file" } };
+
+  it("sends tools and returns the whole assistant message including tool calls", async () => {
+    const toolCalls = [{ id: "1", type: "function", function: { name: "read_file", arguments: "{}" } }];
+    const f = respond({ model: "m", choices: [{ message: { role: "assistant", content: null, tool_calls: toolCalls } }] }, { headers: { "x-harness-node": "pc" } });
+    const out = await new Gateway("http://g", f).complete("auto", msgs, [tool]);
+    expect(out.message.tool_calls).toEqual(toolCalls);
+    expect(out.node).toBe("pc");
+    expect(JSON.parse((f as unknown as ReturnType<typeof vi.fn>).mock.calls[0]?.[1].body)).toMatchObject({ tools: [tool] });
+  });
+
+  it("leaves tools out of the request when there are none", async () => {
+    const f = respond({ choices: [{ message: { role: "assistant", content: "x" } }] });
+    await new Gateway("http://g", f).complete("auto", msgs, []);
+    expect(JSON.parse((f as unknown as ReturnType<typeof vi.fn>).mock.calls[0]?.[1].body)).not.toHaveProperty("tools");
+  });
+
+  it("throws on a 401 and when no message comes back", async () => {
+    await expect(new Gateway("http://g", respond({}, { ok: false, status: 401 })).complete("auto", msgs)).rejects.toThrow("API key");
+    await expect(new Gateway("http://g", respond({ choices: [] })).complete("auto", msgs)).rejects.toThrow("no completion");
+  });
+});
+
 describe("Gateway auth", () => {
   it("sends the bearer key on nodes and chat requests", async () => {
     const f = respond([]);

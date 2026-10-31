@@ -21,6 +21,11 @@ describe("parseCommand", () => {
     expect(parseCommand(["chat", "-m", "claude:sonnet"])).toEqual({ name: "chat", model: "claude:sonnet", prompt: "" });
   });
 
+  it("parses code with a prompt, a model and the auto-approve flag", () => {
+    expect(parseCommand(["code", "fix", "the", "bug"])).toEqual({ name: "code", model: "auto", prompt: "fix the bug", yes: false });
+    expect(parseCommand(["code", "-m", "claude:sonnet", "-y"])).toEqual({ name: "code", model: "claude:sonnet", prompt: "", yes: true });
+  });
+
   it("parses load with and without a context length", () => {
     expect(parseCommand(["load", "qwen3.5-9b"])).toEqual({ name: "load", model: "qwen3.5-9b", contextLength: undefined });
     expect(parseCommand(["load", "qwen3.5-9b", "-c", "32768"])).toEqual({ name: "load", model: "qwen3.5-9b", contextLength: 32768 });

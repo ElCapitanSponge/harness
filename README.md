@@ -62,6 +62,42 @@ curl http://127.0.0.1:8787/v1/chat/completions \
 
 The response header `x-harness-node` says which node served the request.
 
+## Working on files from any device (`harness code`)
+
+`harness code` is a coding agent in the style of Claude Code. The model runs on the pooled nodes, but the **tools run on the machine you call from**, in the directory you call from, so it edits the files that are actually in front of you.
+
+```bash
+cd ~/some/project
+harness code "the tests in utils.test.ts fail, find out why and fix it"   # one task
+harness code                                                               # interactive
+harness code -m qwen3.5-9b "add a README section"                          # pick a model
+harness code -m claude:sonnet                                              # Claude Code, locally
+```
+
+Tools: `read_file`, `list_dir`, `grep`, `write_file`, `edit_file`, `run_command`. The model sees them as ordinary OpenAI tools, so any local model with tool calling works.
+
+- **Confined to the working directory.** File tools reject paths outside it, including through symlinks.
+- **Changes need your approval.** Reading is automatic. Writing, editing and running commands ask `[y/N/a]` (`a` = always allow that tool for the session). `-y` approves everything, so use it only in a throwaway directory or with a model you trust.
+- **Declining ends the turn.** The model is told to stop and ask what you want instead.
+- **`run_command` is not sandboxed.** It runs in the working directory but a command can touch anything your user can. Read what it asks to run.
+- **Claude models** (`claude`, `claude:<alias>`) hand over to the real `claude` CLI on your machine, using that machine's own login, because Claude Code already has its own file tools. The gateway never runs Claude with tools for you.
+
+`pnpm` runs scripts from the repo root, so wrap the CLI in a shell function that passes your directory through in `HARNESS_CWD`:
+
+```bash
+# ~/.zshrc or ~/.bashrc
+harness() { HARNESS_CWD="$PWD" pnpm --silent --dir "$HOME/personal/harness" harness "$@"; }
+```
+
+```powershell
+# $PROFILE
+function harness { $env:HARNESS_CWD = (Get-Location).Path; pnpm --silent --dir C:\Users\andre\personal\harness harness @args; Remove-Item Env:HARNESS_CWD }
+```
+
+On a device other than the one running the gateway, clone this repo, run `pnpm install`, and create a `.env` in it with `GATEWAY_URL` (for example `http://100.106.71.39:8787`) and `HARNESS_API_KEY`. Local models must support tool calling; if one ignores the tools, try another.
+
+Chat apps (LibreChat and friends) can use the same gateway for plain chat. The gateway lists Claude models in `/v1/models` and streams Claude replies, but chat apps have no tools on your files, so use `harness code` for file work.
+
 ## Model names
 
 | Model | Goes to |

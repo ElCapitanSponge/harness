@@ -4,6 +4,7 @@ export type Command =
   | { name: "nodes" }
   | { name: "models" }
   | { name: "chat"; model: string; prompt: string }
+  | { name: "code"; model: string; prompt: string; yes: boolean }
   | { name: "load"; model: string; contextLength?: number }
   | { name: "unload"; model?: string }
   | { name: "help" };
@@ -14,6 +15,9 @@ Usage:
   harness nodes                         list nodes reporting to the gateway
   harness models                        list models across nodes
   harness chat [-m model] [prompt...]   one-shot chat, or interactive with no prompt
+  harness code [-m model] [-y] [prompt...]
+                                        work on the files in the current directory (read, edit, run
+                                        commands). Runs on this machine; claude models launch Claude Code
   harness load <model> [-c tokens]      load a model in local LM Studio
   harness unload [model]                unload one model, or all if omitted
 
@@ -28,6 +32,7 @@ export function parseCommand(argv: string[]): Command {
       model: { type: "string", short: "m" },
       context: { type: "string", short: "c" },
       help: { type: "boolean", short: "h" },
+      yes: { type: "boolean", short: "y" },
     },
   });
   const [name, ...rest] = positionals;
@@ -39,6 +44,8 @@ export function parseCommand(argv: string[]): Command {
       return { name };
     case "chat":
       return { name: "chat", model: values.model ?? "auto", prompt: rest.join(" ").trim() };
+    case "code":
+      return { name: "code", model: values.model ?? "auto", prompt: rest.join(" ").trim(), yes: values.yes ?? false };
     case "load": {
       const model = rest[0];
       if (!model) throw new Error("load needs a model id");
