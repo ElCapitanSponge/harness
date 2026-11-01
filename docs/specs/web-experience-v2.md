@@ -94,7 +94,9 @@ The first web page proved the idea: a device connects out, the gateway routes to
 
 ### D. A new application shell
 
-The single-string page cannot carry sidebar, panels, settings, a command palette and tests. Proposed: a real front-end package (`packages/web`) built with Vite and TypeScript, using a small component library (Preact), with output served by the gateway from its own files (the content security policy stays strict and external-script-free). The Docker image gains a build stage. This is a larger decision and needs a decision record (§6).
+The single-string page cannot carry sidebar, panels, settings, a command palette and tests. Decided: a real front-end package (`packages/web`) built with **Vite, React and TypeScript**, using the **React Compiler**, with output served by the gateway from its own files (the content security policy stays strict and external-script-free). The Docker image gains a build stage. The standards in §8 apply from the first line. The decision is recorded in an ADR (§6).
+
+Because React draws elements rather than HTML strings, the markdown renderer in this package produces React elements instead of HTML text. That removes the need for `dangerouslySetInnerHTML`, which the strict lint rules would forbid, and makes injection through model text structurally impossible rather than a matter of careful escaping.
 
 Includes: the layout in §3, light and dark themes, keyboard shortcuts (new chat, switch model, switch conversation, focus composer, stop), a command palette (Ctrl or Cmd+K), a settings area (devices, models, usage), phone layout, accessibility (focus, labels, contrast), and component tests.
 
@@ -172,6 +174,7 @@ I documentation: structure first, then a page with every feature
 | G | #41 Work on the files of the device you browse from |
 | H | #42 Anthropic-compatible endpoint |
 | I | #43 Documentation structure, #44 Reference documentation and link check |
+| Standards | #46 Strict ESLint for the whole repository (comes before the shell, #37) |
 
 The epic is #33.
 
@@ -182,9 +185,35 @@ The shortest route to the reported problem ("I could not use any model") is **A*
 | Decision | Why it needs a record |
 |---|---|
 | Remote configuration of devices, and how a device opts in (§4 B) | It changes who decides what a device will run |
-| A front-end build step and a component library (§4 D) | It changes how the page is built, served and tested |
+| A front-end build step: Vite, React, the React Compiler, and the code standards in §8 (§4 D) | It changes how the page is built, served, linted and tested |
 | Chats as saved event streams, one conversation model (§4 C) | It changes what the gateway stores |
 | Which Messages API features the Claude Code endpoint supports (§4 H) | A compatibility promise |
+
+## 8. Code standards
+
+These apply to the new front-end package from its first commit and, through their own ticket, to the rest of the repository.
+
+**Tools (checked against the npm registry on 2026-11-01).** Vite 8, React 19, `@vitejs/plugin-react` 6, `babel-plugin-react-compiler` 1.0 (stable), ESLint 10 with typescript-eslint 8, `eslint-plugin-react-hooks` 7 (its recommended set includes the rules powered by the React Compiler, which replace the separate `eslint-plugin-react-compiler`), `eslint-plugin-react`, `eslint-plugin-jsx-a11y`. There is no Prettier.
+
+**React Compiler.** Enabled for every component. With Vite 8 and plugin-react 6 there are two ways to run it: a native build (`react({ compiler: true })`, which the plugin marks experimental) or the official Babel plugin through `@rolldown/plugin-babel` and its `reactCompilerPreset` helper. The Babel route is proposed because it is the stable compiler. The ticket confirms the choice with a build. Compiler diagnostics fail the build, so code the compiler cannot optimise is fixed rather than silently left slow.
+
+**ESLint, flat config, strict.**
+
+| Rule | Setting |
+|---|---|
+| Base | typescript-eslint `strictTypeChecked` and `stylisticTypeChecked`, with type information (`projectService`) |
+| `any` | `@typescript-eslint/no-explicit-any` as an error, and the `no-unsafe-*` rules, so an `any` cannot arrive from elsewhere either |
+| `var` | `no-var` and `prefer-const` as errors |
+| Functions | arrow functions only: `func-style: expression`, `prefer-arrow-callback`, and a restriction on function declarations and function expressions. Exceptions that cannot be arrows: class methods, constructors, and generators (`function*`) |
+| Function bodies | arrow functions may use a concise body. If every arrow must use braces (`() => {}`), set `arrow-body-style` to `always`; this is one line to change |
+| Hooks | `eslint-plugin-react-hooks` recommended: rules of hooks, exhaustive dependencies, and the compiler rules |
+| React | `eslint-plugin-react` with the JSX runtime config; `react/no-danger` as an error |
+| Accessibility | `eslint-plugin-jsx-a11y` strict |
+| Imports | `consistent-type-imports`, `no-non-null-assertion`, `no-floating-promises`, `no-misused-promises` |
+| Formatting | enforced by ESLint itself with `@stylistic/eslint-plugin` (the repository's current style: two spaces, double quotes, semicolons, trailing commas), not a separate formatter |
+| Warnings | none: a rule is an error or it is off |
+
+`pnpm lint` runs in CI and fails on any error. Existing code is measured against the same rules (about 97 function declarations and expressions, 3 generators, 1 `any`, no `var` at the time of writing), and the migration is its own ticket so that it does not hide inside a feature.
 
 ## 7. Open questions
 
