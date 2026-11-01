@@ -5,7 +5,9 @@ const r = loadRenderer();
 const TICK = String.fromCharCode(96);
 const FENCE = TICK + TICK + TICK;
 const NL = String.fromCharCode(10);
-const lines = (...l: string[]): string => l.join(NL);
+const lines = (...l: string[]): string => {
+  return l.join(NL);
+};
 
 describe("markdown blocks", () => {
   it("renders headings, paragraphs and rules", () => {
@@ -52,25 +54,25 @@ describe("markdown inline", () => {
   });
 
   it("renders links, and turns bare web addresses into links", () => {
-    expect(r.markdown("[docs](https://example.com/a?b=1&c=2)")).toBe('<p><a href="https://example.com/a?b=1&amp;c=2" target="_blank" rel="noopener noreferrer">docs</a></p>');
-    expect(r.markdown("see https://example.com/x.")).toContain('<a href="https://example.com/x"');
+    expect(r.markdown("[docs](https://example.com/a?b=1&c=2)")).toBe("<p><a href=\"https://example.com/a?b=1&amp;c=2\" target=\"_blank\" rel=\"noopener noreferrer\">docs</a></p>");
+    expect(r.markdown("see https://example.com/x.")).toContain("<a href=\"https://example.com/x\"");
   });
 });
 
 describe("code blocks", () => {
   it("renders a fenced block with its language and a copy button", () => {
     const html = r.markdown(lines(`${FENCE}ts`, "const x = 1;", FENCE));
-    expect(html).toContain('<div class="code">');
+    expect(html).toContain("<div class=\"code\">");
     expect(html).toContain("<span>ts</span>");
-    expect(html).toContain('class="copy"');
-    expect(html).toContain('<span class="tk-k">const</span>');
-    expect(html).toContain('<span class="tk-n">1</span>');
+    expect(html).toContain("class=\"copy\"");
+    expect(html).toContain("<span class=\"tk-k\">const</span>");
+    expect(html).toContain("<span class=\"tk-n\">1</span>");
   });
 
   it("renders an unclosed fence, which is what a half-streamed reply looks like", () => {
     const html = r.markdown(lines(`${FENCE}js`, "let a = 1;"));
     expect(html).toContain("<pre>");
-    expect(html).toContain('<span class="tk-k">let</span>');
+    expect(html).toContain("<span class=\"tk-k\">let</span>");
   });
 
   it("keeps markdown out of code, and does not run on past a closing fence", () => {
@@ -90,28 +92,28 @@ describe("code blocks", () => {
 
 describe("syntax colouring", () => {
   it("colours comments, strings, numbers, keywords and calls", () => {
-    const html = r.highlight(lines("// note", 'const s = "a" + 12;', "call(x);"), "javascript");
-    expect(html).toContain('<span class="tk-c">// note</span>');
-    expect(html).toContain('<span class="tk-s">&quot;a&quot;</span>');
-    expect(html).toContain('<span class="tk-n">12</span>');
-    expect(html).toContain('<span class="tk-f">call</span>');
+    const html = r.highlight(lines("// note", "const s = \"a\" + 12;", "call(x);"), "javascript");
+    expect(html).toContain("<span class=\"tk-c\">// note</span>");
+    expect(html).toContain("<span class=\"tk-s\">&quot;a&quot;</span>");
+    expect(html).toContain("<span class=\"tk-n\">12</span>");
+    expect(html).toContain("<span class=\"tk-f\">call</span>");
   });
 
   it("ends an unterminated string at the end of the line", () => {
-    const html = r.highlight(lines('x = "open', "y = 2"), "js");
-    expect(html).toContain('<span class="tk-n">2</span>');
+    const html = r.highlight(lines("x = \"open", "y = 2"), "js");
+    expect(html).toContain("<span class=\"tk-n\">2</span>");
   });
 
   it("colours Python, shell, JSON, CSS and HTML", () => {
-    expect(r.highlight("def f(): # hi", "python")).toContain('<span class="tk-k">def</span>');
-    expect(r.highlight("echo hi # c", "bash")).toContain('<span class="tk-c"># c</span>');
-    const json = r.highlight('{"a": 1, "b": true}', "json");
-    expect(json).toContain('<span class="tk-p">&quot;a&quot;</span>');
-    expect(json).toContain('<span class="tk-k">true</span>');
-    expect(r.highlight("a { color: #fff; }", "css")).toContain('<span class="tk-p">color</span>');
-    const html = r.highlight('<a href="x">hi</a>', "html");
-    expect(html).toContain('<span class="tk-k">&lt;a</span>');
-    expect(html).toContain('<span class="tk-s">&quot;x&quot;</span>');
+    expect(r.highlight("def f(): # hi", "python")).toContain("<span class=\"tk-k\">def</span>");
+    expect(r.highlight("echo hi # c", "bash")).toContain("<span class=\"tk-c\"># c</span>");
+    const json = r.highlight("{\"a\": 1, \"b\": true}", "json");
+    expect(json).toContain("<span class=\"tk-p\">&quot;a&quot;</span>");
+    expect(json).toContain("<span class=\"tk-k\">true</span>");
+    expect(r.highlight("a { color: #fff; }", "css")).toContain("<span class=\"tk-p\">color</span>");
+    const html = r.highlight("<a href=\"x\">hi</a>", "html");
+    expect(html).toContain("<span class=\"tk-k\">&lt;a</span>");
+    expect(html).toContain("<span class=\"tk-s\">&quot;x&quot;</span>");
   });
 
   it("escapes code in a language it does not know", () => {
@@ -136,13 +138,13 @@ describe("diffs", () => {
 
   it("is used for diff fences", () => {
     const html = r.markdown(lines(`${FENCE}diff`, "-a", "+b", FENCE));
-    expect(html).toContain('class="diff"');
+    expect(html).toContain("class=\"diff\"");
     expect(html).toContain(`<span class="d-add">+b${NL}</span>`);
   });
 });
 
 describe("hostile input", () => {
-  const dangerous = ["<script>alert(1)</script>", "<img src=x onerror=alert(1)>", '<a href="javascript:alert(1)">x</a>', "<svg onload=alert(1)>"];
+  const dangerous = ["<script>alert(1)</script>", "<img src=x onerror=alert(1)>", "<a href=\"javascript:alert(1)\">x</a>", "<svg onload=alert(1)>"];
 
   it("never lets model text become markup", () => {
     for (const text of dangerous) {
@@ -170,11 +172,11 @@ describe("hostile input", () => {
       expect(html, url).not.toContain("<a ");
       expect(html, url).not.toContain("href");
     }
-    expect(r.markdown("[m](mailto:a@b.co)")).toContain('href="mailto:a@b.co"');
+    expect(r.markdown("[m](mailto:a@b.co)")).toContain("href=\"mailto:a@b.co\"");
   });
 
   it("cannot break out of the href attribute", () => {
-    const html = r.markdown('[x](https://a.co/"onmouseover="alert(1))');
+    const html = r.markdown("[x](https://a.co/\"onmouseover=\"alert(1))");
     expect(html).not.toMatch(/ onmouseover=/);
     expect(html).toContain("&quot;");
   });
@@ -186,8 +188,14 @@ describe("hostile input", () => {
 
   it("handles empty and huge input without throwing", () => {
     expect(r.markdown("")).toBe("");
-    expect(() => r.markdown("*".repeat(50_000))).not.toThrow();
-    expect(() => r.markdown(`${FENCE}js` + NL + "x".repeat(200_000))).not.toThrow();
-    expect(() => r.markdown("[".repeat(20_000))).not.toThrow();
+    expect(() => {
+      return r.markdown("*".repeat(50_000));
+    }).not.toThrow();
+    expect(() => {
+      return r.markdown(`${FENCE}js` + NL + "x".repeat(200_000));
+    }).not.toThrow();
+    expect(() => {
+      return r.markdown("[".repeat(20_000));
+    }).not.toThrow();
   });
 });

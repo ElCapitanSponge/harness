@@ -1,14 +1,14 @@
 import { parseArgs } from "node:util";
 
-export type Command =
-  | { name: "nodes" }
-  | { name: "models" }
-  | { name: "chat"; model: string; prompt: string }
-  | { name: "code"; model: string; prompt: string; yes: boolean; device?: string; root?: string }
-  | { name: "tool"; device: string; root: string; tool: string; args: Record<string, unknown> }
-  | { name: "load"; model: string; contextLength?: number; device?: string }
-  | { name: "unload"; model?: string; device?: string }
-  | { name: "help" };
+export type Command
+  = | { name: "nodes" }
+    | { name: "models" }
+    | { name: "chat"; model: string; prompt: string }
+    | { name: "code"; model: string; prompt: string; yes: boolean; device?: string; root?: string }
+    | { name: "tool"; device: string; root: string; tool: string; args: Record<string, unknown> }
+    | { name: "load"; model: string; contextLength?: number; device?: string }
+    | { name: "unload"; model?: string; device?: string }
+    | { name: "help" };
 
 export const USAGE = `harness - talk to local models and Claude through the gateway
 
@@ -29,7 +29,7 @@ Usage:
 Models: a loaded model id, "auto", "claude", or "claude:<alias>" (e.g. claude:sonnet).
 Env: GATEWAY_URL (default http://127.0.0.1:8787)`;
 
-export function parseCommand(argv: string[]): Command {
+export const parseCommand = (argv: string[]): Command => {
   const { values, positionals } = parseArgs({
     args: argv,
     allowPositionals: true,
@@ -43,7 +43,9 @@ export function parseCommand(argv: string[]): Command {
     },
   });
   const [name, ...rest] = positionals;
-  if (values.help || !name || name === "help") return { name: "help" };
+  if (values.help || !name || name === "help") {
+    return { name: "help" };
+  }
 
   switch (name) {
     case "nodes":
@@ -55,7 +57,9 @@ export function parseCommand(argv: string[]): Command {
       return { name: "code", model: values.model ?? "auto", prompt: rest.join(" ").trim(), yes: values.yes ?? false, device: values.device, root: values.root };
     case "tool": {
       const [device, root, tool, json] = rest;
-      if (!device || !root || !tool) throw new Error("tool needs <device> <root> <tool> [json-args]");
+      if (!device || !root || !tool) {
+        throw new Error("tool needs <device> <root> <tool> [json-args]");
+      }
       let args: unknown = {};
       if (json) {
         try {
@@ -64,12 +68,16 @@ export function parseCommand(argv: string[]): Command {
           throw new Error("json-args must be valid JSON");
         }
       }
-      if (typeof args !== "object" || args === null || Array.isArray(args)) throw new Error("json-args must be a JSON object");
+      if (typeof args !== "object" || args === null || Array.isArray(args)) {
+        throw new Error("json-args must be a JSON object");
+      }
       return { name: "tool", device, root, tool, args: args as Record<string, unknown> };
     }
     case "load": {
       const model = rest[0];
-      if (!model) throw new Error("load needs a model id");
+      if (!model) {
+        throw new Error("load needs a model id");
+      }
       const contextLength = values.context ? Number(values.context) : undefined;
       if (contextLength !== undefined && (!Number.isInteger(contextLength) || contextLength <= 0)) {
         throw new Error(`invalid context length: ${values.context}`);
@@ -81,4 +89,4 @@ export function parseCommand(argv: string[]): Command {
     default:
       throw new Error(`unknown command: ${name}`);
   }
-}
+};

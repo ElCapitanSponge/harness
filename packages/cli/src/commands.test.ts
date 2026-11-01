@@ -32,10 +32,18 @@ describe("parseCommand", () => {
   });
 
   it("rejects load without a model or with a bad context", () => {
-    expect(() => parseCommand(["load"])).toThrow("needs a model");
-    expect(() => parseCommand(["load", "m", "-c", "abc"])).toThrow("invalid context");
-    expect(() => parseCommand(["load", "m", "--context=-5"])).toThrow("invalid context");
-    expect(() => parseCommand(["load", "m", "--context=1.5"])).toThrow("invalid context");
+    expect(() => {
+      return parseCommand(["load"]);
+    }).toThrow("needs a model");
+    expect(() => {
+      return parseCommand(["load", "m", "-c", "abc"]);
+    }).toThrow("invalid context");
+    expect(() => {
+      return parseCommand(["load", "m", "--context=-5"]);
+    }).toThrow("invalid context");
+    expect(() => {
+      return parseCommand(["load", "m", "--context=1.5"]);
+    }).toThrow("invalid context");
   });
 
   it("parses code with a device and root to work on a connected device's files", () => {
@@ -51,13 +59,19 @@ describe("parseCommand", () => {
 
   it("parses tool with a device, root, tool and optional JSON args", () => {
     expect(parseCommand(["tool", "pc", "proj", "list_dir"])).toEqual({ name: "tool", device: "pc", root: "proj", tool: "list_dir", args: {} });
-    expect(parseCommand(["tool", "pc", "proj", "read_file", '{"path":"a.txt"}'])).toMatchObject({ args: { path: "a.txt" } });
+    expect(parseCommand(["tool", "pc", "proj", "read_file", "{\"path\":\"a.txt\"}"])).toMatchObject({ args: { path: "a.txt" } });
   });
 
   it("rejects tool with missing parts, invalid JSON, or non-object args", () => {
-    expect(() => parseCommand(["tool", "pc", "proj"])).toThrow("tool needs");
-    expect(() => parseCommand(["tool", "pc", "proj", "x", "{bad"])).toThrow("valid JSON");
-    expect(() => parseCommand(["tool", "pc", "proj", "x", "[1]"])).toThrow("JSON object");
+    expect(() => {
+      return parseCommand(["tool", "pc", "proj"]);
+    }).toThrow("tool needs");
+    expect(() => {
+      return parseCommand(["tool", "pc", "proj", "x", "{bad"]);
+    }).toThrow("valid JSON");
+    expect(() => {
+      return parseCommand(["tool", "pc", "proj", "x", "[1]"]);
+    }).toThrow("JSON object");
   });
 
   it("parses load and unload with a device, to control a connected device's LM Studio", () => {
@@ -72,6 +86,8 @@ describe("parseCommand", () => {
   });
 
   it("rejects unknown commands", () => {
-    expect(() => parseCommand(["frobnicate"])).toThrow("unknown command");
+    expect(() => {
+      return parseCommand(["frobnicate"]);
+    }).toThrow("unknown command");
   });
 });

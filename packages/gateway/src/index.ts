@@ -1,6 +1,7 @@
 import type { Server } from "node:http";
 import os from "node:os";
 import path from "node:path";
+import { nonEmpty } from "@harness/core";
 import { serve } from "@hono/node-server";
 import { createApp } from "./app.js";
 import { assertSafeBinding } from "./auth.js";
@@ -11,7 +12,7 @@ import { Sessions, createCompleter } from "./sessions.js";
 import { fileStore, loadStored } from "./store.js";
 import { attachTunnel } from "./tunnel.js";
 
-const apiKey = process.env.HARNESS_API_KEY || undefined;
+const apiKey = nonEmpty(process.env.HARNESS_API_KEY);
 
 const registry = new Registry();
 const relay = new Relay();

@@ -250,6 +250,8 @@ Traffic between tailnet devices is already encrypted by Tailscale (WireGuard), s
 
 ## Contributing
 
+Run `pnpm typecheck`, `pnpm lint` and `pnpm test` before pushing; the code standards (no `any`, no `var`, arrow functions, braces always) and how they are enforced are in [docs/contributing.md](docs/contributing.md).
+
 Commits follow [Conventional Commits](https://www.conventionalcommits.org): `type(scope): summary`, for example `feat(gateway): add API key auth` or `fix(cli): handle empty prompt`. Common types are `feat`, `fix`, `docs`, `test`, `refactor`, `chore` and `ci`. `main` blocks force-pushes and deletion and requires linear history, so rebase or squash before merging.
 
 ## License

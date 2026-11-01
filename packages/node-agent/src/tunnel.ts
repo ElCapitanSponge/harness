@@ -1,16 +1,16 @@
-import { HEARTBEAT_INTERVAL_MS, RelayRequest, TUNNEL_PATH, authHeaders, type Heartbeat, type TunnelMessage } from "@harness/core";
+import { HEARTBEAT_INTERVAL_MS, RelayRequest, TUNNEL_PATH, authHeaders, rawToString, type Heartbeat, type TunnelMessage } from "@harness/core";
 import { WebSocket } from "ws";
 import type { ChatServer } from "./chat.js";
 import type { ClaudeServer } from "./claude.js";
 import type { ModelServer } from "./models.js";
 import type { ToolServer } from "./toolserver.js";
 
-export function tunnelUrl(gatewayUrl: string): string {
+export const tunnelUrl = (gatewayUrl: string): string => {
   const url = new URL(gatewayUrl);
   url.protocol = url.protocol === "https:" ? "wss:" : "ws:";
   url.pathname = TUNNEL_PATH;
   return url.toString();
-}
+};
 
 interface TunnelOptions {
   gatewayUrl: string;
@@ -26,17 +26,17 @@ interface TunnelOptions {
   log?: (message: string) => void;
 }
 
-function safeJson(text: string): unknown {
+const safeJson = (text: string): unknown => {
   try {
     return JSON.parse(text);
   } catch {
     return undefined;
   }
-}
+};
 
 // Dials out to the gateway and keeps the connection open, reconnecting with backoff, so this device
 // needs no inbound port. Heartbeats go over the connection; the gateway lists the device while it is open.
-export function connectTunnel(opts: TunnelOptions): { close(): void } {
+export const connectTunnel = (opts: TunnelOptions): { close(): void } => {
   const { intervalMs = HEARTBEAT_INTERVAL_MS, minRetryMs = 1000, maxRetryMs = 30_000, log = console.warn } = opts;
   const url = tunnelUrl(opts.gatewayUrl);
   let stopped = false;
@@ -49,7 +49,9 @@ export function connectTunnel(opts: TunnelOptions): { close(): void } {
   const beat = async (socket: WebSocket): Promise<void> => {
     try {
       const heartbeat = await opts.heartbeat();
-      if (socket.readyState === WebSocket.OPEN) socket.send(JSON.stringify({ type: "heartbeat", heartbeat }));
+      if (socket.readyState === WebSocket.OPEN) {
+        socket.send(JSON.stringify({ type: "heartbeat", heartbeat }));
+      }
     } catch (err) {
       log(`[agent] heartbeat failed: ${(err as Error).message}`);
     }
@@ -62,29 +64,44 @@ export function connectTunnel(opts: TunnelOptions): { close(): void } {
       delay = minRetryMs;
       lastError = "";
       void beat(socket);
-      beatTimer = setInterval(() => void beat(socket), intervalMs);
+      beatTimer = setInterval(() => {
+        return void beat(socket);
+      }, intervalMs);
     });
     socket.on("message", (data) => {
-      const parsed = RelayRequest.safeParse(safeJson(data.toString()));
-      if (!parsed.success) return;
+      const parsed = RelayRequest.safeParse(safeJson(rawToString(data)));
+      if (!parsed.success) {
+        return;
+      }
       const send = (msg: TunnelMessage): void => {
-        if (socket.readyState === WebSocket.OPEN) socket.send(JSON.stringify(msg));
+        if (socket.readyState === WebSocket.OPEN) {
+          socket.send(JSON.stringify(msg));
+        }
       };
-      if (parsed.data.type === "tool") void opts.tools?.handle(parsed.data, send);
-      else if (parsed.data.type === "claude") void opts.claude?.handle(parsed.data, send);
-      else if (parsed.data.type === "model") void opts.models?.handle(parsed.data, send);
-      else opts.chat?.handle(parsed.data, send);
+      if (parsed.data.type === "tool") {
+        void opts.tools?.handle(parsed.data, send);
+      } else if (parsed.data.type === "claude") {
+        void opts.claude?.handle(parsed.data, send);
+      } else if (parsed.data.type === "model") {
+        void opts.models?.handle(parsed.data, send);
+      } else {
+        opts.chat?.handle(parsed.data, send);
+      }
     });
     socket.on("error", (err) => {
       // Report a given failure once, not on every retry.
-      if (err.message === lastError) return;
+      if (err.message === lastError) {
+        return;
+      }
       lastError = err.message;
       log(err.message.includes("401") ? "[agent] gateway rejected the API key (set HARNESS_API_KEY)" : `[agent] gateway unreachable: ${err.message}`);
     });
     socket.on("close", () => {
       clearInterval(beatTimer);
       opts.chat?.cancelAll();
-      if (stopped) return;
+      if (stopped) {
+        return;
+      }
       retryTimer = setTimeout(connect, delay);
       delay = Math.min(delay * 2, maxRetryMs);
     });
@@ -100,4 +117,4 @@ export function connectTunnel(opts: TunnelOptions): { close(): void } {
       ws?.terminate();
     },
   };
-}
+};

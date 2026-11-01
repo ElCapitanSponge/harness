@@ -1,6 +1,6 @@
 import type { IncomingMessage, Server } from "node:http";
 import type { Duplex } from "node:stream";
-import { TUNNEL_PATH, TunnelMessage } from "@harness/core";
+import { TUNNEL_PATH, TunnelMessage, rawToString } from "@harness/core";
 import { type WebSocket, WebSocketServer } from "ws";
 import { safeEqual } from "./auth.js";
 import type { Registry } from "./registry.js";
@@ -8,39 +8,53 @@ import type { Relay } from "./relay.js";
 
 const PING_INTERVAL_MS = 15_000;
 
-function authorized(req: IncomingMessage, apiKey?: string): boolean {
-  if (!apiKey) return true;
+const authorized = (req: IncomingMessage, apiKey?: string): boolean => {
+  if (!apiKey) {
+    return true;
+  }
   const header = req.headers.authorization ?? "";
   return safeEqual(header.startsWith("Bearer ") ? header.slice(7) : "", apiKey);
-}
+};
 
-function reject(socket: Duplex, status: string): void {
+const reject = (socket: Duplex, status: string): void => {
   socket.write(`HTTP/1.1 ${status}\r\nConnection: close\r\nContent-Length: 0\r\n\r\n`);
   socket.destroy();
-}
+};
 
 // Devices dial out to the gateway and hold this connection, so they need no inbound port.
 // A device is listed while its connection is open and is removed as soon as it closes.
-export function attachTunnel(server: Server, opts: { registry: Registry; relay: Relay; apiKey?: string }): { close(): void } {
+export const attachTunnel = (server: Server, opts: { registry: Registry; relay: Relay; apiKey?: string }): { close(): void } => {
   const wss = new WebSocketServer({ noServer: true });
   const owner = new Map<string, WebSocket>();
   const alive = new WeakSet<WebSocket>();
 
   server.on("upgrade", (req, socket, head) => {
-    if (new URL(req.url ?? "/", "http://x").pathname !== TUNNEL_PATH) return reject(socket, "404 Not Found");
-    if (!authorized(req, opts.apiKey)) return reject(socket, "401 Unauthorized");
-    wss.handleUpgrade(req, socket, head, (ws) => wss.emit("connection", ws, req));
+    if (new URL(req.url ?? "/", "http://x").pathname !== TUNNEL_PATH) {
+      reject(socket, "404 Not Found");
+      return;
+    }
+    if (!authorized(req, opts.apiKey)) {
+      reject(socket, "401 Unauthorized");
+      return;
+    }
+    wss.handleUpgrade(req, socket, head, (ws) => {
+      return wss.emit("connection", ws, req);
+    });
   });
 
   wss.on("connection", (ws) => {
     let nodeId: string | undefined;
-    const sender = { send: (data: string) => ws.send(data) };
+    const sender = { send: (data: string) => {
+      ws.send(data);
+    } };
     alive.add(ws);
-    ws.on("pong", () => alive.add(ws));
+    ws.on("pong", () => {
+      return alive.add(ws);
+    });
     ws.on("message", (data) => {
       let msg: TunnelMessage;
       try {
-        msg = TunnelMessage.parse(JSON.parse(data.toString()));
+        msg = TunnelMessage.parse(JSON.parse(rawToString(data)));
       } catch {
         ws.close(1008, "invalid message");
         return;
@@ -73,7 +87,9 @@ export function attachTunnel(server: Server, opts: { registry: Registry; relay: 
         owner.delete(nodeId);
         opts.registry.remove(nodeId);
       }
-      if (nodeId) opts.relay.detach(nodeId, sender);
+      if (nodeId) {
+        opts.relay.detach(nodeId, sender);
+      }
     });
   });
 
@@ -93,8 +109,10 @@ export function attachTunnel(server: Server, opts: { registry: Registry; relay: 
   return {
     close() {
       clearInterval(timer);
-      for (const ws of wss.clients) ws.terminate();
+      for (const ws of wss.clients) {
+        ws.terminate();
+      }
       wss.close();
     },
   };
-}
+};

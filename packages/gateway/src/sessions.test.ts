@@ -1,54 +1,72 @@
 import type { ChatMessage, Heartbeat, ToolCall } from "@harness/core";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi, type Mock } from "vitest";
 import { Registry } from "./registry.js";
+import type { Relay } from "./relay.js";
 import { Sessions, type Complete, type Session, type SessionEvent } from "./sessions.js";
 
-const beat = (over: Partial<Heartbeat> = {}): Heartbeat => ({
-  nodeId: "pc",
-  kind: "local",
-  busy: false,
-  models: [{ id: "qwen", loaded: true }],
-  roots: ["proj"],
-  allowedTools: ["read_file", "list_dir", "grep"],
-  platform: "win32",
-  ...over,
-});
+const beat = (over: Partial<Heartbeat> = {}): Heartbeat => {
+  return {
+    nodeId: "pc",
+    kind: "local",
+    busy: false,
+    models: [{ id: "qwen", loaded: true }],
+    roots: ["proj"],
+    allowedTools: ["read_file", "list_dir", "grep"],
+    platform: "win32",
+    ...over,
+  };
+};
 
-const call = (id: string, name: string, args: unknown): ToolCall => ({ id, type: "function", function: { name, arguments: JSON.stringify(args) } });
+const call = (id: string, name: string, args: unknown): ToolCall => {
+  return { id, type: "function", function: { name, arguments: JSON.stringify(args) } };
+};
 
 let registry: Registry;
-let relay: { callTool: ReturnType<typeof vi.fn> };
-let complete: ReturnType<typeof vi.fn>;
+let relay: { callTool: Mock<Relay["callTool"]> };
+let complete: Mock<Complete>;
 // The loop reuses one history array, so keep a copy of what the model saw at each call.
 let seen: ChatMessage[][];
 let sessions: Sessions;
 
 const script = (...replies: ChatMessage[]) => {
   const queue = [...replies];
-  complete.mockImplementation(async () => queue.shift() ?? { role: "assistant", content: "done" });
+  complete.mockImplementation(async () => {
+    return queue.shift() ?? { role: "assistant", content: "done" };
+  });
 };
 
 const until = async (check: () => boolean): Promise<void> => {
-  for (let i = 0; i < 200 && !check(); i++) await new Promise((r) => setTimeout(r, 5));
+  for (let i = 0; i < 200 && !check(); i++) {
+    await new Promise((r) => {
+      return setTimeout(r, 5);
+    });
+  }
   expect(check()).toBe(true);
 };
 
-const create = (over: Partial<{ model: string; device: string; root: string }> = {}): Session =>
-  sessions.create({ model: "qwen", device: "pc", root: "proj", ...over });
+const create = (over: Partial<{ model: string; device: string; root: string }> = {}): Session => {
+  return sessions.create({ model: "qwen", device: "pc", root: "proj", ...over });
+};
 
-const types = (s: Session): string[] => s.events.map((e) => e.type);
+const types = (s: Session): string[] => {
+  return s.events.map((e) => {
+    return e.type;
+  });
+};
 
 beforeEach(() => {
   registry = new Registry();
   registry.upsert(beat());
-  relay = { callTool: vi.fn(async () => ({ ok: true, output: "1\tcontents" })) };
-  complete = vi.fn();
+  relay = { callTool: vi.fn<Relay["callTool"]>(async () => {
+    return { ok: true, output: "1\tcontents" };
+  }) };
+  complete = vi.fn<Complete>();
   seen = [];
-  const spy = ((model: string, messages: ChatMessage[], tools: unknown, signal: AbortSignal) => {
+  const spy: Complete = (model, messages, tools, signal, hooks) => {
     seen.push([...messages]);
-    return (complete as unknown as (...a: unknown[]) => Promise<ChatMessage>)(model, messages, tools, signal);
-  }) as unknown as Complete;
-  sessions = new Sessions({ registry, relay: relay as never, complete: spy });
+    return complete(model, messages, tools, signal, hooks);
+  };
+  sessions = new Sessions({ registry, relay: relay, complete: spy });
 });
 
 describe("Sessions.create", () => {
@@ -56,19 +74,27 @@ describe("Sessions.create", () => {
     const s = create();
     expect(sessions.get(s.id)).toBe(s);
     expect(sessions.list()).toEqual([
-      { id: s.id, model: "qwen", device: "pc", root: "proj", busy: false, events: 0, created: expect.any(Number), deviceConnected: true },
+      { id: s.id, model: "qwen", device: "pc", root: "proj", busy: false, events: 0, created: expect.any(Number) as number, deviceConnected: true },
     ]);
   });
 
   it("refuses Claude models, which cannot take client-side tools through the gateway", () => {
-    expect(() => create({ model: "claude:sonnet" })).toThrow("Claude models");
+    expect(() => {
+      return create({ model: "claude:sonnet" });
+    }).toThrow("Claude models");
   });
 
   it("refuses a device that is not connected, a root it does not expose, or one with no tools", () => {
-    expect(() => create({ device: "ghost" })).toThrow("not connected");
-    expect(() => create({ root: "other" })).toThrow('does not expose a project root named "other"');
+    expect(() => {
+      return create({ device: "ghost" });
+    }).toThrow("not connected");
+    expect(() => {
+      return create({ root: "other" });
+    }).toThrow("does not expose a project root named \"other\"");
     registry.upsert(beat({ allowedTools: [] }));
-    expect(() => create()).toThrow("does not allow any tools");
+    expect(() => {
+      return create();
+    }).toThrow("does not allow any tools");
   });
 });
 
@@ -80,9 +106,11 @@ describe("Session turns", () => {
     );
     const s = create();
     s.send("what is in a.txt?");
-    await until(() => types(s).includes("done"));
+    await until(() => {
+      return types(s).includes("done");
+    });
 
-    expect(relay.callTool).toHaveBeenCalledWith("pc", "proj", "read_file", { path: "a.txt" }, { session: expect.any(String) });
+    expect(relay.callTool).toHaveBeenCalledWith("pc", "proj", "read_file", { path: "a.txt" }, { session: expect.any(String) as string });
     expect(s.events).toEqual<SessionEvent[]>([
       { type: "user", text: "what is in a.txt?" },
       { type: "tool", summary: "read a.txt" },
@@ -96,8 +124,12 @@ describe("Session turns", () => {
     script({ role: "assistant", content: "hi" });
     const s = create();
     s.send("hello");
-    await until(() => types(s).includes("done"));
-    const offered = (complete.mock.calls[0]![2] as { function: { name: string } }[]).map((t) => t.function.name).sort();
+    await until(() => {
+      return types(s).includes("done");
+    });
+    const offered = (complete.mock.calls[0]![2] as { function: { name: string } }[]).map((t) => {
+      return t.function.name;
+    }).sort();
     expect(offered).toEqual(["grep", "list_dir", "read_file"]);
   });
 
@@ -105,7 +137,9 @@ describe("Session turns", () => {
     script({ role: "assistant", content: "hi" });
     const s = create();
     s.send("hello");
-    await until(() => types(s).includes("done"));
+    await until(() => {
+      return types(s).includes("done");
+    });
     const messages = seen[0]!;
     expect(messages[0]).toMatchObject({ role: "system" });
     expect(JSON.stringify(messages[0])).toContain("proj");
@@ -120,20 +154,30 @@ describe("Session turns", () => {
     );
     const s = create();
     s.send("read nope");
-    await until(() => types(s).includes("done"));
+    await until(() => {
+      return types(s).includes("done");
+    });
     const second = seen[1]!;
     expect(second.at(-1)).toMatchObject({ role: "tool", content: "error: file not found" });
   });
 
   it("refuses a second message while a turn is running", async () => {
     let release!: (m: ChatMessage) => void;
-    complete.mockImplementation(() => new Promise((resolve) => (release = resolve)));
+    complete.mockImplementation(() => {
+      return new Promise((resolve) => {
+        return (release = resolve);
+      });
+    });
     const s = create();
     s.send("first");
     expect(s.busy).toBe(true);
-    expect(() => s.send("second")).toThrow("busy");
+    expect(() => {
+      s.send("second");
+    }).toThrow("busy");
     release({ role: "assistant", content: "ok" });
-    await until(() => !s.busy);
+    await until(() => {
+      return !s.busy;
+    });
     s.send("third");
   });
 
@@ -141,55 +185,91 @@ describe("Session turns", () => {
     script({ role: "assistant", content: "one" }, { role: "assistant", content: "two" });
     const s = create();
     s.send("a");
-    await until(() => !s.busy);
+    await until(() => {
+      return !s.busy;
+    });
     s.send("b");
-    await until(() => types(s).filter((t) => t === "done").length === 2);
+    await until(() => {
+      return types(s).filter((t) => {
+        return t === "done";
+      }).length === 2;
+    });
     const second = seen[1]!;
-    expect(second.map((m) => m.role)).toEqual(["system", "user", "assistant", "user"]);
+    expect(second.map((m) => {
+      return m.role;
+    })).toEqual(["system", "user", "assistant", "user"]);
   });
 
   it("reports a model failure and rolls the half-finished turn back so the next one works", async () => {
     complete.mockRejectedValueOnce(new Error("model crashed"));
     const s = create();
     s.send("first");
-    await until(() => types(s).includes("error"));
+    await until(() => {
+      return types(s).includes("error");
+    });
     expect(s.events.at(-1)).toEqual({ type: "error", message: "model crashed" });
 
     script({ role: "assistant", content: "recovered" });
     s.send("second");
-    await until(() => types(s).includes("done"));
+    await until(() => {
+      return types(s).includes("done");
+    });
     const messages = seen[1]!;
-    expect(messages.map((m) => m.role)).toEqual(["system", "user"]);
+    expect(messages.map((m) => {
+      return m.role;
+    })).toEqual(["system", "user"]);
   });
 
   it("cancels a running turn", async () => {
-    complete.mockImplementation((_m, _msgs, _t, signal: AbortSignal) => new Promise((_res, rej) => signal.addEventListener("abort", () => rej(new Error("cancelled")))));
+    complete.mockImplementation((_m, _msgs, _t, signal: AbortSignal) => {
+      return new Promise((_res, rej) => {
+        signal.addEventListener("abort", () => {
+          rej(new Error("cancelled"));
+        });
+      });
+    });
     const s = create();
     s.send("go");
     s.cancel();
-    await until(() => types(s).includes("cancelled"));
+    await until(() => {
+      return types(s).includes("cancelled");
+    });
     expect(s.busy).toBe(false);
   });
 
   it("stops the turn when it is cancelled while a tool is running, instead of asking the model again", async () => {
     let finishTool!: () => void;
-    relay.callTool.mockImplementation(() => new Promise((resolve) => (finishTool = () => resolve({ ok: true, output: "x" }))));
+    relay.callTool.mockImplementation(() => {
+      return new Promise((resolve) => {
+        return (finishTool = () => {
+          resolve({ ok: true, output: "x" });
+        });
+      });
+    });
     script({ role: "assistant", content: null, tool_calls: [call("1", "read_file", { path: "a.txt" })] }, { role: "assistant", content: "should not be asked" });
     const s = create();
     s.send("go");
-    await until(() => relay.callTool.mock.calls.length === 1);
+    await until(() => {
+      return relay.callTool.mock.calls.length === 1;
+    });
     s.cancel();
     finishTool();
-    await until(() => types(s).includes("cancelled"));
+    await until(() => {
+      return types(s).includes("cancelled");
+    });
     expect(complete).toHaveBeenCalledTimes(1);
     expect(s.busy).toBe(false);
   });
 
   it("stops at the step limit if the model keeps calling tools", async () => {
-    complete.mockImplementation(async () => ({ role: "assistant", content: null, tool_calls: [call(String(Math.random()), "list_dir", {})] }) as ChatMessage);
+    complete.mockImplementation(async () => {
+      return { role: "assistant", content: null, tool_calls: [call(String(Math.random()), "list_dir", {})] };
+    });
     const s = create();
     s.send("loop");
-    await until(() => types(s).includes("done"));
+    await until(() => {
+      return types(s).includes("done");
+    });
     expect(s.events.at(-1)).toEqual({ type: "done", stopped: true });
   });
 });
@@ -199,17 +279,25 @@ describe("Session.subscribe", () => {
     script({ role: "assistant", content: "one" }, { role: "assistant", content: "two" });
     const s = create();
     s.send("a");
-    await until(() => !s.busy);
+    await until(() => {
+      return !s.busy;
+    });
 
     const seen: string[] = [];
-    const stop = s.subscribe((e) => seen.push(e.type), 1);
+    const stop = s.subscribe((e) => {
+      return seen.push(e.type);
+    }, 1);
     expect(seen).toEqual(["text", "done"]);
 
     s.send("b");
-    await until(() => seen.includes("done") && seen.length === 5);
+    await until(() => {
+      return seen.includes("done") && seen.length === 5;
+    });
     stop();
     s.send("c");
-    await until(() => !s.busy);
+    await until(() => {
+      return !s.busy;
+    });
     expect(seen).toHaveLength(5);
   });
 });
@@ -220,29 +308,43 @@ describe("Session approvals", () => {
     registry.upsert(beat({ allowedTools: ["read_file", "write_file", "edit_file", "run_command"] }));
     return create();
   };
-  const pending = (s: Session) => s.events.find((e) => e.type === "approval") as Extract<SessionEvent, { type: "approval" }> | undefined;
+  const pending = (s: Session) => {
+    return s.events.find((e): e is Extract<SessionEvent, { type: "approval" }> => {
+      return e.type === "approval";
+    });
+  };
 
   it("pauses a change until it is approved, then runs it on the device", async () => {
     script({ role: "assistant", content: null, tool_calls: [writeCall] }, { role: "assistant", content: "Written." });
     const s = writer();
     s.send("write n.txt");
-    await until(() => pending(s) !== undefined);
+    await until(() => {
+      return pending(s) !== undefined;
+    });
     expect(relay.callTool).not.toHaveBeenCalled();
     expect(pending(s)).toMatchObject({ tool: "write_file", summary: "write n.txt (1 characters)" });
 
     expect(s.answer(pending(s)!.id, true)).toBe(true);
-    await until(() => types(s).includes("done"));
-    expect(relay.callTool).toHaveBeenCalledWith("pc", "proj", "write_file", { path: "n.txt", content: "x" }, { session: expect.any(String) });
-    expect(s.events.find((e) => e.type === "approval-resolved")).toMatchObject({ approved: true });
+    await until(() => {
+      return types(s).includes("done");
+    });
+    expect(relay.callTool).toHaveBeenCalledWith("pc", "proj", "write_file", { path: "n.txt", content: "x" }, { session: expect.any(String) as string });
+    expect(s.events.find((e) => {
+      return e.type === "approval-resolved";
+    })).toMatchObject({ approved: true });
   });
 
   it("ends the turn without running the change when it is declined", async () => {
     script({ role: "assistant", content: null, tool_calls: [writeCall] }, { role: "assistant", content: "should not happen" });
     const s = writer();
     s.send("write n.txt");
-    await until(() => pending(s) !== undefined);
+    await until(() => {
+      return pending(s) !== undefined;
+    });
     s.answer(pending(s)!.id, false);
-    await until(() => types(s).includes("done"));
+    await until(() => {
+      return types(s).includes("done");
+    });
     expect(relay.callTool).not.toHaveBeenCalled();
     expect(s.events.at(-1)).toEqual({ type: "done", stopped: false, declined: true });
     expect(complete).toHaveBeenCalledTimes(1);
@@ -257,13 +359,21 @@ describe("Session approvals", () => {
     );
     const s = writer();
     s.send("first");
-    await until(() => pending(s) !== undefined);
+    await until(() => {
+      return pending(s) !== undefined;
+    });
     s.answer(pending(s)!.id, true, true);
-    await until(() => !s.busy);
+    await until(() => {
+      return !s.busy;
+    });
 
     s.send("second");
-    await until(() => !s.busy);
-    expect(s.events.filter((e) => e.type === "approval")).toHaveLength(1);
+    await until(() => {
+      return !s.busy;
+    });
+    expect(s.events.filter((e) => {
+      return e.type === "approval";
+    })).toHaveLength(1);
     expect(relay.callTool).toHaveBeenCalledTimes(2);
   });
 
@@ -272,7 +382,9 @@ describe("Session approvals", () => {
     registry.upsert(beat({ allowedTools: ["write_file"] }));
     const s = sessions.create({ model: "qwen", device: "pc", root: "proj", autoApprove: true });
     s.send("write n.txt");
-    await until(() => types(s).includes("done"));
+    await until(() => {
+      return types(s).includes("done");
+    });
     expect(types(s)).not.toContain("approval");
     expect(relay.callTool).toHaveBeenCalledTimes(1);
   });
@@ -281,9 +393,13 @@ describe("Session approvals", () => {
     script({ role: "assistant", content: null, tool_calls: [writeCall] });
     const s = writer();
     s.send("write n.txt");
-    await until(() => pending(s) !== undefined);
+    await until(() => {
+      return pending(s) !== undefined;
+    });
     s.cancel();
-    await until(() => !s.busy);
+    await until(() => {
+      return !s.busy;
+    });
     expect(relay.callTool).not.toHaveBeenCalled();
   });
 
@@ -296,7 +412,9 @@ describe("Session approvals", () => {
       await vi.advanceTimersByTimeAsync(10);
       expect(pending(s)).toBeDefined();
       await vi.advanceTimersByTimeAsync(5 * 60_000 + 1000);
-      expect(s.events.find((e) => e.type === "approval-resolved")).toMatchObject({ approved: false });
+      expect(s.events.find((e) => {
+        return e.type === "approval-resolved";
+      })).toMatchObject({ approved: false });
       expect(relay.callTool).not.toHaveBeenCalled();
     } finally {
       vi.useRealTimers();
@@ -307,7 +425,9 @@ describe("Session approvals", () => {
     script({ role: "assistant", content: null, tool_calls: [writeCall] });
     const s = writer();
     s.send("write n.txt");
-    await until(() => pending(s) !== undefined);
+    await until(() => {
+      return pending(s) !== undefined;
+    });
     const id = pending(s)!.id;
     expect(s.answer("nope", true)).toBe(false);
     expect(s.answer(id, false)).toBe(true);

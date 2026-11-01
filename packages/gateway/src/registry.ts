@@ -13,6 +13,8 @@ export class Registry {
 
   live(): NodeRecord[] {
     const cutoff = Date.now() - NODE_TTL_MS;
-    return [...this.nodes.values()].filter((n) => n.lastSeen >= cutoff);
+    return [...this.nodes.values()].filter((n) => {
+      return n.lastSeen >= cutoff;
+    });
   }
 }

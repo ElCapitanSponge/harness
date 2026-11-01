@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { ChatRequest, Heartbeat, authHeaders, textOf } from "./index.js";
 
 describe("tool calling schema", () => {
-  const toolCalls = [{ id: "c1", type: "function", function: { name: "read_file", arguments: '{"path":"a"}' } }];
+  const toolCalls = [{ id: "c1", type: "function", function: { name: "read_file", arguments: "{\"path\":\"a\"}" } }];
 
   it("accepts tools, tool calls, tool results and null content, and keeps them", () => {
     const parsed = ChatRequest.parse({

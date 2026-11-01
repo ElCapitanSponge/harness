@@ -3,7 +3,9 @@ import { describe, expect, it, vi } from "vitest";
 import { buildArgs, runClaude, toOpenAIResponse, toPrompt, toSse } from "./index.js";
 
 describe("toSse", () => {
-  const events = (s: string) => s.split("\n\n").filter(Boolean);
+  const events = (s: string) => {
+    return s.split("\n\n").filter(Boolean);
+  };
 
   it("emits a content chunk, a stop chunk and [DONE]", () => {
     const [first, stop, done] = events(toSse({ text: "pong", model: "claude:sonnet" }));
@@ -12,7 +14,7 @@ describe("toSse", () => {
       model: "claude:sonnet",
       choices: [{ delta: { role: "assistant", content: "pong" }, finish_reason: null }],
     });
-    expect(JSON.parse(stop!.replace("data: ", "")).choices[0].finish_reason).toBe("stop");
+    expect((JSON.parse(stop!.replace("data: ", "")) as { choices: { finish_reason: string }[] }).choices[0]?.finish_reason).toBe("stop");
     expect(done).toBe("data: [DONE]");
   });
 });
@@ -34,7 +36,9 @@ describe("toPrompt with rich messages", () => {
   });
 });
 
-const req = (model: string, messages: ChatRequest["messages"]): ChatRequest => ({ model, messages });
+const req = (model: string, messages: ChatRequest["messages"]): ChatRequest => {
+  return { model, messages };
+};
 
 describe("toPrompt", () => {
   it("uses a single user message verbatim", () => {

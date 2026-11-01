@@ -1,5 +1,6 @@
 import os from "node:os";
 import path from "node:path";
+import { nonEmpty } from "@harness/core";
 import { parseRoots } from "./toolserver.js";
 
 const env = process.env;
@@ -7,7 +8,7 @@ const env = process.env;
 export const config = {
   nodeId: env.NODE_ID ?? os.hostname().toLowerCase(),
   gatewayUrl: env.GATEWAY_URL ?? "http://localhost:8787",
-  apiKey: env.HARNESS_API_KEY || undefined,
+  apiKey: nonEmpty(env.HARNESS_API_KEY),
   // Address the gateway should use to reach this node's inference server.
   // On a tailnet this becomes the machine's Tailscale address.
   inferenceUrl: env.INFERENCE_URL ?? "http://localhost:1234",
@@ -16,7 +17,9 @@ export const config = {
   projectRoots: parseRoots(env.PROJECT_ROOTS),
   // Tools coding sessions may run on this device. Read-only by default; write_file, edit_file and run_command
   // change files or run programs, so add them here only if you want that.
-  allowedTools: (env.ALLOWED_TOOLS ?? "read_file,list_dir,grep").split(",").map((s) => s.trim()).filter(Boolean),
+  allowedTools: (env.ALLOWED_TOOLS ?? "read_file,list_dir,grep").split(",").map((s) => {
+    return s.trim();
+  }).filter(Boolean),
   // Let the gateway load and unload models in this device's LM Studio. Off unless you turn it on.
   modelControl: env.ALLOW_MODEL_CONTROL === "1",
   // Every tool call the gateway makes on this device is appended here, one JSON line each.
@@ -27,6 +30,8 @@ export const config = {
   // Executables that mean "the user is gaming; stay out of the GPU".
   gameProcesses: (env.GAME_PROCESSES ?? "RocketLeague.exe,Fortnite.exe,eldenring.exe,cs2.exe,Cyberpunk2077.exe")
     .split(",")
-    .map((s) => s.trim().toLowerCase())
+    .map((s) => {
+      return s.trim().toLowerCase();
+    })
     .filter(Boolean),
 };

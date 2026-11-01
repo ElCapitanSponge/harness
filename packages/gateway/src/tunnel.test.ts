@@ -7,11 +7,12 @@ import { Registry } from "./registry.js";
 import { Relay } from "./relay.js";
 import { attachTunnel } from "./tunnel.js";
 
-const beat = (nodeId = "pc"): string =>
-  JSON.stringify({
+const beat = (nodeId = "pc"): string => {
+  return JSON.stringify({
     type: "heartbeat",
     heartbeat: { nodeId, kind: "local", busy: false, models: [{ id: "qwen", loaded: true }] } satisfies Heartbeat,
   });
+};
 
 let server: Server;
 let tunnel: { close(): void };
@@ -20,39 +21,61 @@ let relay: Relay;
 let port: number;
 const sockets: WebSocket[] = [];
 
-async function start(apiKey?: string): Promise<void> {
+const start = async (apiKey?: string): Promise<void> => {
   server = createServer();
   relay = new Relay();
   tunnel = attachTunnel(server, { registry, relay, apiKey });
-  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+  await new Promise<void>((resolve) => {
+    return server.listen(0, "127.0.0.1", resolve);
+  });
   port = (server.address() as AddressInfo).port;
-}
+};
 
-function dial(path = "/tunnel", headers: Record<string, string> = {}): Promise<WebSocket> {
+const dial = (path = "/tunnel", headers: Record<string, string> = {}): Promise<WebSocket> => {
   const ws = new WebSocket(`ws://127.0.0.1:${port}${path}`, { headers });
   sockets.push(ws);
   return new Promise((resolve, reject) => {
-    ws.once("open", () => resolve(ws));
+    ws.once("open", () => {
+      resolve(ws);
+    });
     ws.once("error", reject);
   });
-}
+};
 
 const until = async (check: () => boolean): Promise<void> => {
-  for (let i = 0; i < 100 && !check(); i++) await new Promise((r) => setTimeout(r, 10));
+  for (let i = 0; i < 100 && !check(); i++) {
+    await new Promise((r) => {
+      return setTimeout(r, 10);
+    });
+  }
   expect(check()).toBe(true);
 };
 
-const closed = (ws: WebSocket): Promise<number> => new Promise((resolve) => ws.once("close", (code) => resolve(code)));
-const ids = (): string[] => registry.live().map((n) => n.nodeId);
+const closed = (ws: WebSocket): Promise<number> => {
+  return new Promise((resolve) => {
+    return ws.once("close", (code) => {
+      resolve(code);
+    });
+  });
+};
+const ids = (): string[] => {
+  return registry.live().map((n) => {
+    return n.nodeId;
+  });
+};
 
 beforeEach(() => {
   registry = new Registry();
 });
 
 afterEach(async () => {
-  for (const ws of sockets.splice(0)) ws.terminate();
+  for (const ws of sockets.splice(0)) {
+    ws.terminate();
+  }
   tunnel.close();
-  await new Promise((resolve) => server.close(resolve));
+  await new Promise((resolve) => {
+    return server.close(resolve);
+  });
 });
 
 describe("tunnel auth", () => {
@@ -67,7 +90,9 @@ describe("tunnel auth", () => {
     await start("secret");
     const ws = await dial("/tunnel", { authorization: "Bearer secret" });
     ws.send(beat());
-    await until(() => ids().includes("pc"));
+    await until(() => {
+      return ids().includes("pc");
+    });
   });
 
   it("allows connections when no key is configured", async () => {
@@ -86,11 +111,15 @@ describe("tunnel registration", () => {
     await start();
     const ws = await dial();
     ws.send(beat());
-    await until(() => ids().includes("pc"));
+    await until(() => {
+      return ids().includes("pc");
+    });
     expect(registry.live()[0]?.models).toEqual([{ id: "qwen", loaded: true }]);
 
     ws.close();
-    await until(() => ids().length === 0);
+    await until(() => {
+      return ids().length === 0;
+    });
   });
 
   it("closes the connection on a malformed message and lists nothing", async () => {
@@ -107,23 +136,31 @@ describe("tunnel registration", () => {
     const ws = await dial();
     const code = closed(ws);
     ws.send(beat("a"));
-    await until(() => ids().includes("a"));
+    await until(() => {
+      return ids().includes("a");
+    });
     ws.send(beat("b"));
     expect(await code).toBe(1008);
-    await until(() => ids().length === 0);
+    await until(() => {
+      return ids().length === 0;
+    });
   });
 
   it("lets a reconnect replace the old connection without being removed when the old one closes", async () => {
     await start();
     const first = await dial();
     first.send(beat());
-    await until(() => ids().includes("pc"));
+    await until(() => {
+      return ids().includes("pc");
+    });
 
     const second = await dial();
     const firstClosed = closed(first);
     second.send(beat());
     await firstClosed;
-    await new Promise((r) => setTimeout(r, 50));
+    await new Promise((r) => {
+      return setTimeout(r, 50);
+    });
     expect(ids()).toEqual(["pc"]);
   });
 });

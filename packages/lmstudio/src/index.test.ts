@@ -10,7 +10,9 @@ describe("validateModel", () => {
 
   it("refuses anything that could be read as an option or break out of an argument", () => {
     for (const id of ["--help", "-y", "", " lead", "a;b", "a|b", "a&b", "a$b", "a`b", "a\nb", "x".repeat(201), 5, undefined, null]) {
-      expect(() => validateModel(id), String(id)).toThrow("invalid model id");
+      expect(() => {
+        return validateModel(id);
+      }, String(id)).toThrow("invalid model id");
     }
   });
 });
@@ -24,7 +26,9 @@ describe("validateContext", () => {
 
   it("refuses fractions, tiny and huge values, and non-numbers", () => {
     for (const v of [1.5, 0, -5, 255, 4_000_001, "8192", NaN, Infinity]) {
-      expect(() => validateContext(v), String(v)).toThrow("invalid context length");
+      expect(() => {
+        return validateContext(v);
+      }, String(v)).toThrow("invalid context length");
     }
   });
 });

@@ -7,7 +7,9 @@ describe("resolveHosts", () => {
   });
 
   it("replaces 'tailscale' with the looked-up address", async () => {
-    expect(await resolveHosts("127.0.0.1,tailscale", async () => "100.64.0.9")).toEqual(["127.0.0.1", "100.64.0.9"]);
+    expect(await resolveHosts("127.0.0.1,tailscale", async () => {
+      return "100.64.0.9";
+    })).toEqual(["127.0.0.1", "100.64.0.9"]);
   });
 
   it("skips 'tailscale' with a warning when it is not connected", async () => {
@@ -27,6 +29,8 @@ describe("resolveHosts", () => {
     const down = async () => {
       throw new Error("down");
     };
-    await expect(resolveHosts("tailscale", down, () => undefined)).rejects.toThrow("no usable listen address");
+    await expect(resolveHosts("tailscale", down, () => {
+      return undefined;
+    })).rejects.toThrow("no usable listen address");
   });
 });

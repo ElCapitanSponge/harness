@@ -10,19 +10,27 @@ let dir: string;
 beforeEach(async () => {
   dir = await fs.mkdtemp(path.join(os.tmpdir(), "harness-audit-"));
 });
-afterEach(() => fs.rm(dir, { recursive: true, force: true }));
-
-const entry = (over: Partial<AuditEntry> = {}): AuditEntry => ({
-  time: "2026-11-01T00:00:00.000Z",
-  root: "proj",
-  tool: "read_file",
-  summary: "read a.txt",
-  outcome: "ok",
-  ms: 1,
-  ...over,
+afterEach(() => {
+  return fs.rm(dir, { recursive: true, force: true });
 });
 
-const settle = (): Promise<void> => new Promise((r) => setTimeout(r, 100));
+const entry = (over: Partial<AuditEntry> = {}): AuditEntry => {
+  return {
+    time: "2026-11-01T00:00:00.000Z",
+    root: "proj",
+    tool: "read_file",
+    summary: "read a.txt",
+    outcome: "ok",
+    ms: 1,
+    ...over,
+  };
+};
+
+const settle = (): Promise<void> => {
+  return new Promise((r) => {
+    return setTimeout(r, 100);
+  });
+};
 
 describe("createAuditLog", () => {
   it("appends one JSON line per entry, in order, creating the folder", async () => {
@@ -32,14 +40,18 @@ describe("createAuditLog", () => {
     log(entry({ summary: "second", outcome: "error" }));
     await settle();
     const lines = (await fs.readFile(file, "utf8")).trim().split(String.fromCharCode(10));
-    expect(lines.map((l) => JSON.parse(l).summary)).toEqual(["first", "second"]);
+    expect(lines.map((l) => {
+      return (JSON.parse(l) as { summary: string }).summary;
+    })).toEqual(["first", "second"]);
   });
 
   it("warns once, not on every entry, if the log cannot be written", async () => {
     const blocker = path.join(dir, "file");
     await fs.writeFile(blocker, "x");
     const warnings: string[] = [];
-    const log = createAuditLog(path.join(blocker, "audit.log"), (m) => warnings.push(m));
+    const log = createAuditLog(path.join(blocker, "audit.log"), (m) => {
+      return warnings.push(m);
+    });
     log(entry());
     log(entry());
     await settle();
@@ -49,13 +61,17 @@ describe("createAuditLog", () => {
 });
 
 describe("tool server auditing", () => {
-  async function run(roots: Record<string, string>, allowed: string[], msg: { root: string; name: string; args: Record<string, unknown>; session?: string }) {
+  const run = async (roots: Record<string, string>, allowed: string[], msg: { root: string; name: string; args: Record<string, unknown>; session?: string }) => {
     const entries: AuditEntry[] = [];
-    const server = createToolServer({ roots, allowed, audit: (e) => entries.push(e) });
+    const server = createToolServer({ roots, allowed, audit: (e) => {
+      return entries.push(e);
+    } });
     const sent: TunnelMessage[] = [];
-    await server.handle({ type: "tool", id: "t", ...msg }, (m) => sent.push(m));
+    await server.handle({ type: "tool", id: "t", ...msg }, (m) => {
+      return sent.push(m);
+    });
     return { entries, sent };
-  }
+  };
 
   it("records a successful call with its session, without file contents", async () => {
     await fs.writeFile(path.join(dir, "a.txt"), "secret contents");

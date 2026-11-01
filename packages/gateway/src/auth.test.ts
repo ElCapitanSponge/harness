@@ -4,9 +4,13 @@ import { assertSafeBinding, bearerAuth, safeEqual } from "./auth.js";
 
 const app = new Hono();
 app.use("*", bearerAuth("s3cret"));
-app.get("/ping", (c) => c.text("pong"));
+app.get("/ping", (c) => {
+  return c.text("pong");
+});
 
-const call = (headers: Record<string, string> = {}) => app.request("/ping", { headers });
+const call = (headers: Record<string, string> = {}) => {
+  return app.request("/ping", { headers });
+};
 
 describe("bearerAuth", () => {
   it("allows the right key", async () => {
@@ -36,24 +40,38 @@ describe("safeEqual", () => {
 
 describe("assertSafeBinding", () => {
   it("allows loopback without a key", () => {
-    expect(() => assertSafeBinding(["127.0.0.1", "::1", "localhost"], undefined)).not.toThrow();
+    expect(() => {
+      assertSafeBinding(["127.0.0.1", "::1", "localhost"], undefined);
+    }).not.toThrow();
   });
 
   it("refuses a network address without a key", () => {
-    expect(() => assertSafeBinding(["100.64.0.5"], undefined)).toThrow("HARNESS_API_KEY");
+    expect(() => {
+      assertSafeBinding(["100.64.0.5"], undefined);
+    }).toThrow("HARNESS_API_KEY");
   });
 
   it("allows a network address when a key is set", () => {
-    expect(() => assertSafeBinding(["127.0.0.1", "100.64.0.5"], "k")).not.toThrow();
+    expect(() => {
+      assertSafeBinding(["127.0.0.1", "100.64.0.5"], "k");
+    }).not.toThrow();
   });
 
   it("refuses wildcard addresses unless explicitly allowed, even with a key", () => {
-    expect(() => assertSafeBinding(["0.0.0.0"], "k")).toThrow("wildcard");
-    expect(() => assertSafeBinding(["::"], "k")).toThrow("wildcard");
+    expect(() => {
+      assertSafeBinding(["0.0.0.0"], "k");
+    }).toThrow("wildcard");
+    expect(() => {
+      assertSafeBinding(["::"], "k");
+    }).toThrow("wildcard");
   });
 
   it("allows a wildcard address only with both the opt-in and a key", () => {
-    expect(() => assertSafeBinding(["0.0.0.0"], "k", true)).not.toThrow();
-    expect(() => assertSafeBinding(["0.0.0.0"], undefined, true)).toThrow("HARNESS_API_KEY");
+    expect(() => {
+      assertSafeBinding(["0.0.0.0"], "k", true);
+    }).not.toThrow();
+    expect(() => {
+      assertSafeBinding(["0.0.0.0"], undefined, true);
+    }).toThrow("HARNESS_API_KEY");
   });
 });

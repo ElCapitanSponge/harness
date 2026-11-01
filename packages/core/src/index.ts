@@ -45,11 +45,17 @@ export const ChatRequest = z.looseObject({
 });
 export type ChatRequest = z.infer<typeof ChatRequest>;
 
-export function textOf(content: ChatMessage["content"]): string {
-  if (typeof content === "string") return content;
-  if (!content) return "";
-  return content.map((part) => part.text ?? "").join("");
-}
+export const textOf = (content: ChatMessage["content"]): string => {
+  if (typeof content === "string") {
+    return content;
+  }
+  if (!content) {
+    return "";
+  }
+  return content.map((part) => {
+    return part.text ?? "";
+  }).join("");
+};
 
 export const ModelInfo = z.object({
   id: z.string(),
@@ -139,22 +145,24 @@ export const SessionApproval = z.object({ approve: z.boolean(), always: z.boolea
 export const SessionMessage = z.object({ text: z.string().min(1) });
 
 // What happens in a coding session, in order. Sent to clients as server-sent events.
-export type SessionEvent =
-  | { type: "user"; text: string }
-  | { type: "text"; text: string }
-  | { type: "thinking"; text: string }
-  | { type: "tool"; summary: string }
-  | { type: "approval"; id: string; tool: string; summary: string }
-  | { type: "approval-resolved"; id: string; approved: boolean }
-  | { type: "done"; stopped: boolean; declined?: boolean }
-  | { type: "cancelled" }
-  | { type: "error"; message: string };
+export type SessionEvent
+  = | { type: "user"; text: string }
+    | { type: "text"; text: string }
+    | { type: "thinking"; text: string }
+    | { type: "tool"; summary: string }
+    | { type: "approval"; id: string; tool: string; summary: string }
+    | { type: "approval-resolved"; id: string; approved: boolean }
+    | { type: "done"; stopped: boolean; declined?: boolean }
+    | { type: "cancelled" }
+    | { type: "error"; message: string };
 
 // Sent live while the model is still writing, and never stored or replayed: they only make a running turn feel
 // responsive. The stored "thinking" and "text" events carry the same words once the model has finished.
 export type LiveSessionEvent = { type: "thinking-delta"; text: string } | { type: "text-delta"; text: string };
 
-export const isLiveEvent = (event: { type: string }): event is LiveSessionEvent => event.type.endsWith("-delta");
+export const isLiveEvent = (event: { type: string }): event is LiveSessionEvent => {
+  return event.type.endsWith("-delta");
+};
 
 export interface SessionInfo {
   id: string;
@@ -173,6 +181,8 @@ export const ModelLoad = z.object({ model: z.string().min(1), contextLength: z.n
 export const ModelUnload = z.object({ model: z.string().min(1).optional() });
 
 // Yields the `data:` payload of each server-sent event in a response body.
+
+// eslint-disable-next-line func-style -- generators cannot be arrow functions
 export async function* sseData(body: ReadableStream<Uint8Array>): AsyncGenerator<string> {
   const decoder = new TextDecoder();
   let buffer = "";
@@ -183,10 +193,16 @@ export async function* sseData(body: ReadableStream<Uint8Array>): AsyncGenerator
     for (const frame of frames) {
       const data = frame
         .split(/\r?\n/)
-        .filter((line) => line.startsWith("data:"))
-        .map((line) => line.slice(5).trim())
+        .filter((line) => {
+          return line.startsWith("data:");
+        })
+        .map((line) => {
+          return line.slice(5).trim();
+        })
         .join(String.fromCharCode(10));
-      if (data) yield data;
+      if (data) {
+        yield data;
+      }
     }
   }
 }
@@ -196,6 +212,19 @@ export const TUNNEL_PATH = "/tunnel";
 export const HEARTBEAT_INTERVAL_MS = 10_000;
 export const NODE_TTL_MS = 30_000;
 
-export function authHeaders(apiKey?: string): Record<string, string> {
+// An environment variable that is set but empty counts as not set.
+export const nonEmpty = (value: string | undefined): string | undefined => {
+  return value === undefined || value === "" ? undefined : value;
+};
+
+// The text of a WebSocket message, which the library hands over as a Buffer, several Buffers or an ArrayBuffer.
+export const rawToString = (data: Buffer | ArrayBuffer | Buffer[]): string => {
+  if (Buffer.isBuffer(data)) {
+    return data.toString("utf8");
+  }
+  return Array.isArray(data) ? Buffer.concat(data).toString("utf8") : Buffer.from(data).toString("utf8");
+};
+
+export const authHeaders = (apiKey?: string): Record<string, string> => {
   return apiKey ? { authorization: `Bearer ${apiKey}` } : {};
-}
+};

@@ -11,7 +11,7 @@ import { connectTunnel } from "./tunnel.js";
 
 const tools = createToolServer({ roots: config.projectRoots, allowed: config.allowedTools, audit: createAuditLog(config.auditLog) });
 
-async function collect(): Promise<Heartbeat> {
+const collect = async (): Promise<Heartbeat> => {
   const { busy, reason } = await detectBusy(config.gameProcesses);
   let models: Heartbeat["models"] = [];
   try {
@@ -31,7 +31,7 @@ async function collect(): Promise<Heartbeat> {
     claude: config.claude,
     modelControl: config.modelControl,
   };
-}
+};
 
 console.log(`[agent] ${config.nodeId} -> ${config.gatewayUrl} (inference ${config.inferenceUrl})`);
 connectTunnel({
@@ -39,7 +39,9 @@ connectTunnel({
   apiKey: config.apiKey,
   heartbeat: collect,
   tools,
-  models: createModelServer({ enabled: config.modelControl, isBusy: async () => (await detectBusy(config.gameProcesses)).busy }),
+  models: createModelServer({ enabled: config.modelControl, isBusy: async () => {
+    return (await detectBusy(config.gameProcesses)).busy;
+  } }),
   claude: config.claude ? createClaudeServer({ bin: config.claudeBin }) : undefined,
   chat: createChatServer({ inferenceUrl: config.inferenceUrl }),
 });

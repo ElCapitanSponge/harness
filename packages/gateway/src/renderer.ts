@@ -366,8 +366,12 @@ export interface Renderer {
 }
 
 // Runs the renderer outside a page, for tests.
-export function loadRenderer(): Renderer {
+export const loadRenderer = (): Renderer => {
   const root: { harnessRender?: Renderer } = {};
+  // eslint-disable-next-line @typescript-eslint/no-implied-eval, @typescript-eslint/no-unsafe-call -- the renderer is script text that is also embedded in the page, and the tests must run that same text
   new Function("root", `(${RENDERER_SOURCE})(root);`)(root);
-  return root.harnessRender as Renderer;
-}
+  if (!root.harnessRender) {
+    throw new Error("the renderer did not register itself");
+  }
+  return root.harnessRender;
+};
