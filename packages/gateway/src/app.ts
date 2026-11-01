@@ -1,5 +1,5 @@
 import { toOpenAIResponse, toSse, type ClaudeResult } from "@harness/claude";
-import { ChatRequest, DeviceToolRequest, ModelLoad, ModelUnload, SessionApproval, SessionCreate, SessionMessage } from "@harness/core";
+import { ChatRequest, DeviceToolRequest, ModelLoad, ModelUnload, SessionApproval, SessionCreate, SessionMessage, flattenError } from "@harness/core";
 import { findTool } from "@harness/tools";
 import { Hono, type Context } from "hono";
 import { bearerAuth } from "./auth.js";
@@ -36,7 +36,7 @@ export function createApp({ registry, apiKey, relay, sessions }: AppDeps): Hono 
   // Runs one read-only tool on a connected device. The device also decides which roots and tools it allows.
   app.post("/devices/:nodeId/tools", async (c) => {
     const parsed = DeviceToolRequest.safeParse(await c.req.json().catch(() => undefined));
-    if (!parsed.success) return c.json({ error: parsed.error.flatten() }, 400);
+    if (!parsed.success) return c.json({ error: flattenError(parsed.error) }, 400);
     // Changes go through a coding session, where they wait for an approval. This endpoint is for looking around.
     const spec = findTool(parsed.data.name);
     if (!spec || spec.needsApproval) {
@@ -54,7 +54,7 @@ export function createApp({ registry, apiKey, relay, sessions }: AppDeps): Hono 
   // Loads or unloads a model in a device's LM Studio. The device must have switched this on.
   const modelControl = (op: "load" | "unload") => async (c: Context) => {
     const parsed = (op === "load" ? ModelLoad : ModelUnload).safeParse(await c.req.json().catch(() => undefined));
-    if (!parsed.success) return c.json({ error: parsed.error.flatten() }, 400);
+    if (!parsed.success) return c.json({ error: flattenError(parsed.error) }, 400);
     const nodeId = c.req.param("nodeId") ?? "";
     const node = registry.live().find((n) => n.nodeId === nodeId);
     if (!node) return c.json({ error: { message: `device "${nodeId}" is not connected` } }, 404);
@@ -76,7 +76,7 @@ export function createApp({ registry, apiKey, relay, sessions }: AppDeps): Hono 
 
   app.post("/sessions", async (c) => {
     const parsed = SessionCreate.safeParse(await c.req.json().catch(() => undefined));
-    if (!parsed.success) return c.json({ error: parsed.error.flatten() }, 400);
+    if (!parsed.success) return c.json({ error: flattenError(parsed.error) }, 400);
     try {
       return c.json(sessions.create(parsed.data).info(), 201);
     } catch (err) {
@@ -88,7 +88,7 @@ export function createApp({ registry, apiKey, relay, sessions }: AppDeps): Hono 
     const session = sessions.get(c.req.param("id"));
     if (!session) return c.json({ error: { message: "no such session" } }, 404);
     const parsed = SessionMessage.safeParse(await c.req.json().catch(() => undefined));
-    if (!parsed.success) return c.json({ error: parsed.error.flatten() }, 400);
+    if (!parsed.success) return c.json({ error: flattenError(parsed.error) }, 400);
     try {
       session.send(parsed.data.text);
     } catch (err) {
@@ -101,7 +101,7 @@ export function createApp({ registry, apiKey, relay, sessions }: AppDeps): Hono 
     const session = sessions.get(c.req.param("id"));
     if (!session) return c.json({ error: { message: "no such session" } }, 404);
     const parsed = SessionApproval.safeParse(await c.req.json().catch(() => undefined));
-    if (!parsed.success) return c.json({ error: parsed.error.flatten() }, 400);
+    if (!parsed.success) return c.json({ error: flattenError(parsed.error) }, 400);
     if (!session.answer(c.req.param("approvalId"), parsed.data.approve, parsed.data.always)) {
       return c.json({ error: { message: "no such pending approval" } }, 404);
     }
@@ -154,7 +154,7 @@ export function createApp({ registry, apiKey, relay, sessions }: AppDeps): Hono 
 
   app.post("/v1/chat/completions", async (c) => {
     const parsed = ChatRequest.safeParse(await c.req.json().catch(() => undefined));
-    if (!parsed.success) return c.json({ error: parsed.error.flatten() }, 400);
+    if (!parsed.success) return c.json({ error: flattenError(parsed.error) }, 400);
     const req = parsed.data;
 
     if (isClaudeModel(req.model)) {
