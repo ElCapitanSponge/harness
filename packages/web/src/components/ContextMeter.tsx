@@ -34,13 +34,13 @@ export const ContextMeter = ({ id }: { id: string }) => {
   return (
     <Popover.Root>
       <Popover.Trigger asChild>
-        <button type="button" className="flex items-center gap-2 rounded-md px-2 py-1 text-xs text-muted-foreground hover:bg-muted" aria-label="Context used">
+        <button type="button" className="flex items-center gap-2 rounded-md px-2 py-1 text-xs text-muted-foreground hover:bg-muted">
           <Gauge className="size-3.5" />
           <span>{mark}{compact(used)}{window ? ` / ${compact(window)}` : ""}</span>
           {fraction === undefined
             ? null
             : (
-                <span className="h-1.5 w-16 overflow-hidden rounded-full bg-muted" role="progressbar" aria-valuenow={Math.round(fraction * 100)} aria-valuemin={0} aria-valuemax={100}>
+                <span className="h-1.5 w-16 overflow-hidden rounded-full bg-muted" role="progressbar" aria-label="Context window used" aria-valuenow={Math.round(fraction * 100)} aria-valuemin={0} aria-valuemax={100}>
                   <span className={cn("block h-full rounded-full", tone)} style={{ width: `${String(Math.round(fraction * 100))}%` }} />
                 </span>
               )}

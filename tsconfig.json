@@ -17,6 +17,6 @@
       "@harness/lmstudio": ["./packages/lmstudio/src/index.ts"]
     }
   },
-  "include": ["packages/*/src/**/*.ts", "scripts/**/*.ts", "eslint.config.ts"],
+  "include": ["packages/*/src/**/*.ts", "scripts/**/*.ts", "eslint.config.ts", "vitest.config.ts"],
   "exclude": ["packages/web"]
 }

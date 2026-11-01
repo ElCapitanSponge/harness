@@ -21,6 +21,8 @@ jobs:
       - run: pnpm typecheck
       - run: pnpm lint
       - run: pnpm test
+      # The stories are tests too (they run in pnpm test); this checks the static Storybook still builds.
+      - run: pnpm --filter @harness/web build-storybook
 
   # Builds the gateway image and runs it, so a Dockerfile or packaging mistake fails here and not on the NAS.
   image-smoke:

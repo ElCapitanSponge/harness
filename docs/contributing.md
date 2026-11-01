@@ -59,3 +59,15 @@ These are enforced by the linter, not by review. A rule is an error or it is off
 ## The web app
 
 `packages/web` is the page the gateway serves. `pnpm web` runs it with hot reload against a gateway on `localhost:8787` (set `GATEWAY_URL` for another); `pnpm build:web` builds it into `packages/web/dist`, which the gateway serves in preference to its built-in page. The same standards apply (arrow functions, braces, no `any`), plus the React hooks and React Compiler lint rules. See [ADR 0009](adr/0009-web-app-is-react-built-with-vite-served-by-the-gateway.md).
+
+### Storybook and front-end tests
+
+`pnpm storybook` opens Storybook 10 on port 6006 with the app's theme and a light/dark toggle in the toolbar. `pnpm --filter @harness/web build-storybook` builds a static copy (CI checks it builds).
+
+There are three kinds of front-end test, all run by `pnpm test` in a DOM (jsdom), with no browser to install:
+
+- **Unit tests** (`*.test.ts` beside the code in `src/lib`) for logic such as the conversation reducer and the API helpers.
+- **Component tests** (`*.test.tsx`) that render a component with Testing Library and check behaviour that does not fit a story, such as a draft surviving a reload or untrusted markdown never becoming markup.
+- **Stories** (`*.stories.tsx`). Write one for each state a component can be in (empty, loading, streaming, error, offline, locked). Put the expectations in a `play` function, with `expect` and `userEvent` from `storybook/test`. `src/stories.test.tsx` runs every story as a test and fails on a serious accessibility problem (colour contrast is left to the Storybook accessibility panel, because jsdom cannot paint).
+
+A component that reads from the gateway gets its data from the story's `parameters.seed` (the query keys the app uses), so no story touches a network.

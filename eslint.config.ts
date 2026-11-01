@@ -7,7 +7,7 @@ import tseslint from "typescript-eslint";
 
 // Strict by design: every rule is an error or off, never a warning. The standards are in docs/specs/web-experience-v2.md (section 8).
 export default defineConfig(
-  { ignores: ["**/node_modules/**", "**/dist/**", "bench-results/**", "deploy/**"] },
+  { ignores: ["**/node_modules/**", "**/dist/**", "**/storybook-static/**", "bench-results/**", "deploy/**"] },
 
   js.configs.recommended,
   tseslint.configs.strictTypeChecked,
