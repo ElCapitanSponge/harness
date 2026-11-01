@@ -34,7 +34,8 @@ describe("telling the model which shell the device has", () => {
     expect(power).toContain("Commands run in PowerShell (pwsh) on Windows");
     const prompt = await systemFor({ platform: "win32", shell: "cmd" });
     expect(prompt).toContain("Commands run in cmd.exe");
-    expect(prompt).toContain("PowerShell is not installed");
+    expect(prompt).toContain("Neither PowerShell 7 nor Windows PowerShell");
+    expect(await systemFor({ platform: "win32", shell: "Windows PowerShell" })).toContain("Windows PowerShell 5.1");
   });
 
   it("names zsh on a Mac and bash on Linux, and says to use a command when no tool fits", async () => {

@@ -5,19 +5,18 @@ import { commandEnv, runShell, shellAdvice, shellFor, shellName } from "./shell.
 import { findTool } from "./tools.js";
 
 describe("which shell a device uses", () => {
-  it("is PowerShell 7 when it is installed on Windows, and the command prompt otherwise", () => {
+  it("is PowerShell 7 on Windows if it is installed, then Windows PowerShell, then the command prompt", () => {
     const shell = shellFor("win32", "dir");
-    if (shell.name === "PowerShell") {
-      expect(shell.bin).toBe("pwsh");
-      expect(shell.args.at(-1)).toContain("dir");
-      expect(shell.args).toEqual(expect.arrayContaining(["-NoProfile", "-NonInteractive", "-Command"]));
-    } else {
-      expect(shell).toMatchObject({ bin: "cmd.exe", name: "cmd", verbatim: true });
+    expect(["pwsh", "powershell.exe", "cmd.exe"]).toContain(shell.bin);
+    if (shell.bin === "cmd.exe") {
+      expect(shell).toMatchObject({ name: "cmd", verbatim: true });
       expect(shell.args.slice(0, 3)).toEqual(["/d", "/s", "/c"]);
       expect(shell.args[3]).toContain("dir");
+    } else {
+      expect(shell.name).toBe(shell.bin === "pwsh" ? "PowerShell" : "Windows PowerShell");
+      expect(shell.args.at(-1)).toContain("dir");
+      expect(shell.args).toEqual(expect.arrayContaining(["-NoProfile", "-NonInteractive", "-Command"]));
     }
-    // Never Windows PowerShell.
-    expect(shell.bin).not.toBe("powershell.exe");
   });
 
   it.skipIf(process.platform === "win32")("is the login shell on macOS and Linux if it is bash or zsh, and bash or sh otherwise", () => {
@@ -27,14 +26,16 @@ describe("which shell a device uses", () => {
   });
 
   it("reports the name a device would use, for the model to be told", () => {
-    expect(["PowerShell", "cmd"]).toContain(shellName("win32"));
+    expect(["PowerShell", "Windows PowerShell", "cmd"]).toContain(shellName("win32"));
     expect(shellName("linux")).toMatch(/^(bash|sh)$/);
   });
 
   it("tells the model what syntax to write", () => {
     expect(shellAdvice("win32", "PowerShell")).toContain("PowerShell");
     expect(shellAdvice("win32", "cmd")).toContain("cmd.exe");
-    expect(shellAdvice("win32", "cmd")).toContain("PowerShell is not installed");
+    expect(shellAdvice("win32", "cmd")).toContain("Neither PowerShell 7 nor Windows PowerShell");
+    expect(shellAdvice("win32", "Windows PowerShell")).toContain("5.1");
+    expect(shellAdvice("win32", "Windows PowerShell")).toContain("'&&' and '||' operators");
     expect(shellAdvice("win32")).toContain("cmd.exe");
     expect(shellAdvice("darwin", "zsh")).toContain("zsh on macOS");
     expect(shellAdvice("linux")).toContain("bash on Linux");
