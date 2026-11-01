@@ -1,8 +1,9 @@
 # Gateway image. No secrets are baked in: pass HARNESS_API_KEY at run time.
 
 # The web app is built here, so the final image carries only its static files.
-FROM node:22-slim AS web
-RUN corepack enable
+FROM node:26-slim AS web
+# Node 25 and later no longer ship corepack, so pnpm is installed directly, at the version package.json pins.
+RUN npm install --global pnpm@10.10.0
 WORKDIR /app
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY packages/core/package.json packages/core/
@@ -12,10 +13,10 @@ COPY packages/core packages/core
 COPY packages/web packages/web
 RUN pnpm --filter @harness/web build
 
-FROM node:22-slim
+FROM node:26-slim
 
 ENV NODE_ENV=production
-RUN corepack enable
+RUN npm install --global pnpm@10.10.0
 WORKDIR /app
 
 # Install only what the gateway needs (core + gateway workspaces) from the lockfile.
