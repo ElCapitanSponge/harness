@@ -160,14 +160,12 @@ The confirmation flow becomes what Claude Code's desktop app taught people to ex
 - **Rules** remembered per project (for example, always allow `pnpm test`), listed and removable in settings.
 - Approvals reach the person wherever they are: a notification when the page is in the background.
 
-### M. Multi-model modes
+### M. Choosing the model per turn
 
-Ideas taken from PewDiePie's self-hosted "ChatOS" (as reported by news coverage; the original was not watched): several models answer the same question and the best answer wins, and many small models working at once. They suit a pool of models, and they are optional.
+Torii answers each turn with one model on one device. Council and swarm modes (several models answering one request, judged or voted) were considered and dropped: they are not the direction of this project. What replaced them:
 
-- **Compare:** send one message to two or three chosen models and show the answers side by side.
-- **Council:** several models answer, then one model acts as judge (or the models vote) and the page shows the winner with the others one click away.
-- **Swarm:** many small models on one task, results gathered. Later, and only if it proves useful.
-- Each mode shows how long each model took and what it cost in tokens, so the person can see whether it was worth it.
+- **Switching** the model inside one conversation, across devices and Claude (#63).
+- **Auto**, where Torii chooses the model and device from the conversation and the pool, and loads and unloads models itself (#64).
 
 ### N. Skills and project instructions
 
@@ -244,7 +242,7 @@ A model catalogue and loading  ----+--> E progress feedback --+
 B node settings from the page  ----+--> G this device --------+--> (usable day to day)
 C conversations that persist  -----+--> D app shell ----------+
 #26 context, #27 Claude usage -----------> F context and usage panel
-A, D2 ---------------------------------> M multi-model modes (compare, council)
+A, D2, F ------------------------------> M per-turn model choice (#63, then #64)
 C -----------------------------------------> J users and sign-in
 D1, B -------------------------------------> K desktop app
 D1 ----------------------------------------> L permission modes and approvals
@@ -273,7 +271,7 @@ On 2026-11-01 the tickets were consolidated from 27 open to 15, because a long l
 | J | #48 Users and sign-in for the family |
 | K | #49 The desktop app |
 | L | #50 Permission modes and approval cards |
-| M | #51 Multi-model modes |
+| M | #63 switching models in a conversation, #64 Auto mode (#51 council and swarm: not planned) |
 | H | not planned (#42 closed) |
 
 Closed as done: #1, #2, #7 and #15 (the gateway is deployed and in use).
