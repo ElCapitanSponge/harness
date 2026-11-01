@@ -1,7 +1,6 @@
 import type { ChatRequest } from "@harness/core";
 import { describe, expect, it, vi } from "vitest";
-import { buildArgs, runClaude, toOpenAIResponse, toPrompt, toSse } from "./claude.js";
-import { CLAUDE_MODEL_IDS } from "./router.js";
+import { buildArgs, runClaude, toOpenAIResponse, toPrompt, toSse } from "./index.js";
 
 describe("toSse", () => {
   const events = (s: string) => s.split("\n\n").filter(Boolean);
@@ -15,12 +14,6 @@ describe("toSse", () => {
     });
     expect(JSON.parse(stop!.replace("data: ", "")).choices[0].finish_reason).toBe("stop");
     expect(done).toBe("data: [DONE]");
-  });
-});
-
-describe("claude model list", () => {
-  it("advertises plain claude and the common aliases", () => {
-    expect(CLAUDE_MODEL_IDS).toEqual(expect.arrayContaining(["claude", "claude:sonnet", "claude:opus", "claude:haiku"]));
   });
 });
 

@@ -1,10 +1,9 @@
 import type { ChatRequest, NodeRecord } from "@harness/core";
 import { describe, expect, it } from "vitest";
-import { isClaudeModel, pickRoute } from "./router.js";
+import { CLAUDE_MODEL_IDS, isClaudeModel, pickRoute } from "./router.js";
 
 const node = (over: Partial<NodeRecord> & { nodeId: string }): NodeRecord => ({
   kind: "local",
-  baseUrl: "http://localhost:1234",
   busy: false,
   models: [],
   lastSeen: Date.now(),
@@ -55,5 +54,11 @@ describe("isClaudeModel", () => {
     expect(isClaudeModel("claude:sonnet")).toBe(true);
     expect(isClaudeModel("claude-3")).toBe(false);
     expect(isClaudeModel("qwen3.5-9b")).toBe(false);
+  });
+});
+
+describe("claude model list", () => {
+  it("advertises plain claude and the common aliases", () => {
+    expect(CLAUDE_MODEL_IDS).toEqual(expect.arrayContaining(["claude", "claude:sonnet", "claude:opus", "claude:haiku"]));
   });
 });

@@ -4,6 +4,7 @@ import { TUNNEL_PATH, TunnelMessage } from "@harness/core";
 import { type WebSocket, WebSocketServer } from "ws";
 import { safeEqual } from "./auth.js";
 import type { Registry } from "./registry.js";
+import type { Relay } from "./relay.js";
 
 const PING_INTERVAL_MS = 15_000;
 
@@ -20,7 +21,7 @@ function reject(socket: Duplex, status: string): void {
 
 // Devices dial out to the gateway and hold this connection, so they need no inbound port.
 // A device is listed while its connection is open and is removed as soon as it closes.
-export function attachTunnel(server: Server, opts: { registry: Registry; apiKey?: string }): { close(): void } {
+export function attachTunnel(server: Server, opts: { registry: Registry; relay: Relay; apiKey?: string }): { close(): void } {
   const wss = new WebSocketServer({ noServer: true });
   const owner = new Map<string, WebSocket>();
   const alive = new WeakSet<WebSocket>();
@@ -33,6 +34,7 @@ export function attachTunnel(server: Server, opts: { registry: Registry; apiKey?
 
   wss.on("connection", (ws) => {
     let nodeId: string | undefined;
+    const sender = { send: (data: string) => ws.send(data) };
     alive.add(ws);
     ws.on("pong", () => alive.add(ws));
     ws.on("message", (data) => {
@@ -41,6 +43,15 @@ export function attachTunnel(server: Server, opts: { registry: Registry; apiKey?
         msg = TunnelMessage.parse(JSON.parse(data.toString()));
       } catch {
         ws.close(1008, "invalid message");
+        return;
+      }
+      if (msg.type !== "heartbeat") {
+        // Replies are only accepted from a device that has already identified itself.
+        if (!nodeId) {
+          ws.close(1008, "heartbeat required first");
+          return;
+        }
+        opts.relay.handle(nodeId, msg);
         return;
       }
       const id = msg.heartbeat.nodeId;
@@ -52,6 +63,7 @@ export function attachTunnel(server: Server, opts: { registry: Registry; apiKey?
         nodeId = id;
         const previous = owner.get(id);
         owner.set(id, ws);
+        opts.relay.attach(id, sender);
         previous?.terminate();
       }
       opts.registry.upsert(msg.heartbeat);
@@ -61,6 +73,7 @@ export function attachTunnel(server: Server, opts: { registry: Registry; apiKey?
         owner.delete(nodeId);
         opts.registry.remove(nodeId);
       }
+      if (nodeId) opts.relay.detach(nodeId, sender);
     });
   });
 

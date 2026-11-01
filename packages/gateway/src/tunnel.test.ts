@@ -4,23 +4,26 @@ import type { Heartbeat } from "@harness/core";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { WebSocket } from "ws";
 import { Registry } from "./registry.js";
+import { Relay } from "./relay.js";
 import { attachTunnel } from "./tunnel.js";
 
 const beat = (nodeId = "pc"): string =>
   JSON.stringify({
     type: "heartbeat",
-    heartbeat: { nodeId, kind: "local", baseUrl: "http://localhost:1234", busy: false, models: [{ id: "qwen", loaded: true }] } satisfies Heartbeat,
+    heartbeat: { nodeId, kind: "local", busy: false, models: [{ id: "qwen", loaded: true }] } satisfies Heartbeat,
   });
 
 let server: Server;
 let tunnel: { close(): void };
 let registry: Registry;
+let relay: Relay;
 let port: number;
 const sockets: WebSocket[] = [];
 
 async function start(apiKey?: string): Promise<void> {
   server = createServer();
-  tunnel = attachTunnel(server, { registry, apiKey });
+  relay = new Relay();
+  tunnel = attachTunnel(server, { registry, relay, apiKey });
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
   port = (server.address() as AddressInfo).port;
 }

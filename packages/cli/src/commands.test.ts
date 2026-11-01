@@ -38,6 +38,28 @@ describe("parseCommand", () => {
     expect(() => parseCommand(["load", "m", "--context=1.5"])).toThrow("invalid context");
   });
 
+  it("parses code with a device and root to work on a connected device's files", () => {
+    expect(parseCommand(["code", "-d", "anakin", "-r", "proj", "-m", "qwen", "fix it"])).toEqual({
+      name: "code",
+      model: "qwen",
+      prompt: "fix it",
+      yes: false,
+      device: "anakin",
+      root: "proj",
+    });
+  });
+
+  it("parses tool with a device, root, tool and optional JSON args", () => {
+    expect(parseCommand(["tool", "pc", "proj", "list_dir"])).toEqual({ name: "tool", device: "pc", root: "proj", tool: "list_dir", args: {} });
+    expect(parseCommand(["tool", "pc", "proj", "read_file", '{"path":"a.txt"}'])).toMatchObject({ args: { path: "a.txt" } });
+  });
+
+  it("rejects tool with missing parts, invalid JSON, or non-object args", () => {
+    expect(() => parseCommand(["tool", "pc", "proj"])).toThrow("tool needs");
+    expect(() => parseCommand(["tool", "pc", "proj", "x", "{bad"])).toThrow("valid JSON");
+    expect(() => parseCommand(["tool", "pc", "proj", "x", "[1]"])).toThrow("JSON object");
+  });
+
   it("parses unload with and without a model", () => {
     expect(parseCommand(["unload"])).toEqual({ name: "unload", model: undefined });
     expect(parseCommand(["unload", "qwen3.5-9b"])).toEqual({ name: "unload", model: "qwen3.5-9b" });

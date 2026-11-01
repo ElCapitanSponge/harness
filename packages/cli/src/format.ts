@@ -9,12 +9,13 @@ function table(headers: string[], rows: string[][]): string {
 export function formatNodes(nodes: NodeRecord[], now = Date.now()): string {
   if (nodes.length === 0) return "No nodes are reporting to the gateway.";
   return table(
-    ["NODE", "KIND", "STATUS", "LOADED", "LAST SEEN"],
+    ["NODE", "KIND", "STATUS", "LOADED", "ROOTS", "LAST SEEN"],
     nodes.map((n) => [
       n.nodeId,
       n.kind,
       n.busy ? `busy (${n.busyReason ?? "unknown"})` : "idle",
       String(n.models.filter((m) => m.loaded).length),
+      n.roots?.length ? n.roots.join(",") : "-",
       `${Math.max(0, Math.round((now - n.lastSeen) / 1000))}s ago`,
     ]),
   );

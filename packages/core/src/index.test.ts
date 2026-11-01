@@ -65,14 +65,10 @@ describe("ChatRequest", () => {
 });
 
 describe("Heartbeat", () => {
-  const valid = { nodeId: "pc", kind: "local", baseUrl: "http://localhost:1234", busy: false, models: [{ id: "qwen", loaded: true }] };
+  const valid = { nodeId: "pc", kind: "local", busy: false, models: [{ id: "qwen", loaded: true }] };
 
   it("accepts a valid heartbeat", () => {
     expect(Heartbeat.safeParse(valid).success).toBe(true);
-  });
-
-  it("rejects a non-URL baseUrl", () => {
-    expect(Heartbeat.safeParse({ ...valid, baseUrl: "not a url" }).success).toBe(false);
   });
 
   it("rejects an unknown node kind", () => {

@@ -67,10 +67,16 @@ export type NodeKind = z.infer<typeof NodeKind>;
 export const Heartbeat = z.object({
   nodeId: z.string(),
   kind: NodeKind,
-  baseUrl: z.string().url(),
   busy: z.boolean(),
   busyReason: z.string().optional(),
   models: z.array(ModelInfo),
+  // Names of the project folders this device lets coding sessions work in. Absent or empty: no tools.
+  roots: z.array(z.string()).optional(),
+  // Tools this device will run inside those roots, and its operating system, for the coding session's prompt.
+  allowedTools: z.array(z.string()).optional(),
+  // True if the owner is logged in to the `claude` CLI on this device and has let it answer Claude requests.
+  claude: z.boolean().optional(),
+  platform: z.string().optional(),
 });
 export type Heartbeat = z.infer<typeof Heartbeat>;
 
@@ -78,9 +84,73 @@ export interface NodeRecord extends Heartbeat {
   lastSeen: number;
 }
 
-// Messages a device sends over its outbound tunnel to the gateway.
-export const TunnelMessage = z.discriminatedUnion("type", [z.object({ type: z.literal("heartbeat"), heartbeat: Heartbeat })]);
+// Messages a device sends over its outbound tunnel to the gateway: its state, and replies to relayed requests.
+export const TunnelMessage = z.discriminatedUnion("type", [
+  z.object({ type: z.literal("heartbeat"), heartbeat: Heartbeat }),
+  z.object({ type: z.literal("head"), id: z.string(), status: z.number().int(), contentType: z.string().optional() }),
+  z.object({ type: z.literal("chunk"), id: z.string(), data: z.string() }),
+  z.object({ type: z.literal("end"), id: z.string() }),
+  z.object({ type: z.literal("fail"), id: z.string(), message: z.string() }),
+  // The single reply to a tool call or a Claude request.
+  z.object({ type: z.literal("tool-result"), id: z.string(), ok: z.boolean(), output: z.string() }),
+]);
 export type TunnelMessage = z.infer<typeof TunnelMessage>;
+
+// Messages the gateway sends down a device's tunnel. `body` is the raw JSON of a chat completions request.
+export const RelayRequest = z.discriminatedUnion("type", [
+  z.object({ type: z.literal("request"), id: z.string(), body: z.string() }),
+  z.object({ type: z.literal("cancel"), id: z.string() }),
+  // A chat request to answer with the local `claude` CLI. `body` is the raw JSON of the chat request.
+  z.object({ type: z.literal("claude"), id: z.string(), body: z.string() }),
+  z.object({
+    type: z.literal("tool"),
+    id: z.string(),
+    root: z.string(),
+    name: z.string(),
+    args: z.record(z.string(), z.unknown()),
+    session: z.string().optional(),
+  }),
+]);
+export type RelayRequest = z.infer<typeof RelayRequest>;
+
+// Body of a request to run one tool on a device, and the device's answer.
+export const DeviceToolRequest = z.object({ root: z.string(), name: z.string(), args: z.record(z.string(), z.unknown()).default({}) });
+export const DeviceToolResult = z.object({ ok: z.boolean(), output: z.string() });
+export type DeviceToolResult = z.infer<typeof DeviceToolResult>;
+
+// Starting a coding session, and sending it a message.
+export const SessionCreate = z.object({
+  model: z.string().min(1),
+  device: z.string().min(1),
+  root: z.string().min(1),
+  // Skip approval prompts for this session. An explicit opt-in by whoever starts it.
+  autoApprove: z.boolean().optional(),
+});
+export const SessionApproval = z.object({ approve: z.boolean(), always: z.boolean().optional() });
+export const SessionMessage = z.object({ text: z.string().min(1) });
+
+// What happens in a coding session, in order. Sent to clients as server-sent events.
+export type SessionEvent =
+  | { type: "user"; text: string }
+  | { type: "text"; text: string }
+  | { type: "tool"; summary: string }
+  | { type: "approval"; id: string; tool: string; summary: string }
+  | { type: "approval-resolved"; id: string; approved: boolean }
+  | { type: "done"; stopped: boolean; declined?: boolean }
+  | { type: "cancelled" }
+  | { type: "error"; message: string };
+
+export interface SessionInfo {
+  id: string;
+  model: string;
+  device: string;
+  root: string;
+  busy: boolean;
+  events: number;
+  created: number;
+  // Whether the device is connected now. A session whose device is away can be read but not continued.
+  deviceConnected: boolean;
+}
 
 export const TUNNEL_PATH = "/tunnel";
 

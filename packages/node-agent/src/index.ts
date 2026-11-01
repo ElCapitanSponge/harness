@@ -2,7 +2,13 @@ import type { Heartbeat } from "@harness/core";
 import { detectBusy } from "./busy.js";
 import { config } from "./config.js";
 import { listModels } from "./lmstudio.js";
+import { createAuditLog } from "./audit.js";
+import { createChatServer } from "./chat.js";
+import { createClaudeServer } from "./claude.js";
+import { createToolServer } from "./toolserver.js";
 import { connectTunnel } from "./tunnel.js";
+
+const tools = createToolServer({ roots: config.projectRoots, allowed: config.allowedTools, audit: createAuditLog(config.auditLog) });
 
 async function collect(): Promise<Heartbeat> {
   const { busy, reason } = await detectBusy(config.gameProcesses);
@@ -15,12 +21,22 @@ async function collect(): Promise<Heartbeat> {
   return {
     nodeId: config.nodeId,
     kind: "local",
-    baseUrl: config.inferenceUrl,
     busy,
     busyReason: reason,
     models,
+    roots: tools.rootNames(),
+    allowedTools: tools.allowedNames(),
+    platform: process.platform,
+    claude: config.claude,
   };
 }
 
 console.log(`[agent] ${config.nodeId} -> ${config.gatewayUrl} (inference ${config.inferenceUrl})`);
-connectTunnel({ gatewayUrl: config.gatewayUrl, apiKey: config.apiKey, heartbeat: collect });
+connectTunnel({
+  gatewayUrl: config.gatewayUrl,
+  apiKey: config.apiKey,
+  heartbeat: collect,
+  tools,
+  claude: config.claude ? createClaudeServer({ bin: config.claudeBin }) : undefined,
+  chat: createChatServer({ inferenceUrl: config.inferenceUrl }),
+});

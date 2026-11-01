@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { WebSocketServer, type WebSocket } from "ws";
 import { connectTunnel, tunnelUrl } from "./tunnel.js";
 
-const heartbeat = async (): Promise<Heartbeat> => ({ nodeId: "pc", kind: "local", baseUrl: "http://localhost:1234", busy: false, models: [] });
+const heartbeat = async (): Promise<Heartbeat> => ({ nodeId: "pc", kind: "local", busy: false, models: [] });
 
 describe("tunnelUrl", () => {
   it("maps http to ws and https to wss and points at the tunnel path", () => {

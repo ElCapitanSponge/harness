@@ -4,7 +4,8 @@ export type Command =
   | { name: "nodes" }
   | { name: "models" }
   | { name: "chat"; model: string; prompt: string }
-  | { name: "code"; model: string; prompt: string; yes: boolean }
+  | { name: "code"; model: string; prompt: string; yes: boolean; device?: string; root?: string }
+  | { name: "tool"; device: string; root: string; tool: string; args: Record<string, unknown> }
   | { name: "load"; model: string; contextLength?: number }
   | { name: "unload"; model?: string }
   | { name: "help" };
@@ -15,9 +16,11 @@ Usage:
   harness nodes                         list nodes reporting to the gateway
   harness models                        list models across nodes
   harness chat [-m model] [prompt...]   one-shot chat, or interactive with no prompt
-  harness code [-m model] [-y] [prompt...]
+  harness code [-m model] [-y] [-d device [-r root]] [prompt...]
                                         work on the files in the current directory (read, edit, run
                                         commands). Runs on this machine; claude models launch Claude Code
+  harness tool <device> <root> <tool> [json-args]
+                                        run one tool on a connected device (debugging the remote tools)
   harness load <model> [-c tokens]      load a model in local LM Studio
   harness unload [model]                unload one model, or all if omitted
 
@@ -33,6 +36,8 @@ export function parseCommand(argv: string[]): Command {
       context: { type: "string", short: "c" },
       help: { type: "boolean", short: "h" },
       yes: { type: "boolean", short: "y" },
+      device: { type: "string", short: "d" },
+      root: { type: "string", short: "r" },
     },
   });
   const [name, ...rest] = positionals;
@@ -45,7 +50,21 @@ export function parseCommand(argv: string[]): Command {
     case "chat":
       return { name: "chat", model: values.model ?? "auto", prompt: rest.join(" ").trim() };
     case "code":
-      return { name: "code", model: values.model ?? "auto", prompt: rest.join(" ").trim(), yes: values.yes ?? false };
+      return { name: "code", model: values.model ?? "auto", prompt: rest.join(" ").trim(), yes: values.yes ?? false, device: values.device, root: values.root };
+    case "tool": {
+      const [device, root, tool, json] = rest;
+      if (!device || !root || !tool) throw new Error("tool needs <device> <root> <tool> [json-args]");
+      let args: unknown = {};
+      if (json) {
+        try {
+          args = JSON.parse(json);
+        } catch {
+          throw new Error("json-args must be valid JSON");
+        }
+      }
+      if (typeof args !== "object" || args === null || Array.isArray(args)) throw new Error("json-args must be a JSON object");
+      return { name: "tool", device, root, tool, args: args as Record<string, unknown> };
+    }
     case "load": {
       const model = rest[0];
       if (!model) throw new Error("load needs a model id");
