@@ -1,7 +1,7 @@
 #!/usr/bin/env tsx
-import type { ChatMessage } from "@harness/core";
+import type { ChatMessage, SessionEvent } from "@harness/core";
 import readline from "node:readline/promises";
-import { runTurn, systemPrompt, type Approver } from "./agent.js";
+import { runTurn, systemPrompt, type Approver } from "@harness/tools";
 import { Gateway } from "./api.js";
 import { isClaudeModel, runClaudeCode } from "./claudecode.js";
 import { parseCommand, USAGE } from "./commands.js";
@@ -53,6 +53,75 @@ async function chat(model: string, prompt: string): Promise<void> {
       history.pop();
       console.error(`error: ${(err as Error).message}`);
     }
+  }
+  rl.close();
+}
+
+// Works on a connected device's files: the model loop runs on the gateway, tools run on the device.
+async function codeRemote(model: string, prompt: string, yes: boolean, device: string, rootName?: string): Promise<void> {
+  const node = (await gateway.nodes()).find((n) => n.nodeId === device);
+  if (!node) throw new Error(`device "${device}" is not connected`);
+  const roots = node.roots ?? [];
+  const root = rootName ?? (roots.length === 1 ? roots[0] : undefined);
+  if (!root) throw new Error(roots.length ? `pick a project root with -r (${roots.join(", ")})` : `device "${device}" exposes no project roots`);
+
+  const session = await gateway.createSession({ model, device, root, autoApprove: yes });
+  console.error(`working on ${device}:${root} with "${model}"${yes ? " (auto-approving changes)" : ""}`);
+
+  const rl = process.stdin.isTTY ? readline.createInterface({ input: process.stdin, output: process.stdout }) : undefined;
+  // Events already shown, so a later turn does not replay earlier ones.
+  let cursor = 0;
+  const ask = async (event: Extract<SessionEvent, { type: "approval" }>): Promise<void> => {
+    let approve = false;
+    let always = false;
+    if (rl) {
+      const answer = (await rl.question(`  allow ${event.summary}? [y/N/a = always allow ${event.tool}] `).catch(() => "")).trim().toLowerCase();
+      always = answer === "a";
+      approve = always || answer === "y" || answer === "yes";
+    }
+    await gateway.answerApproval(session.id, event.id, approve, always);
+  };
+  const turn = async (text: string): Promise<void> => {
+    const abort = new AbortController();
+    const onInt = () => void gateway.cancelSession(session.id).catch(() => undefined);
+    process.once("SIGINT", onInt);
+    try {
+      await gateway.sendMessage(session.id, text);
+      for await (const event of gateway.sessionEvents(session.id, cursor, abort.signal)) {
+        cursor++;
+        if (event.type === "text") console.log(event.text);
+        else if (event.type === "tool") console.error(`  > ${event.summary}`);
+        else if (event.type === "approval") await ask(event);
+        else if (event.type === "error") console.error(`error: ${event.message}`);
+        else if (event.type === "cancelled") console.error("(cancelled)");
+        else if (event.type === "done") {
+          if (event.declined) console.error("(declined; nothing was changed. Tell me what to do instead)");
+          else if (event.stopped) console.error("(stopped at the step limit; say 'continue' to go on)");
+          break;
+        }
+        if (event.type === "error" || event.type === "cancelled") break;
+      }
+    } finally {
+      process.removeListener("SIGINT", onInt);
+      abort.abort();
+    }
+  };
+
+  if (prompt) {
+    await turn(prompt);
+    rl?.close();
+    return;
+  }
+  if (!rl) {
+    const piped = await readStdin();
+    if (!piped) throw new Error("no prompt given");
+    return turn(piped);
+  }
+  console.error("(empty line or Ctrl+C to quit)");
+  for (;;) {
+    const line = (await rl.question("> ").catch(() => "")).trim();
+    if (!line) break;
+    await turn(line);
   }
   rl.close();
 }
@@ -128,7 +197,13 @@ async function main(): Promise<void> {
     case "chat":
       return chat(cmd.model, cmd.prompt);
     case "code":
-      return code(cmd.model, cmd.prompt, cmd.yes);
+      return cmd.device ? codeRemote(cmd.model, cmd.prompt, cmd.yes, cmd.device, cmd.root) : code(cmd.model, cmd.prompt, cmd.yes);
+    case "tool": {
+      const result = await gateway.deviceTool(cmd.device, cmd.root, cmd.tool, cmd.args);
+      console.log(result.output);
+      if (!result.ok) process.exitCode = 1;
+      return;
+    }
     case "load":
       await lms.serverStart().catch(() => undefined);
       console.log(await lms.load(cmd.model, cmd.contextLength));

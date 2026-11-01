@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { Gateway } from "./api.js";
+import { Gateway, sseData } from "./api.js";
 import { loadArgs, unloadArgs } from "./lms.js";
 
 const respond = (body: unknown, init: { ok?: boolean; status?: number; headers?: Record<string, string> } = {}) =>
@@ -95,5 +95,57 @@ describe("lms arguments", () => {
   it("unloads one model or all", () => {
     expect(unloadArgs("m")).toEqual(["unload", "m"]);
     expect(unloadArgs()).toEqual(["unload", "--all"]);
+  });
+});
+
+describe("sseData", () => {
+  const body = (...parts: string[]): ReadableStream<Uint8Array> =>
+    new ReadableStream({
+      start(c) {
+        for (const p of parts) c.enqueue(new TextEncoder().encode(p));
+        c.close();
+      },
+    });
+  const collect = async (stream: ReadableStream<Uint8Array>): Promise<string[]> => {
+    const out: string[] = [];
+    for await (const d of sseData(stream)) out.push(d);
+    return out;
+  };
+
+  it("yields each data payload, across chunk boundaries, ignoring comments", async () => {
+    const lf = String.fromCharCode(10);
+    const frame = (text: string) => text + lf + lf;
+    const out = await collect(body(frame('data: {"a":1}'), ": keepalive" + lf + lf + 'data: {"b"', ":2}" + lf + lf));
+    expect(out).toEqual(['{"a":1}', '{"b":2}']);
+  });
+});
+
+describe("Gateway sessions", () => {
+  const sse = (...events: unknown[]) =>
+    new Response(events.map((e) => "data: " + JSON.stringify(e) + String.fromCharCode(10, 10)).join(""), { headers: { "content-type": "text/event-stream" } });
+
+  it("creates a session, sends a message and cancels, with the key as a header", async () => {
+    const f = vi.fn(async () => new Response(JSON.stringify({ id: "s1", model: "qwen", device: "pc", root: "proj", busy: false, events: 0 }), { status: 201 }));
+    const g = new Gateway("http://g", f as unknown as typeof fetch, "k");
+    expect((await g.createSession({ model: "qwen", device: "pc", root: "proj" })).id).toBe("s1");
+    await g.sendMessage("s1", "hi");
+    await g.cancelSession("s1");
+    const calls = f.mock.calls as unknown as [string, { headers: Record<string, string>; body: string }][];
+    expect(calls.map((c) => c[0])).toEqual(["http://g/sessions", "http://g/sessions/s1/messages", "http://g/sessions/s1/cancel"]);
+    expect(calls[0]![1].headers.authorization).toBe("Bearer k");
+    expect(JSON.parse(calls[1]![1].body)).toEqual({ text: "hi" });
+  });
+
+  it("surfaces the gateway's error when a session cannot be created", async () => {
+    const f = vi.fn(async () => new Response(JSON.stringify({ error: { message: 'device "x" is not connected' } }), { status: 400 }));
+    await expect(new Gateway("http://g", f as unknown as typeof fetch).createSession({ model: "m", device: "x", root: "r" })).rejects.toThrow("not connected");
+  });
+
+  it("streams session events from an index", async () => {
+    const f = vi.fn(async () => sse({ type: "text", text: "hello" }, { type: "done", stopped: false }));
+    const seen: string[] = [];
+    for await (const e of new Gateway("http://g", f as unknown as typeof fetch).sessionEvents("s1", 3)) seen.push(e.type);
+    expect(seen).toEqual(["text", "done"]);
+    expect((f.mock.calls as unknown as [string][])[0]![0]).toBe("http://g/sessions/s1/events?from=3");
   });
 });

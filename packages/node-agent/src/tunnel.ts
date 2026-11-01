@@ -1,5 +1,8 @@
-import { HEARTBEAT_INTERVAL_MS, TUNNEL_PATH, authHeaders, type Heartbeat } from "@harness/core";
+import { HEARTBEAT_INTERVAL_MS, RelayRequest, TUNNEL_PATH, authHeaders, type Heartbeat, type TunnelMessage } from "@harness/core";
 import { WebSocket } from "ws";
+import type { ChatServer } from "./chat.js";
+import type { ClaudeServer } from "./claude.js";
+import type { ToolServer } from "./toolserver.js";
 
 export function tunnelUrl(gatewayUrl: string): string {
   const url = new URL(gatewayUrl);
@@ -12,10 +15,21 @@ interface TunnelOptions {
   gatewayUrl: string;
   apiKey?: string;
   heartbeat: () => Promise<Heartbeat>;
+  chat?: ChatServer;
+  tools?: ToolServer;
+  claude?: ClaudeServer;
   intervalMs?: number;
   minRetryMs?: number;
   maxRetryMs?: number;
   log?: (message: string) => void;
+}
+
+function safeJson(text: string): unknown {
+  try {
+    return JSON.parse(text);
+  } catch {
+    return undefined;
+  }
 }
 
 // Dials out to the gateway and keeps the connection open, reconnecting with backoff, so this device
@@ -48,6 +62,16 @@ export function connectTunnel(opts: TunnelOptions): { close(): void } {
       void beat(socket);
       beatTimer = setInterval(() => void beat(socket), intervalMs);
     });
+    socket.on("message", (data) => {
+      const parsed = RelayRequest.safeParse(safeJson(data.toString()));
+      if (!parsed.success) return;
+      const send = (msg: TunnelMessage): void => {
+        if (socket.readyState === WebSocket.OPEN) socket.send(JSON.stringify(msg));
+      };
+      if (parsed.data.type === "tool") void opts.tools?.handle(parsed.data, send);
+      else if (parsed.data.type === "claude") void opts.claude?.handle(parsed.data, send);
+      else opts.chat?.handle(parsed.data, send);
+    });
     socket.on("error", (err) => {
       // Report a given failure once, not on every retry.
       if (err.message === lastError) return;
@@ -56,6 +80,7 @@ export function connectTunnel(opts: TunnelOptions): { close(): void } {
     });
     socket.on("close", () => {
       clearInterval(beatTimer);
+      opts.chat?.cancelAll();
       if (stopped) return;
       retryTimer = setTimeout(connect, delay);
       delay = Math.min(delay * 2, maxRetryMs);

@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  launchd agent for the harness node agent. Starts at login and restarts if it exits.
+
+    sed -e "s#__HARNESS_DIR__#$HOME/personal/harness#g" -e "s#__HOME__#$HOME#g" \
+      deploy/macos/com.harness.agent.plist > ~/Library/LaunchAgents/com.harness.agent.plist
+    launchctl bootstrap "gui/$(id -u)" ~/Library/LaunchAgents/com.harness.agent.plist
+
+  Stop it with: launchctl bootout "gui/$(id -u)/com.harness.agent"
+-->
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.harness.agent</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/bin/sh</string>
+    <string>__HARNESS_DIR__/deploy/run-agent.sh</string>
+  </array>
+  <key>RunAtLoad</key>
+  <true/>
+  <key>KeepAlive</key>
+  <true/>
+  <key>ThrottleInterval</key>
+  <integer>10</integer>
+  <key>StandardOutPath</key>
+  <string>__HOME__/Library/Logs/harness-agent.log</string>
+  <key>StandardErrorPath</key>
+  <string>__HOME__/Library/Logs/harness-agent.log</string>
+</dict>
+</plist>

@@ -5,7 +5,6 @@ import { Registry } from "./registry.js";
 const hb = (nodeId: string): Heartbeat => ({
   nodeId,
   kind: "local",
-  baseUrl: "http://localhost:1234",
   busy: false,
   models: [],
 });

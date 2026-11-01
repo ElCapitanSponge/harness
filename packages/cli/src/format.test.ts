@@ -4,7 +4,6 @@ import { formatModels, formatNodes } from "./format.js";
 
 const node = (over: Partial<NodeRecord> & { nodeId: string }): NodeRecord => ({
   kind: "local",
-  baseUrl: "http://localhost:1234",
   busy: false,
   models: [],
   lastSeen: 100_000,

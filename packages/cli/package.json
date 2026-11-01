@@ -3,11 +3,14 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "bin": { "harness": "./src/bin.ts" },
+  "bin": {
+    "harness": "./src/bin.ts"
+  },
   "scripts": {
     "start": "tsx src/bin.ts"
   },
   "dependencies": {
-    "@harness/core": "workspace:*"
+    "@harness/core": "workspace:*",
+    "@harness/tools": "workspace:*"
   }
 }
