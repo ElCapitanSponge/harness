@@ -20,7 +20,12 @@ The first web page proved the idea: a device connects out, the gateway routes to
 | The interface should look and work like Claude Code, ChatGPT, T3 Chat | One long script in a string, no sidebar, no model picker in the header, no real composer | D |
 | No feedback while the model works before a reply | The page shows nothing until the first token, and a model load or a cold start can take a minute | E |
 | Show context total, a per-model breakdown, when to compact; usage overall and per model; time left on the Claude plan | Designed in #26 and #27, not built | F |
-| Work on the files of the device I am connecting from, with the harness as the model picker, like Claude Code | A browser cannot read the Mac's files. The flow needs an agent on that Mac, and the page needs to know which device it is being used from. | G, H |
+| Work on the files of the device I am connecting from, with the harness as the model picker, like Claude Code | A browser cannot read the Mac's files. The flow needs an agent on that Mac, and the page needs to know which device it is being used from. | G, K |
+| Keep the Claude Code workflow (desktop most, CLI on Linux) on the home network and over Tailscale, with local models as well as Claude | The harness already serves both. The tooling around it (the app, the portal, the approvals) is what needs work. Running through Claude Code itself is not wanted (§4 H). | D to G, K, L |
+| Own app and web portal, both able to configure selected agents; the family will use it later | More than one person means accounts, roles and per-person history | J, K |
+| Take inspiration from PewDiePie's interface | Its reported ideas (several models answering and voting, many small models at once) fit a pool of models | M |
+| The confirmation flow needs work | Approvals are a plain Allow or Decline card | L |
+| The harness must work with the skills used in Claude Code and other AI chats; the owner relies heavily on Matt Pocock's skills | Sessions know nothing about skills, project instruction files, sub-agents or structured questions, which those skills lean on | N |
 | Documentation needs a great deal of improvement; should feed a wiki or an Astro site later | One long README plus a security page | I |
 
 **Note on one word.** The feedback asks that conversations are "ephemeral" when navigating or refreshing. It is read here as the opposite: they must **survive** navigation and refresh. If ephemeral (disposable) was meant for some conversations, that is a small addition to ticket C (a "temporary chat" that is not saved).
@@ -82,6 +87,8 @@ The first web page proved the idea: a device connects out, the gateway routes to
 
 **Trust model (needs a decision record, see §6).** Letting the page change *project roots*, *allowed tools* and *Claude* remotely means a compromised gateway could widen a device's reach, which today it cannot. Proposed: a device accepts remote configuration only if it was started with `REMOTE_CONFIG=1` (one line, set once, or chosen when the agent is installed). Without it the page shows the settings read-only. Every remote change is written to the device's own audit log. A device can be locked again by removing the line.
 
+The owner has confirmed that remote configuration of selected agents is wanted from both the web portal and the desktop app, and is comfortable with it as the main user. "Selected" is what the opt-in line gives. Once there are other people (J), only the owner role can change a device's settings.
+
 **Adding a device.** An *Add a device* dialog produces the one command to run on that machine (per operating system), so the first setup is a single paste and everything after is in the page.
 
 ### C. Conversations that survive refresh
@@ -118,9 +125,78 @@ A browser cannot read the Mac's files, and the browser File System Access API is
 - **Finding "this device".** The gateway compares the address a browser connects from with the address each agent connected from; on a tailnet both are the machine's tailnet address, so they match. This must be checked behind the TrueNAS container's port publishing (whether the real source address is preserved). If it cannot be matched, the person picks *This device is...* once and the page remembers it.
 - **One click.** On a device with an agent the sidebar offers *New code session here* with that device's folders (and recent ones). On a device without an agent the page says so and links to the install guide.
 
-### H. Use the pool from Claude Code itself
+### H. Not planned: running through Claude Code itself
 
-The gateway also answers the Anthropic Messages API (`/v1/messages`, streaming and tools) so that pointing Claude Code (CLI or desktop) at the gateway with `ANTHROPIC_BASE_URL` makes the harness's models appear in its own model picker, and Claude Code's own file tools, planning and background tasks work on the machine it runs on with a local model behind it. Requests for Claude models pass through to a device that serves Claude. This is the most direct way to get "the whole flow like Claude Code" without rebuilding it. It needs A (model loading) first, and a check of exactly which parts of the Messages API Claude Code uses.
+The idea was an Anthropic-compatible endpoint (`/v1/messages`) so that Claude Code could use the pool's models. **The owner does not want to run through Claude Code**: Claude is already reachable through the harness, and the harness's own tooling is what needs the work. The ticket (#42) is closed as not planned.
+
+What was learned in a short test on 2026-11-01, kept here so it is not repeated:
+
+- LM Studio already answers the Anthropic Messages API for a loaded model, in the right format.
+- Claude Code 2.1.302 refused to use a local model by name, with an `unrecognized_model` error before sending anything, whether the name was given with `--model`, through the model alias settings, or as a Claude-style alias. Published gateway guides say it should accept any name, so something else in that setup (likely the isolated, logged-out configuration used for the test) was the cause. It was not investigated further.
+
+If this is wanted later, start from that test.
+
+### J. The family
+
+The harness has one shared key today. With more people it needs people.
+
+- **Sign-in.** Preferred: through Tailscale's own identity. Behind `tailscale serve` the gateway is told who the person is, so there is no password and no key to hand out, and it only works on the tailnet. For the home network without Tailscale, local accounts with a password. The choice is recorded (§6).
+- **Roles.** *Owner* (everything, including device settings and keys), *family* (chat and coding sessions on the devices and models the owner allows), and optionally *restricted* (chat with local models only, no commands, no Claude).
+- **Per-person things:** conversation history (private by default, shareable), usage, a default model, and which devices and tools they may use. The Claude plan is the owner's, so spending it is a permission, and the usage meter shows who used what.
+- **Safety for the others:** a coding session never gets more than the person's role, whatever the device allows.
+
+### K. The desktop app
+
+An app with the web interface in its own window and, built in, the node agent for that machine. That removes the hardest part of "work on the files of the device I am on": the app *is* the device, so it already knows its own name, can choose folders with the operating system's folder picker, can start at login, and can be configured from the portal like any other agent. The same interface also stays available as the web portal for any browser.
+
+Electron or Tauri is a decision to record (§6). The agent is Node, which favours Electron; Tauri is smaller. Windows and macOS first, Linux after (the CLI covers Linux today, which is how the owner uses it there).
+
+### L. Permission modes and approval cards
+
+The confirmation flow becomes what Claude Code's desktop app taught people to expect:
+
+- **Modes** per conversation: *ask before every change*, *accept file edits* (still ask for commands), *plan first* (read-only until the plan is approved), and *run without asking* (clearly marked, never the default, and only where the device and role allow it).
+- **Approval cards** show what will happen: the diff for an edit, the full command with its folder, the file for a write. Buttons: allow, allow for this conversation, allow always in this project, decline with a reason that goes back to the model.
+- **Rules** remembered per project (for example, always allow `pnpm test`), listed and removable in settings.
+- Approvals reach the person wherever they are: a notification when the page is in the background.
+
+### M. Multi-model modes
+
+Ideas taken from PewDiePie's self-hosted "ChatOS" (as reported by news coverage; the original was not watched): several models answer the same question and the best answer wins, and many small models working at once. They suit a pool of models, and they are optional.
+
+- **Compare:** send one message to two or three chosen models and show the answers side by side.
+- **Council:** several models answer, then one model acts as judge (or the models vote) and the page shows the winner with the others one click away.
+- **Swarm:** many small models on one task, results gathered. Later, and only if it proves useful.
+- Each mode shows how long each model took and what it cost in tokens, so the person can see whether it was worth it.
+
+### N. Skills and project instructions
+
+The owner relies heavily on Matt Pocock's skills and wants them to work in the harness as they do in Claude Code. The format is the **Agent Skills** layout, which Claude Code, Codex, Gemini CLI and Cursor are reported to share (sources disagree on the full list of tools): a folder per skill with a `SKILL.md` that starts with front matter (`name`, `description`), plus any side files. Claude.ai's own Skills are the same folder, zipped.
+
+**What the installed skills actually use** (37 skills in `~/.claude/skills`, read on 2026-11-01):
+
+| Used by the skills | How many | What the harness needs |
+|---|---|---|
+| `name` and `description` front matter | all 37 | List them for the model to choose from |
+| `disable-model-invocation: true` | 23 | The model must not start these on its own; only the person does, by typing `/name` |
+| `argument-hint` | 4 | Show the hint in the `/` menu and pass what the person types as the skill's arguments |
+| Side files beside `SKILL.md` (for example `tdd/mocking.md`) | most | Let the model read them, relative to the skill's folder |
+| An `agents/openai.yaml` file (display name, short description) | most | Ignore it safely; it is metadata for Codex and can supply a nicer label |
+| "Skill tool" (one skill loading another) | 23 mentions | A tool that loads a skill by name |
+| Sub-agents | about 35 mentions | A tool that runs a task in a fresh, separate conversation and returns its result |
+| Asking the user structured questions | 1 | A tool that shows options in the page and returns the answer |
+| A to-do or plan tool | 1 | The plan tool in #29 |
+| `gh` and shell commands | several | Already covered by the command tool and its approval |
+
+**Behaviour**
+
+- **Where skills come from.** On the device the session runs on: the person's own skills (`~/.claude/skills`, `~/.agents/skills`) and the project's (`.claude/skills`, `.agents/skills` inside the project root). The search folders are a device setting (B). The gateway can also hold a **library** that is available in every conversation, including chats with no device, and that can be imported and exported as a zip so skills move between the harness, Claude.ai and other tools.
+- **Progressive loading.** Only names and descriptions go into the model's instructions. The full text loads when the model (or the person) calls the skill, so a long skill does not use up a small model's context until it is needed.
+- **Running one.** Typing `/` in the composer lists skills with their hints; `/to-tickets some plan` loads that skill with the rest as its arguments. A skill marked `disable-model-invocation` is never started by the model.
+- **Reading a skill's other files.** The session may read inside a skill's folder, read-only, even when the folder is outside the project root.
+- **Project instructions.** `AGENTS.md` and `CLAUDE.md` in the project root (and the person's own, such as `~/.claude/CLAUDE.md`) are put in the model's instructions, with `@file` imports followed. This is how the repository's own `AGENTS.md` works with any model.
+- **Honest limits for small local models.** Skills are written for large models. A 9B model may follow a short skill well and a long, multi-step one badly, and loading a long skill uses a large share of a small context window. The interface shows how much of the context a skill used (F), and the skills page notes which skills are long.
+- **Sub-agents** are child conversations with their own context and a chosen subset of tools, run on any device and model in the pool, shown nested under their parent. This also lets a small main model hand a long task to a bigger one.
 
 ### I. Documentation
 
@@ -158,7 +234,10 @@ A model catalogue and loading  ----+--> E progress feedback --+
 B node settings from the page  ----+--> G this device --------+--> (usable day to day)
 C conversations that persist  -----+--> D app shell ----------+
 #26 context, #27 Claude usage -----------> F context and usage panel
-A -----------------------------------------> H Anthropic-compatible endpoint
+A, D2 ---------------------------------> M multi-model modes (compare, council)
+C -----------------------------------------> J users and sign-in
+D1, B -------------------------------------> K desktop app
+D1 ----------------------------------------> L permission modes and approvals
 I documentation: structure first, then a page with every feature
 #28 to #31 (panels, plan, tasks, images) land inside D's layout
 ```
@@ -172,7 +251,12 @@ I documentation: structure first, then a page with every feature
 | E | #39 Immediate progress feedback |
 | F | #40 Context and usage panels (with #26 and #27) |
 | G | #41 Work on the files of the device you browse from |
-| H | #42 Anthropic-compatible endpoint |
+| H | not planned (#42 closed) |
+| J | #48 Users and sign-in for the family |
+| K | #49 The desktop app |
+| L | #50 Permission modes and approval cards |
+| M | #51 Multi-model modes |
+| N | #53 Skills and project instructions, #54 Skills in the interface, #55 Sub-agents and asking questions |
 | I | #43 Documentation structure, #44 Reference documentation and link check |
 | Standards | #46 Strict ESLint for the whole repository (comes before the shell, #37) |
 
@@ -187,7 +271,8 @@ The shortest route to the reported problem ("I could not use any model") is **A*
 | Remote configuration of devices, and how a device opts in (§4 B) | It changes who decides what a device will run |
 | A front-end build step: Vite, React, the React Compiler, and the code standards in §8 (§4 D) | It changes how the page is built, served, linted and tested |
 | Chats as saved event streams, one conversation model (§4 C) | It changes what the gateway stores |
-| Which Messages API features the Claude Code endpoint supports (§4 H) | A compatibility promise |
+| How people sign in, and what each role may do (§4 J) | It changes who can use the devices, the tools and the Claude plan |
+| The desktop app's technology: Electron or Tauri (§4 K) | It decides how the agent is bundled and how it is released |
 
 ## 8. Code standards
 
@@ -234,5 +319,7 @@ These apply to the new front-end package from its first commit and, through thei
 
 - Is a *temporary chat* wanted (§1 note)?
 - Should loading a model unload the others on that device by default? (Proposed: yes.)
-- For the Anthropic endpoint, which Claude Code models should the local models appear as, since Claude Code expects Claude model names?
+- Who is in the family, and what should each role be allowed? (For example: may use chat and local models; may not run commands; may or may not spend the Claude plan.)
+- Should family members sign in through Tailscale's identity (no password, but only on the tailnet), with accounts for the home network only, or both?
+- Electron (the agent is already Node, simplest) or Tauri (smaller)?
 - Are there other devices than the Mac, the desktop and the TrueNAS box that the "this device" detection must handle (a phone, for instance, has no agent)?
