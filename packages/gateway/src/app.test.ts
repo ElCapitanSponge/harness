@@ -1,6 +1,7 @@
 import type { Heartbeat } from "@harness/core";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createApp } from "./app.js";
+import type { ModelLoader } from "./loader.js";
 import { Registry } from "./registry.js";
 import { Sessions } from "./sessions.js";
 
@@ -27,15 +28,18 @@ const chat = (over: Record<string, unknown> = {}) => {
 };
 
 let registry: Registry;
+const loaderEnsure = vi.fn<ModelLoader["ensure"]>();
 let relay: { request: ReturnType<typeof vi.fn>; callTool: ReturnType<typeof vi.fn>; callClaude: ReturnType<typeof vi.fn>; callModel: ReturnType<typeof vi.fn> };
 
 const build = (apiKey?: string) => {
-  return createApp({ registry, apiKey, relay: relay as never, sessions: new Sessions({ registry, relay: relay as never, complete: (async () => {
+  return createApp({ registry, apiKey, relay: relay as never, loader: { ensure: loaderEnsure }, sessions: new Sessions({ registry, relay: relay as never, complete: (async () => {
     return { role: "assistant", content: "ok" };
   }) as never }) });
 };
 
 beforeEach(() => {
+  loaderEnsure.mockReset();
+  loaderEnsure.mockResolvedValue(undefined);
   registry = new Registry();
   relay = {
     callModel: vi.fn(async () => {
@@ -356,5 +360,67 @@ describe("chat: Claude routing", () => {
     expect(res.status).toBe(503);
     expect(JSON.stringify(await res.json())).toContain("CLAUDE_ENABLED=1");
     expect(relay.callClaude).not.toHaveBeenCalled();
+  });
+});
+
+describe("catalogue and loading on demand", () => {
+  const idle = (over: Partial<Heartbeat> = {}): Heartbeat => {
+    return beat({ modelControl: true, models: [{ id: "qwen", loaded: true }, { id: "idle-model", loaded: false, contextLength: 8192 }], ...over });
+  };
+
+  it("lists every model on every device, with what choosing it does, and whether Claude is available", async () => {
+    registry.upsert(idle());
+    registry.upsert(beat({ nodeId: "mac", claude: true, models: [] }));
+    const res = await build().request("/catalogue");
+    const body = (await res.json()) as { models: { id: string; device: string; state: string }[]; claude: { available: boolean; device?: string; models: string[] } };
+    expect(body.models.map((m) => {
+      return `${m.device}:${m.id}:${m.state}`;
+    })).toEqual(["pc:qwen:loaded", "pc:idle-model:loads-on-use"]);
+    expect(body.claude).toMatchObject({ available: true, device: "mac" });
+    expect(body.claude.models).toContain("claude:sonnet");
+  });
+
+  it("says Claude is unavailable when no device serves it", async () => {
+    registry.upsert(idle());
+    const body = (await (await build().request("/catalogue")).json()) as { claude: { available: boolean; models: string[] } };
+    expect(body.claude).toMatchObject({ available: false, models: [] });
+  });
+
+  it("requires the key", async () => {
+    expect((await build("k").request("/catalogue")).status).toBe(401);
+  });
+
+  it("loads a model that is available but not loaded, then answers with it", async () => {
+    registry.upsert(idle());
+    const res = await build().request("/v1/chat/completions", json(chat({ model: "idle-model" })));
+    expect(res.status).toBe(200);
+    expect(loaderEnsure).toHaveBeenCalledTimes(1);
+    expect(loaderEnsure.mock.calls[0]?.[0]).toMatchObject({ model: "idle-model" });
+    const [nodeId, body] = relay.request.mock.calls[0] as unknown as [string, string];
+    expect(nodeId).toBe("pc");
+    expect(JSON.parse(body)).toMatchObject({ model: "idle-model" });
+  });
+
+  it("does not load anything for a model that is already loaded", async () => {
+    registry.upsert(idle());
+    await build().request("/v1/chat/completions", json(chat({ model: "qwen" })));
+    expect(loaderEnsure).not.toHaveBeenCalled();
+  });
+
+  it("answers 502 with the reason when the load fails, without sending the request on", async () => {
+    registry.upsert(idle());
+    loaderEnsure.mockRejectedValue(new Error("pc could not load idle-model: not enough memory"));
+    const res = await build().request("/v1/chat/completions", json(chat({ model: "idle-model" })));
+    expect(res.status).toBe(502);
+    expect(JSON.stringify(await res.json())).toContain("not enough memory");
+    expect(relay.request).not.toHaveBeenCalled();
+  });
+
+  it("answers 503 and says how to enable loading when the device does not allow it", async () => {
+    registry.upsert(idle({ modelControl: false }));
+    const res = await build().request("/v1/chat/completions", json(chat({ model: "idle-model" })));
+    expect(res.status).toBe(503);
+    expect(JSON.stringify(await res.json())).toContain("ALLOW_MODEL_CONTROL=1");
+    expect(loaderEnsure).not.toHaveBeenCalled();
   });
 });

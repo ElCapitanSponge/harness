@@ -3,7 +3,9 @@ import { sseData, type ChatMessage, type LiveSessionEvent, type SessionEvent, ty
 import { runTurn, systemPrompt, tools as allTools, type StreamHooks, type ToolSpec } from "@harness/tools";
 import type { Registry } from "./registry.js";
 import type { Relay } from "./relay.js";
-import { isClaudeModel, pickRoute } from "./router.js";
+import type { ModelLoader } from "./loader.js";
+import { isClaudeModel } from "./router.js";
+import { resolveRoute } from "./routing.js";
 
 export type { SessionEvent, SessionInfo };
 
@@ -27,12 +29,9 @@ export interface SessionStore {
 
 // Answers one model call for a coding session by routing it through the pool, like any other chat request. It asks for a
 // stream so the caller can show the model's thinking and answer as they arrive, and returns the finished message.
-export const createCompleter = (deps: { registry: Registry; relay: Pick<Relay, "request"> }): Complete => {
+export const createCompleter = (deps: { registry: Registry; relay: Pick<Relay, "request">; loader: Pick<ModelLoader, "ensure"> }): Complete => {
   return async (model, messages, tools, signal, hooks) => {
-    const route = pickRoute(deps.registry.live(), { model, messages, tools });
-    if (!route) {
-      throw new Error(`no idle node has model "${model}" loaded`);
-    }
+    const route = await resolveRoute({ registry: deps.registry, loader: deps.loader }, { model, messages, tools });
     const res = await deps.relay.request(route.node.nodeId, JSON.stringify({ model: route.model, messages, tools, stream: true }), signal);
 
     if (!res.ok || !(res.headers.get("content-type") ?? "").includes("text/event-stream")) {

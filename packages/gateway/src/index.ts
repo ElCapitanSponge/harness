@@ -4,6 +4,7 @@ import path from "node:path";
 import { nonEmpty } from "@harness/core";
 import { serve } from "@hono/node-server";
 import { createApp } from "./app.js";
+import { ModelLoader } from "./loader.js";
 import { assertSafeBinding } from "./auth.js";
 import { resolveHosts } from "./hosts.js";
 import { Registry } from "./registry.js";
@@ -19,10 +20,18 @@ const relay = new Relay();
 // Coding sessions are kept here so they survive a restart. In a container, mount a volume at this path.
 const dataDir = process.env.HARNESS_DATA_DIR ?? path.join(os.homedir(), ".harness", "gateway");
 const sessionsDir = path.join(dataDir, "sessions");
+// A model that is available but not loaded is loaded when a request needs it. By default the device's other models are
+// unloaded first (two rarely fit in one graphics card); HARNESS_KEEP_LOADED=1 keeps them.
+const loader = new ModelLoader({
+  registry,
+  relay,
+  unloadOthers: process.env.HARNESS_KEEP_LOADED !== "1",
+  defaultContext: Number(process.env.HARNESS_DEFAULT_CONTEXT ?? 32_768),
+});
 const sessions = new Sessions({
   registry,
   relay,
-  complete: createCompleter({ registry, relay }),
+  complete: createCompleter({ registry, relay, loader }),
   store: fileStore(sessionsDir),
   stored: await loadStored(sessionsDir),
 });
@@ -30,6 +39,7 @@ const app = createApp({
   registry,
   relay,
   sessions,
+  loader,
   apiKey,
 });
 

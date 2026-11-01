@@ -5,7 +5,9 @@ import { Hono, type Context } from "hono";
 import { bearerAuth } from "./auth.js";
 import type { Registry } from "./registry.js";
 import type { Relay } from "./relay.js";
-import { CLAUDE_MODEL_IDS, isClaudeModel, pickRoute } from "./router.js";
+import type { ModelLoader } from "./loader.js";
+import { CLAUDE_MODEL_IDS, catalogue, isClaudeModel } from "./router.js";
+import { RouteError, resolveRoute } from "./routing.js";
 import type { Sessions } from "./sessions.js";
 import { WEB_PAGE } from "./web.js";
 
@@ -14,9 +16,10 @@ export interface AppDeps {
   apiKey?: string;
   relay: Pick<Relay, "request" | "callTool" | "callClaude" | "callModel">;
   sessions: Sessions;
+  loader: Pick<ModelLoader, "ensure">;
 }
 
-export const createApp = ({ registry, apiKey, relay, sessions }: AppDeps): Hono => {
+export const createApp = ({ registry, apiKey, relay, sessions, loader }: AppDeps): Hono => {
   const app = new Hono();
 
   // The page holds no secrets and must load before a key can be typed, so it is registered ahead of the auth middleware.
@@ -195,6 +198,18 @@ export const createApp = ({ registry, apiKey, relay, sessions }: AppDeps): Hono 
     return new Response(stream, { headers: { "content-type": "text/event-stream", "cache-control": "no-store" } });
   });
 
+  // Everything that can be chosen, for the interface: each model on each device with what choosing it would do, and Claude.
+  app.get("/catalogue", (c) => {
+    const nodes = registry.live();
+    const claudeDevice = nodes.find((n) => {
+      return n.claude;
+    });
+    return c.json({
+      models: catalogue(nodes),
+      claude: { available: claudeDevice !== undefined, device: claudeDevice?.nodeId, models: claudeDevice ? CLAUDE_MODEL_IDS : [] },
+    });
+  });
+
   app.get("/v1/models", (c) => {
     const local = registry
       .live()
@@ -254,9 +269,14 @@ export const createApp = ({ registry, apiKey, relay, sessions }: AppDeps): Hono 
       }
     }
 
-    const route = pickRoute(registry.live(), req);
-    if (!route) {
-      return c.json({ error: { message: `no idle node has model "${req.model}" loaded` } }, 503);
+    let route;
+    try {
+      route = await resolveRoute({ registry, loader }, req);
+    } catch (err) {
+      if (err instanceof RouteError) {
+        return c.json({ error: { message: err.message } }, err.status);
+      }
+      throw err;
     }
 
     let upstream: Response;

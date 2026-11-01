@@ -3,13 +3,16 @@ import { createServer, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
 import os from "node:os";
 import path from "node:path";
+import type { ModelInfo } from "@harness/core";
 import { getRequestListener } from "@hono/node-server";
 import { afterEach, describe, expect, it } from "vitest";
 import { createChatServer } from "../../node-agent/src/chat.js";
 import { createClaudeServer, type ClaudeServer } from "../../node-agent/src/claude.js";
+import { createModelServer, type ModelServer } from "../../node-agent/src/models.js";
 import { createToolServer, type ToolServer } from "../../node-agent/src/toolserver.js";
 import { connectTunnel } from "../../node-agent/src/tunnel.js";
 import { createApp } from "./app.js";
+import { ModelLoader } from "./loader.js";
 import { Registry } from "./registry.js";
 import { Relay } from "./relay.js";
 import { Sessions, createCompleter } from "./sessions.js";
@@ -50,13 +53,22 @@ const until = async (check: () => boolean): Promise<void> => {
   expect(check()).toBe(true);
 };
 
-const setup = async (opts: { apiKey?: string; handler: Parameters<typeof createServer>[1]; tools?: ToolServer; claude?: ClaudeServer }) => {
+const setup = async (opts: {
+  apiKey?: string;
+  handler: Parameters<typeof createServer>[1];
+  tools?: ToolServer;
+  claude?: ClaudeServer;
+  // The device's model server and what it currently reports, for scenarios where the gateway has to load a model.
+  models?: ModelServer;
+  modelList?: () => ModelInfo[];
+}) => {
   lmstudio = createServer(opts.handler);
   const lmPort = await listen(lmstudio);
 
   const registry = new Registry();
   const relay = new Relay();
-  const app = createApp({ registry, relay, sessions: new Sessions({ registry, relay, complete: createCompleter({ registry, relay }) }), apiKey: opts.apiKey });
+  const loader = new ModelLoader({ registry, relay });
+  const app = createApp({ registry, relay, loader, sessions: new Sessions({ registry, relay, complete: createCompleter({ registry, relay, loader }) }), apiKey: opts.apiKey });
   // The same adapter the real gateway uses, so streamed responses behave as they do in production.
   const listener = getRequestListener(app.fetch);
   gateway = createServer((req, res) => {
@@ -70,10 +82,11 @@ const setup = async (opts: { apiKey?: string; handler: Parameters<typeof createS
     apiKey: opts.apiKey,
     intervalMs: 50,
     heartbeat: async () => {
-      return { nodeId: "pc", kind: "local", busy: false, models: [{ id: "qwen", loaded: true }], roots: opts.tools?.rootNames(), allowedTools: opts.tools?.allowedNames(), claude: opts.claude ? true : undefined };
+      return { nodeId: "pc", kind: "local", busy: false, models: opts.modelList?.() ?? [{ id: "qwen", loaded: true }], modelControl: opts.models ? true : undefined, roots: opts.tools?.rootNames(), allowedTools: opts.tools?.allowedNames(), claude: opts.claude ? true : undefined };
     },
     tools: opts.tools,
     claude: opts.claude,
+    models: opts.models,
     chat: createChatServer({ inferenceUrl: `http://127.0.0.1:${lmPort}` }),
   });
   await until(() => {
@@ -313,6 +326,98 @@ describe("Claude served by a device over the tunnel", () => {
       body: JSON.stringify({ model: "claude", messages: [{ role: "user", content: "ping" }] }),
     });
     expect(res.status).toBe(503);
+  });
+});
+
+describe("a model that is not loaded", () => {
+  it("is loaded on the device when a chat asks for it, making room first, and then answers", async () => {
+    const state: ModelInfo[] = [
+      { id: "small", loaded: true },
+      { id: "big", loaded: false, contextLength: 262_144 },
+    ];
+    const calls: string[] = [];
+    const flip = (id: string, loaded: boolean): void => {
+      for (const m of state) {
+        if (m.id === id) {
+          m.loaded = loaded;
+        }
+      }
+    };
+    const served: string[] = [];
+    const { gwPort } = await setup({
+      modelList: () => {
+        return state.map((m) => {
+          return { ...m };
+        });
+      },
+      models: createModelServer({
+        enabled: true,
+        isBusy: () => {
+          return Promise.resolve(false);
+        },
+        lms: {
+          serverStart: () => {
+            return Promise.resolve("started");
+          },
+          load: (model, ctx) => {
+            calls.push(`load ${model}@${ctx}`);
+            flip(model, true);
+            return Promise.resolve(`loaded ${model}`);
+          },
+          unload: (model) => {
+            calls.push(`unload ${model}`);
+            flip(model ?? "", false);
+            return Promise.resolve("unloaded");
+          },
+        },
+      }),
+      handler: (req, res) => {
+        let body = "";
+        req.on("data", (c: Buffer) => {
+          body += c.toString();
+        });
+        req.on("end", () => {
+          served.push((JSON.parse(body) as { model: string }).model);
+          res.writeHead(200, { "content-type": "application/json" });
+          res.end(JSON.stringify({ choices: [{ message: { role: "assistant", content: "hello from big" } }] }));
+        });
+      },
+    });
+
+    const catalogue = (await (await fetch(`http://127.0.0.1:${gwPort}/catalogue`)).json()) as { models: { id: string; state: string }[] };
+    expect(catalogue.models.map((m) => {
+      return `${m.id}:${m.state}`;
+    })).toEqual(["small:loaded", "big:loads-on-use"]);
+
+    const res = await fetch(`http://127.0.0.1:${gwPort}/v1/chat/completions`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ model: "big", messages: [{ role: "user", content: "hi" }] }),
+    });
+    expect(res.status).toBe(200);
+    expect(JSON.stringify(await res.json())).toContain("hello from big");
+    // It made room, loaded with a sensible context length rather than the model's enormous maximum, then served the request.
+    expect(calls).toEqual(["unload small", "load big@32768"]);
+    expect(served).toEqual(["big"]);
+  });
+
+  it("explains how to enable loading when the device does not allow it", async () => {
+    const state: ModelInfo[] = [{ id: "big", loaded: false }];
+    const { gwPort } = await setup({
+      handler: () => {
+        // Nothing should reach the model server.
+      },
+      modelList: () => {
+        return state;
+      },
+    });
+    const res = await fetch(`http://127.0.0.1:${gwPort}/v1/chat/completions`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ model: "big", messages: [{ role: "user", content: "hi" }] }),
+    });
+    expect(res.status).toBe(503);
+    expect(JSON.stringify(await res.json())).toContain("ALLOW_MODEL_CONTROL=1");
   });
 });
 

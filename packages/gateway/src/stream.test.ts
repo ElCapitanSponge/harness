@@ -85,7 +85,7 @@ describe("createCompleter", () => {
   const registry = new Registry();
   registry.upsert({ nodeId: "pc", kind: "local", busy: false, models: [{ id: "qwen", loaded: true }] } satisfies Heartbeat);
   const complete = (relay: { request: ReturnType<typeof vi.fn> }) => {
-    return createCompleter({ registry, relay: relay as never });
+    return createCompleter({ registry, relay: relay as never, loader: { ensure: vi.fn() } });
   };
   const signal = new AbortController().signal;
 
