@@ -17,7 +17,7 @@ A machine the owner runs a node agent on. Each has a name on the owner's private
 _Avoid_: machine, host, client
 
 **Node agent**:
-The small program on a device that connects out to the gateway, reports the device's state, and (later) runs tools on that device's files.
+The small program on a device that connects out to the gateway, reports the device's state, and does what the gateway asks of that device: answer chat with its local models, run tools on its files, answer Claude, and load or unload models.
 _Avoid_: daemon, worker, agent (alone, which also means the coding agent)
 
 **Tunnel**:
@@ -37,14 +37,22 @@ A device's declaration that it should not be given work, for example because the
 _Avoid_: unavailable, offline
 
 **Claude backend**:
-The path that answers Claude requests by running the official `claude` program on a device where the owner is logged in.
+The path that answers Claude requests by running the official `claude` program on a device where the owner is logged in and has switched Claude on. Claude is available only while such a device is connected.
 _Avoid_: Claude API, Claude proxy
+
+**Model control**:
+The gateway loading or unloading a model on a device's own model server. Each device decides whether to allow it, and refuses while busy.
+_Avoid_: remote management, orchestration
 
 ## Coding sessions
 
 **Coding session**:
-A conversation in which a model reads and changes files, one tool call at a time, with the owner approving changes.
+A conversation in which a model reads and changes files, one tool call at a time, with the owner approving changes. It is saved, and can be reopened later.
 _Avoid_: chat (which means conversation without file access), run
+
+**Turn**:
+One message from the owner and everything the model does in answer, until it replies without asking for another tool, is declined, is cancelled or hits the step limit.
+_Avoid_: request, step
 
 **Tool**:
 An action a model can ask for during a coding session, such as reading a file, writing a file or running a command.
@@ -55,8 +63,16 @@ The folder on a device that a coding session may touch. Nothing outside it is re
 _Avoid_: workspace, sandbox, working directory
 
 **Approval**:
-The owner's yes or no to a tool that would change something. A no ends the turn.
+The owner's yes or no to a tool that would change something. A no ends the turn, and no answer counts as no.
 _Avoid_: confirmation, permission
+
+**Allow list**:
+The tools a device agrees to run. It is the device's own setting, so the gateway cannot widen it. Reading is allowed by default; changing files and running commands are not.
+_Avoid_: permissions, whitelist
+
+**Audit log**:
+The device's own record of every tool call the gateway made on it, including refused ones, without file contents.
+_Avoid_: history, trace
 
 **Caller**:
 The device or browser the owner is using to talk to the gateway, which may differ from the device whose files are being worked on.
@@ -67,3 +83,5 @@ _Avoid_: user machine
 - A **Gateway** has many **Devices**; each connected **Device** has one open **Tunnel**.
 - A **Route** picks one **Device** (or the **Claude backend**) per request, skipping **Busy** and disconnected **Devices**.
 - A **Coding session** uses one **Project root** on one **Device**, which may not be the **Caller**.
+- A **Device** decides its **Project roots**, its **Allow list** and whether it allows **Model control**; the **Gateway** can only ask.
+- A **Coding session** whose **Device** is away can be read but not continued.
