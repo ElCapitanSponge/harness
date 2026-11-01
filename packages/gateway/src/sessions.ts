@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { effortFor, sseData, textOf, type ChatMessage, type Effort, type NodeRecord, type LiveSessionEvent, type SessionEvent, type SessionInfo, type Tool, type ToolCall } from "@harness/core";
-import { runTurn, systemPrompt, tools as allTools, type StreamHooks, type ToolSpec } from "@harness/tools";
+import { contextPrompt, runTurn, systemPrompt, type ProjectContext, tools as allTools, type StreamHooks, type ToolSpec } from "@harness/tools";
 import type { Registry } from "./registry.js";
 import type { Relay } from "./relay.js";
 import type { ModelLoader } from "./loader.js";
@@ -206,6 +206,8 @@ const MAX_STORED_THOUGHT = 6000;
 
 interface SessionDeps {
   relay: Pick<Relay, "callTool">;
+  // What the device says about the project's instructions and skills; without it the session tells the model nothing of them.
+  projectContext?(device: string, root: string, session: string): Promise<ProjectContext | undefined>;
   complete: Complete;
   // Looks up what the device allows right now. Throws if it is not connected or no longer exposes the root.
   resolve(device: string, root: string): ToolSpec[];
@@ -503,9 +505,47 @@ export class Session {
     this.emitLive({ type: "stage", stage: "routing", detail: result.chosen.reason });
   }
 
-  private async run(abort: AbortController, specs: ToolSpec[]): Promise<void> {
+  // Asks the device for the project's instruction files and skills, and puts them in the system prompt (replacing what an earlier
+  // turn put there). An older device that cannot answer, or any failure, leaves the session as it was. The skill tool is only
+  // offered when there is a skill the model may use.
+  private async learnProject(specs: ToolSpec[]): Promise<ToolSpec[]> {
+    if (!this.deps.projectContext) {
+      return specs;
+    }
+    let context: ProjectContext | undefined;
+    try {
+      context = await this.deps.projectContext(this.device, this.root, this.id);
+    } catch {
+      context = undefined;
+    }
+    if (!context || !Array.isArray(context.skills) || !Array.isArray(context.instructions)) {
+      return specs.filter((s) => {
+        return s.def.function.name !== "skill";
+      });
+    }
+    const first = this.history[0];
+    if (first?.role === "system" && typeof first.content === "string") {
+      const base = first.content.split(CONTEXT_MARK)[0] ?? first.content;
+      const extra = contextPrompt(context);
+      first.content = extra === "" ? base : `${base}${CONTEXT_MARK}${extra}`;
+    }
+    const usable = context.skills.some((s) => {
+      return s.modelInvocable;
+    });
+    return usable
+      ? specs
+      : specs.filter((s) => {
+          return s.def.function.name !== "skill";
+        });
+  }
+
+  private async run(abort: AbortController, offered: ToolSpec[]): Promise<void> {
+    let specs = offered;
     try {
       this.decide();
+      if (this.kind === "code" && this.deps.projectContext) {
+        specs = await this.learnProject(offered);
+      }
     } catch (err) {
       this.history.pop();
       this.emit({ type: "error", message: err instanceof Error ? err.message : String(err) });
@@ -579,6 +619,9 @@ export class Session {
   }
 }
 
+// Where the project's instructions and skills begin in a coding session's system prompt.
+const CONTEXT_MARK = "\n\n--- This project and its owner ---\n";
+
 const CHAT_PROMPT = "You are a helpful assistant. Answer clearly and say so when you are not sure.";
 
 export class Sessions {
@@ -591,10 +634,11 @@ export class Sessions {
   private deps: SessionDeps;
 
   constructor(
-    private opts: { registry: Registry; relay: Pick<Relay, "callTool">; complete: Complete; store?: SessionStore; stored?: StoredSession[]; ledger?: UsageLedger; compactAt?: number; claude?: ClaudeState; autoPrefs?: AutoPrefs },
+    private opts: { registry: Registry; relay: Pick<Relay, "callTool">; complete: Complete; store?: SessionStore; stored?: StoredSession[]; ledger?: UsageLedger; compactAt?: number; claude?: ClaudeState; autoPrefs?: AutoPrefs; projectContext?: SessionDeps["projectContext"] },
   ) {
     this.deps = {
       relay: opts.relay,
+      projectContext: opts.projectContext,
       complete: opts.complete,
       ledger: opts.ledger,
       compactAt: opts.compactAt,

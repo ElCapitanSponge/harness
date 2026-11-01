@@ -3,6 +3,7 @@ import path from "node:path";
 import { devTools } from "./dev-tools.js";
 import { num, resolveInside, show, str, truncate, type ToolLevel, type ToolSpec } from "./helpers.js";
 import { runShell } from "./shell.js";
+import { skillTools } from "./skills.js";
 import { webFetch } from "./web-fetch.js";
 
 export { resolveInside, truncate, type ToolContext, type ToolSpec } from "./helpers.js";
@@ -247,14 +248,14 @@ const runCommand: ToolSpec = {
   },
 };
 
-export const tools: ToolSpec[] = [readFile, listDir, grep, writeFile, editFile, runCommand, webFetch, ...devTools];
+export const tools: ToolSpec[] = [readFile, listDir, grep, writeFile, editFile, runCommand, webFetch, ...devTools, ...skillTools];
 
 // The names of the tools a device offers: each group is off, read-only, or able to change things.
 export const toolNamesFor = (device: ToolLevel | "off", remote: ToolLevel | "off"): string[] => {
   const level = { device, remote };
   return tools.filter((t) => {
     const allowed = level[t.group];
-    return allowed === "change" || (allowed === "read" && t.level === "read");
+    return t.hidden !== true && (allowed === "change" || (allowed === "read" && t.level === "read"));
   }).map((t) => {
     return t.def.function.name;
   });

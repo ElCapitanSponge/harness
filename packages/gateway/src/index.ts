@@ -2,6 +2,7 @@ import type { Server } from "node:http";
 import os from "node:os";
 import path from "node:path";
 import { nonEmpty } from "@harness/core";
+import type { ProjectContext } from "@harness/tools";
 import { serve } from "@hono/node-server";
 import { createApp } from "./app.js";
 import { ModelLoader } from "./loader.js";
@@ -50,6 +51,11 @@ const sessions = new Sessions({
   registry,
   relay,
   claude,
+  // The project's instruction files and skills, as the device finds them at the start of each turn; an older device just says no.
+  projectContext: async (device, root, session) => {
+    const result = await relay.callTool(device, root, "project_context", {}, { session });
+    return result.ok ? JSON.parse(result.output) as ProjectContext : undefined;
+  },
   // Auto mode: models to prefer or avoid (names, best first), and devices it must never choose.
   autoPrefs: {
     prefer: parseList(process.env.HARNESS_AUTO_PREFER),

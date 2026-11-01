@@ -12,6 +12,13 @@ _Avoid_: platform, framework
 The model choice where Torii, not the person, picks the model for each message by fixed rules, and shows the reason with the reply. See ADR 0010.
 _Avoid_: smart routing, router
 
+**Skill**:
+A folder with a SKILL.md (a name, a description and instructions) in the Agent Skills layout. The model sees its name and description and loads the rest with the skill tool. See docs/skills.md.
+_Avoid_: plugin, macro
+
+**Instruction file**:
+A project's AGENTS.md or CLAUDE.md, or the person's own CLAUDE.md, added to the model's instructions in a coding session.
+
 **Gateway**:
 The single always-on service that every client talks to. It knows which devices are connected, routes each request, and serves the web page.
 _Avoid_: server, hub, proxy

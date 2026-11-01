@@ -78,7 +78,11 @@ export const createToolServer = (opts: { roots: Record<string, string>; allowed:
         finish(false, `unknown project root "${msg.root}"`, "refused", summary);
         return;
       }
-      if (!tool || !allowed.has(msg.name)) {
+      // A tool for the gateway's own use is allowed wherever the device allows any of its own tools.
+      const permitted = tool !== undefined && (allowed.has(msg.name) || (tool.hidden === true && [...allowed].some((n) => {
+        return findTool(n)?.group === "device";
+      })));
+      if (!tool || !permitted) {
         finish(false, `tool "${msg.name}" is not allowed on this device`, "refused", summary);
         return;
       }

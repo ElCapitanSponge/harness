@@ -104,7 +104,9 @@ const reasoningOf = (message: ChatMessage): string => {
 // One user turn: keep calling the model and running its tool calls until it answers without any.
 // If the user declines an action the turn ends there, so a model cannot keep retrying it.
 export const runTurn = async (history: ChatMessage[], deps: AgentDeps): Promise<{ stopped: boolean; declined?: boolean }> => {
-  const defs = (deps.tools ?? allTools).map((t) => {
+  const defs = (deps.tools ?? allTools).filter((t) => {
+    return t.hidden !== true;
+  }).map((t) => {
     return t.def;
   });
   const maxSteps = deps.maxSteps ?? 25;
