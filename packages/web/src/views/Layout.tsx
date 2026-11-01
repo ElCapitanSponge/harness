@@ -3,6 +3,7 @@ import { Code2, Menu as MenuIcon, MessageSquare, Monitor, Moon, PanelLeftClose, 
 import { useState } from "react";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router";
 import { ConversationActions } from "@/components/ConversationActions";
+import { ToriiMark } from "@/components/ToriiMark";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/fields";
 import { keyStore, setKey } from "@/lib/api";
@@ -25,8 +26,8 @@ const Gate = () => {
         }}
       >
         <div className="flex items-center gap-2 text-lg font-semibold">
-          <span className="flex size-8 items-center justify-center rounded-lg bg-primary font-bold text-primary-foreground">H</span>
-          Harness
+          <span className="flex size-8 items-center justify-center rounded-lg bg-primary text-primary-foreground"><ToriiMark /></span>
+          Torii
         </div>
         <p className="text-muted-foreground">Enter the gateway key to continue. It is kept for this browser tab only.</p>
         <Input type="password" placeholder="API key" autoFocus autoComplete="off" aria-label="API key" value={value} onChange={(ev) => {
@@ -54,8 +55,8 @@ const Sidebar = ({ onNavigate }: { onNavigate: () => void }) => {
   return (
     <div className="flex h-full flex-col gap-2 bg-card p-3">
       <div className="flex items-center gap-2 px-2 py-1 text-base font-semibold">
-        <span className="flex size-7 items-center justify-center rounded-lg bg-primary text-sm font-bold text-primary-foreground">H</span>
-        Harness
+        <span className="flex size-7 items-center justify-center rounded-lg bg-primary text-primary-foreground"><ToriiMark className="size-4.5" /></span>
+        Torii
       </div>
       <Button variant="primary" size="lg" className="justify-start" onClick={() => {
         void navigate("/");
@@ -177,7 +178,7 @@ export const Layout = () => {
           >
             {open ? <PanelLeftClose /> : <MenuIcon />}
           </Button>
-          <span className="font-semibold">Harness</span>
+          <span className="font-semibold">Torii</span>
         </div>
         <Outlet />
       </main>

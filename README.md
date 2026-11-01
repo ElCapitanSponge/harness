@@ -1,4 +1,6 @@
-# harness
+# Torii
+
+A torii is the gate between the everyday world and a sacred one; this is the gate between your own devices and everything you want to ask. The repository is still called `harness`, and the packages are `@harness/*`.
 
 A small TypeScript harness that pools local LLMs (via [LM Studio](https://lmstudio.ai)) and Claude (via the official `claude` CLI) behind a single OpenAI-compatible endpoint.
 

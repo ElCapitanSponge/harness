@@ -2,76 +2,76 @@
 
 @custom-variant dark (&:where(.dark, .dark *));
 
-/* Colours follow the Fluent 2 web tokens (neutral backgrounds and strokes, communication-blue brand). Names are the shadcn ones so
-   the components read the same way, mapped onto Fluent: background = neutralBackground2, card = neutralBackground1. */
+/* Torii: vermilion (shu) on washi paper in light, sumi ink in dark, in Fluent 2's structure of neutral surfaces and strokes. Names are the
+   shadcn ones so the components read the same way. */
 :root {
-  --background: #fafafa;
-  --foreground: #242424;
-  --card: #ffffff;
-  --card-foreground: #242424;
-  --popover: #ffffff;
-  --popover-foreground: #242424;
-  --primary: #0f6cbd;
-  --primary-hover: #115ea3;
-  --primary-pressed: #0f548c;
+  --background: #f6f2ea;
+  --foreground: #1c1917;
+  --card: #fffdf8;
+  --card-foreground: #1c1917;
+  --popover: #fffdf8;
+  --popover-foreground: #1c1917;
+  --primary: #c8321f;
+  --primary-hover: #b02a19;
+  --primary-pressed: #962314;
   --primary-foreground: #ffffff;
-  --secondary: #f5f5f5;
-  --secondary-foreground: #242424;
-  --muted: #f0f0f0;
-  --muted-foreground: #616161;
-  --accent: #ebf3fc;
-  --accent-foreground: #0f548c;
-  --destructive: #b10e1c;
-  --success: #107c10;
-  --warning: #bc4b09;
-  --border: #e0e0e0;
-  --input: #d1d1d1;
-  --ring: #0f6cbd;
-  --code: #f5f5f5;
-  --shadow-card: 0 0 2px rgb(0 0 0 / 0.12), 0 2px 4px rgb(0 0 0 / 0.14);
-  --shadow-raised: 0 0 8px rgb(0 0 0 / 0.12), 0 4px 8px rgb(0 0 0 / 0.14);
-  --hl-keyword: #8764b8;
-  --hl-string: #0b6a0b;
-  --hl-comment: #707070;
-  --hl-number: #bc4b09;
-  --hl-title: #0f548c;
-  --hl-add: #dff6dd;
-  --hl-del: #fdd3d3;
+  --secondary: #efe9dd;
+  --secondary-foreground: #1c1917;
+  --muted: #ece6d9;
+  --muted-foreground: #6b6259;
+  --accent: #f7e6e1;
+  --accent-foreground: #8f2314;
+  --destructive: #7f1d1d;
+  --success: #4d7c2f;
+  --warning: #a16207;
+  --border: #e4ddd0;
+  --input: #d3c9b8;
+  --ring: #c8321f;
+  --code: #f1ebdf;
+  --shadow-card: 0 0 2px rgb(60 40 20 / 0.12), 0 2px 4px rgb(60 40 20 / 0.12);
+  --shadow-raised: 0 0 8px rgb(60 40 20 / 0.12), 0 4px 8px rgb(60 40 20 / 0.14);
+  --hl-keyword: #8b3a62;
+  --hl-string: #4d7c2f;
+  --hl-comment: #8a8070;
+  --hl-number: #b8651b;
+  --hl-title: #1f5a73;
+  --hl-add: #e3efd2;
+  --hl-del: #f6d9d4;
 }
 
 .dark {
-  --background: #1f1f1f;
-  --foreground: #ffffff;
-  --card: #292929;
-  --card-foreground: #ffffff;
-  --popover: #333333;
-  --popover-foreground: #ffffff;
-  --primary: #479ef5;
-  --primary-hover: #62abf5;
-  --primary-pressed: #2886de;
-  --primary-foreground: #0a0a0a;
-  --secondary: #333333;
-  --secondary-foreground: #ffffff;
-  --muted: #2e2e2e;
-  --muted-foreground: #adadad;
-  --accent: #082338;
-  --accent-foreground: #96c6fa;
-  --destructive: #dc626d;
-  --success: #54b054;
-  --warning: #f7a070;
-  --border: #3d3d3d;
-  --input: #666666;
-  --ring: #479ef5;
-  --code: #1a1a1a;
-  --shadow-card: 0 0 2px rgb(0 0 0 / 0.24), 0 2px 4px rgb(0 0 0 / 0.28);
-  --shadow-raised: 0 0 8px rgb(0 0 0 / 0.24), 0 4px 8px rgb(0 0 0 / 0.28);
-  --hl-keyword: #c4b5fd;
-  --hl-string: #86efac;
-  --hl-comment: #a8a29e;
-  --hl-number: #fdba74;
-  --hl-title: #93c5fd;
-  --hl-add: #14532d;
-  --hl-del: #7f1d1d;
+  --background: #14110f;
+  --foreground: #f3ede2;
+  --card: #1d1916;
+  --card-foreground: #f3ede2;
+  --popover: #26211d;
+  --popover-foreground: #f3ede2;
+  --primary: #e8553f;
+  --primary-hover: #f06a55;
+  --primary-pressed: #d4452f;
+  --primary-foreground: #1a0f0c;
+  --secondary: #2a241f;
+  --secondary-foreground: #f3ede2;
+  --muted: #272220;
+  --muted-foreground: #a89e90;
+  --accent: #3a1c16;
+  --accent-foreground: #f4b3a6;
+  --destructive: #ef8a8a;
+  --success: #8fbf6a;
+  --warning: #e0b052;
+  --border: #342d27;
+  --input: #4a4036;
+  --ring: #e8553f;
+  --code: #100d0b;
+  --shadow-card: 0 0 2px rgb(0 0 0 / 0.4), 0 2px 4px rgb(0 0 0 / 0.4);
+  --shadow-raised: 0 0 8px rgb(0 0 0 / 0.4), 0 4px 8px rgb(0 0 0 / 0.45);
+  --hl-keyword: #e0a3c4;
+  --hl-string: #a7d17a;
+  --hl-comment: #8f8575;
+  --hl-number: #f0b36b;
+  --hl-title: #8fc4de;
+  --hl-add: #26391a;
+  --hl-del: #4a1d17;
 }
 
 @theme inline {
