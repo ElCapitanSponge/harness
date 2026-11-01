@@ -58,6 +58,19 @@ export const DeviceThatAcceptsChanges: StoryObj = {
   },
 };
 
+export const AgentOlderThanThePage: StoryObj = {
+  // An agent started before these settings existed sends a report without them. The page says so; it does not crash.
+  parameters: seed([[["nodes"], [node({ nodeId: "anakin" })]], [["settings", "anakin"], { settings: { projectRoots: {}, allowedTools: ["read_file"], modelControl: false, claude: false, gameProcesses: [] }, sources: {}, locked: [], remoteConfig: true }]]),
+  render: () => {
+    return <DevicesView />;
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(await canvas.findByText(/is older than this page/)).toBeVisible();
+    await expect(canvas.queryByRole("button", { name: "Save settings" })).toBeNull();
+  },
+};
+
 export const FolderThatCanOnlyBeRead: StoryObj = {
   parameters: seed([[["nodes"], [node({ nodeId: "anakin" })]], [["settings", "anakin"], report()]]),
   render: () => {

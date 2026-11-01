@@ -10,6 +10,7 @@ import { ConversationView } from "@/views/ConversationView";
 import { DevicesView } from "@/views/DevicesView";
 import { Layout } from "@/views/Layout";
 import { NewConversation } from "@/views/NewConversation";
+import { RouteError } from "@/views/RouteError";
 
 // A rejected key sends the person back to the sign-in form.
 const queryClient = new QueryClient({
@@ -33,6 +34,7 @@ const router = createBrowserRouter([
   {
     path: "/",
     element: <Layout />,
+    errorElement: <RouteError />,
     children: [
       { index: true, element: <NewConversation /> },
       { path: "c/:id", element: <ConversationView /> },

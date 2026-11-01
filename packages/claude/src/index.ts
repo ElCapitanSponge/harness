@@ -1,15 +1,27 @@
 import { execFile } from "node:child_process";
-import { textOf, type ChatRequest, type ClaudeLimits } from "@harness/core";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import { textOf, type ChatRequest, type ClaudeLimits, type ToolCall } from "@harness/core";
 import { ClaudeLimitError, limitedUntil, readLimits, type RateLimitInfo } from "./limits.js";
+import { parseToolCalls, renderToolCall, renderToolResult, toolInstructions } from "./tools.js";
 
 export { ClaudeLimitError } from "./limits.js";
 
 export type Exec = (bin: string, args: string[], input: string) => Promise<string>;
 
+// An empty folder to run the program in, so it finds no project instructions or memory files of its own: what it knows is what
+// the gateway sent. Its login and plan are still the user's.
+export const isolatedDir = (): string => {
+  const dir = path.join(os.tmpdir(), "torii-claude");
+  fs.mkdirSync(dir, { recursive: true });
+  return dir;
+};
+
 // Runs the official `claude` CLI in headless mode so the user's own login and plan are used.
 export const defaultExec: Exec = (bin, args, input) => {
   return new Promise((resolve, reject) => {
-    const child = execFile(bin, args, { maxBuffer: 32 * 1024 * 1024, timeout: 300_000 }, (err, stdout, stderr) => {
+    const child = execFile(bin, args, { maxBuffer: 32 * 1024 * 1024, timeout: 300_000, cwd: isolatedDir() }, (err, stdout, stderr) => {
       if (err) {
         reject(new Error(stderr.trim() || stdout.trim() || err.message));
       } else {
@@ -21,39 +33,61 @@ export const defaultExec: Exec = (bin, args, input) => {
 };
 
 export const toPrompt = (req: ChatRequest): { system?: string; prompt: string } => {
-  const system = req.messages.filter((m) => {
-    return m.role === "system";
-  }).map((m) => {
-    return textOf(m.content);
-  }).join("\n\n");
+  const tools = req.tools ?? [];
+  const system = [
+    ...req.messages.filter((m) => {
+      return m.role === "system";
+    }).map((m) => {
+      return textOf(m.content);
+    }),
+    ...(tools.length > 0 ? [toolInstructions(tools)] : []),
+  ].join("\n\n");
+  // A tool result names its tool only by the id of the call it answers, so the names are remembered as the calls go by.
+  const names = new Map<string, string>();
   const turns = req.messages.filter((m) => {
-    return m.role === "user" || m.role === "assistant";
+    return m.role === "user" || m.role === "assistant" || m.role === "tool";
   });
-  const prompt
-    = turns.length === 1
-      ? textOf(turns[0]?.content)
-      : turns.map((m) => {
-          return `${m.role === "user" ? "User" : "Assistant"}: ${textOf(m.content)}`;
-        }).join("\n\n");
+  const lines = turns.map((m) => {
+    if (m.role === "tool") {
+      return renderToolResult(names.get(m.tool_call_id ?? "") ?? m.name ?? "tool", textOf(m.content));
+    }
+    const calls = m.tool_calls ?? [];
+    for (const call of calls) {
+      names.set(call.id, call.function.name);
+    }
+    const said = textOf(m.content);
+    const label = m.role === "user" ? "User" : "Assistant";
+    return [`${label}: ${said}`.trimEnd(), ...calls.map(renderToolCall)].join("\n");
+  });
+  const prompt = turns.length === 1 && turns[0]?.role === "user" ? textOf(turns[0].content) : lines.join("\n\n");
   return { system: system || undefined, prompt };
 };
+
+// Used when the conversation has no system message of its own.
+const DEFAULT_SYSTEM = "You are a helpful assistant. Answer clearly and say so when you are not sure.";
 
 export const buildArgs = (req: ChatRequest, system?: string): string[] => {
   const alias = req.model.replace(/^claude:?/, "");
   // stream-json carries the plan's usage windows (rate_limit_event) that plain json leaves out; it needs --verbose.
-  const args = ["-p", "--output-format", "stream-json", "--verbose", "--no-session-persistence", "--tools", ""];
+  // Torii supplies the whole context itself: its own system prompt replaces the program's (which describes tools it is not given here), and
+  // extra tool servers and skills from the user's own setup are left out, so a chat is not coloured by them and costs less.
+  const args = ["-p", "--output-format", "stream-json", "--verbose", "--no-session-persistence", "--tools", "", "--strict-mcp-config", "--disable-slash-commands"];
   if (alias) {
     args.push("--model", alias);
   }
-  if (system) {
-    args.push("--append-system-prompt", system);
+  // How hard Claude thinks, where the program allows it: low, medium, high, xhigh or max.
+  if (req.effort) {
+    args.push("--effort", req.effort);
   }
+  args.push("--system-prompt", system ?? DEFAULT_SYSTEM);
   return args;
 };
 
 export interface ClaudeResult {
   text: string;
   model: string;
+  // The tools Claude asked to use, when tools were offered. The coding loop runs them and sends the results back.
+  toolCalls?: ToolCall[];
   // What the program counted for the call. Prompt tokens include its cached input.
   usage?: { inputTokens: number; outputTokens: number };
   limits?: ClaudeLimits;
@@ -119,25 +153,38 @@ export const parseClaudeOutput = (out: string, fallbackModel: string, now = Date
 export const runClaude = async (bin: string, req: ChatRequest, exec: Exec = defaultExec): Promise<ClaudeResult> => {
   const { system, prompt } = toPrompt(req);
   const out = await exec(bin, buildArgs(req, system), prompt);
-  return parseClaudeOutput(out, req.model);
+  const result = parseClaudeOutput(out, req.model);
+  const tools = req.tools ?? [];
+  if (tools.length === 0) {
+    return result;
+  }
+  // With tools offered, the reply is read for requests to use them, which become ordinary tool calls.
+  const parsed = parseToolCalls(result.text, tools);
+  const note = parsed.unknown.length > 0 ? `\n\n(Claude asked for a tool that is not available: ${parsed.unknown.join(", ")}.)` : "";
+  return { ...result, text: `${parsed.text}${note}`.trim(), ...(parsed.calls.length > 0 ? { toolCalls: parsed.calls } : {}) };
 };
 
-// Claude answers in one piece, so a streamed reply is a single content chunk, a stop chunk and [DONE].
+// Claude answers in one piece, so a streamed reply is a single content chunk (with any tool calls whole), a stop chunk and [DONE].
 export const toSse = (r: ClaudeResult): string => {
   const id = `chatcmpl-claude-${Date.now()}`;
   const created = Math.floor(Date.now() / 1000);
   const chunk = (delta: object, finish: string | null) => {
     return `data: ${JSON.stringify({ id, object: "chat.completion.chunk", created, model: r.model, choices: [{ index: 0, delta, finish_reason: finish }] })}\n\n`;
   };
-  return chunk({ role: "assistant", content: r.text }, null) + chunk({}, "stop") + "data: [DONE]\n\n";
+  const calls = (r.toolCalls ?? []).map((c, index) => {
+    return { index, ...c };
+  });
+  const first = { role: "assistant", content: r.text, ...(calls.length > 0 ? { tool_calls: calls } : {}) };
+  return chunk(first, null) + chunk({}, calls.length > 0 ? "tool_calls" : "stop") + "data: [DONE]\n\n";
 };
 
 export const toOpenAIResponse = (r: ClaudeResult) => {
+  const calls = r.toolCalls ?? [];
   return {
     id: `chatcmpl-claude-${Date.now()}`,
     object: "chat.completion",
     created: Math.floor(Date.now() / 1000),
     model: r.model,
-    choices: [{ index: 0, message: { role: "assistant", content: r.text }, finish_reason: "stop" }],
+    choices: [{ index: 0, message: { role: "assistant", content: r.text, ...(calls.length > 0 ? { tool_calls: calls } : {}) }, finish_reason: calls.length > 0 ? "tool_calls" : "stop" }],
   };
 };
