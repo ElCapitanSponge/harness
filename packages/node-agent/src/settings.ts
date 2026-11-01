@@ -1,7 +1,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
-import { DeviceSettings, SETTING_KEYS, nonEmpty, type SettingKey, type SettingsReport } from "@harness/core";
-import { findTool, tools as allTools } from "@harness/tools";
+import { DeviceSettings, SETTING_KEYS, ToolAccess, nonEmpty, type SettingKey, type SettingsReport } from "@harness/core";
+import { findTool, toolNamesFor, tools as allTools } from "@harness/tools";
 import type { AuditEntry } from "./audit.js";
 import { parseRoots } from "./toolserver.js";
 
@@ -9,7 +9,9 @@ import { parseRoots } from "./toolserver.js";
 // where the gateway cannot reach, so a remote change is refused.
 export const SETTING_ENV: Record<SettingKey, string> = {
   projectRoots: "PROJECT_ROOTS",
-  allowedTools: "ALLOWED_TOOLS",
+  readOnlyRoots: "READ_ONLY_ROOTS",
+  onDeviceTools: "ALLOW_ON_DEVICE_TOOLS",
+  remoteTools: "ALLOW_REMOTE_TOOLS",
   modelControl: "ALLOW_MODEL_CONTROL",
   claude: "CLAUDE_ENABLED",
   gameProcesses: "GAME_PROCESSES",
@@ -18,7 +20,10 @@ export const SETTING_ENV: Record<SettingKey, string> = {
 
 const DEFAULTS: DeviceSettings = {
   projectRoots: {},
-  allowedTools: ["read_file", "list_dir", "grep"],
+  readOnlyRoots: [],
+  // Reading on the device is on, as it always was; reaching out (the web, GitHub) and changing anything are off until chosen.
+  onDeviceTools: "read",
+  remoteTools: "off",
   modelControl: false,
   claude: false,
   gameProcesses: ["RocketLeague.exe", "Fortnite.exe", "eldenring.exe", "cs2.exe", "Cyberpunk2077.exe"],
@@ -31,8 +36,33 @@ const list = (value: string): string[] => {
   }).filter(Boolean);
 };
 
+// An access level from text, where anything unrecognised means off, which is the safe reading.
+const accessOf = (value: string): ToolAccess => {
+  const parsed = ToolAccess.safeParse(value.trim().toLowerCase());
+  return parsed.success ? parsed.data : "off";
+};
+
+// The access levels a list of tool names amounts to: the most a group's tools in the list can do.
+export const accessOfTools = (names: string[]): { onDeviceTools: ToolAccess; remoteTools: ToolAccess } => {
+  const level = (group: "device" | "remote"): ToolAccess => {
+    const picked = allTools.filter((t) => {
+      return t.group === group && names.includes(t.def.function.name);
+    });
+    if (picked.some((t) => {
+      return t.level === "change";
+    })) {
+      return "change";
+    }
+    return picked.length > 0 ? "read" : "off";
+  };
+  return { onDeviceTools: level("device"), remoteTools: level("remote") };
+};
+
 const fromEnv = (key: SettingKey, value: string): DeviceSettings[SettingKey] => {
   switch (key) {
+    case "onDeviceTools":
+    case "remoteTools":
+      return accessOf(value);
     case "projectRoots":
       return parseRoots(value);
     case "modelControl":
@@ -47,14 +77,8 @@ const fromEnv = (key: SettingKey, value: string): DeviceSettings[SettingKey] => 
   }
 };
 
-// Checks what a schema cannot: that the tools exist and that the folders are there.
+// Checks what a schema cannot: that the folders are there.
 const checkValue = async (key: SettingKey, value: unknown): Promise<string | undefined> => {
-  if (key === "allowedTools") {
-    const unknown = (value as string[]).filter((name) => {
-      return !findTool(name);
-    });
-    return unknown.length > 0 ? `unknown tool: ${unknown.join(", ")}` : undefined;
-  }
   if (key === "projectRoots") {
     for (const [name, dir] of Object.entries(value as Record<string, string>)) {
       const stat = await fs.stat(path.resolve(dir)).catch(() => {
@@ -89,10 +113,12 @@ export const createSettings = async (opts: SettingsOptions) => {
   const env = opts.env ?? process.env;
   const warn = opts.warn ?? console.warn;
   const saved: Partial<Record<SettingKey, unknown>> = {};
+  let legacySaved: unknown;
 
   try {
     const parsed: unknown = JSON.parse(await fs.readFile(opts.file, "utf8"));
     if (typeof parsed === "object" && parsed !== null) {
+      legacySaved = (parsed as Record<string, unknown>).allowedTools;
       for (const key of SETTING_KEYS) {
         const result = DeviceSettings.shape[key].safeParse((parsed as Record<string, unknown>)[key]);
         if (result.success) {
@@ -108,21 +134,56 @@ export const createSettings = async (opts: SettingsOptions) => {
     }
   }
 
+  // The one list of tool names that earlier versions took (ALLOWED_TOOLS). When it is set it decides exactly which tools there are,
+  // and both tool groups are shown as locked at what that list amounts to.
+  const legacyTools = (): string[] | undefined => {
+    const raw = nonEmpty(env.ALLOWED_TOOLS);
+    return raw === undefined ? undefined : list(raw);
+  };
+  const isLevel = (key: SettingKey): key is "onDeviceTools" | "remoteTools" => {
+    return key === "onDeviceTools" || key === "remoteTools";
+  };
   const envValue = (key: SettingKey): string | undefined => {
     const raw = env[SETTING_ENV[key]];
     return key === "modelControl" || key === "claude" ? raw : nonEmpty(raw);
   };
   const isLocked = (key: SettingKey): boolean => {
-    return envValue(key) !== undefined && envValue(key) !== "";
+    return (envValue(key) !== undefined && envValue(key) !== "") || (isLevel(key) && legacyTools() !== undefined);
   };
+  // Which environment variable fixes a setting, for saying so.
+  const lockedBy = (key: SettingKey): string => {
+    return isLevel(key) && nonEmpty(env[SETTING_ENV[key]]) === undefined && legacyTools() !== undefined ? "ALLOWED_TOOLS" : SETTING_ENV[key];
+  };
+
+  // A list saved by an earlier version becomes the two levels it amounts to.
+  if (Array.isArray(legacySaved) && legacySaved.every((n) => {
+    return typeof n === "string";
+  })) {
+    const levels = accessOfTools(legacySaved);
+    saved.onDeviceTools ??= levels.onDeviceTools;
+    saved.remoteTools ??= levels.remoteTools;
+  }
 
   const resolve = (): DeviceSettings => {
     const out: Record<string, unknown> = {};
+    const legacy = legacyTools();
     for (const key of SETTING_KEYS) {
       const fixed = envValue(key);
-      out[key] = isLocked(key) && fixed !== undefined ? fromEnv(key, fixed) : (saved[key] ?? DEFAULTS[key]);
+      if (fixed !== undefined && fixed !== "") {
+        out[key] = fromEnv(key, fixed);
+      } else if (isLevel(key) && legacy !== undefined) {
+        out[key] = accessOfTools(legacy)[key];
+      } else {
+        out[key] = saved[key] ?? DEFAULTS[key];
+      }
     }
     return out as unknown as DeviceSettings;
+  };
+
+  // The tools to offer: the old list if one is set, otherwise what the two groups allow.
+  const toolNames = (): string[] => {
+    const now = resolve();
+    return legacyTools() ?? toolNamesFor(now.onDeviceTools, now.remoteTools);
   };
 
   const report = (): SettingsReport => {
@@ -131,7 +192,7 @@ export const createSettings = async (opts: SettingsOptions) => {
       sources[key] = isLocked(key) ? "env" : saved[key] === undefined ? "default" : "file";
     }
     const toolList = allTools.map((t) => {
-      return { name: t.def.function.name, installed: t.requires === undefined || (opts.installed?.(t.requires) ?? true), asksFirst: t.needsApproval };
+      return { name: t.def.function.name, group: t.group, level: t.level, installed: t.requires === undefined || (opts.installed?.(t.requires) ?? true), asksFirst: t.needsApproval };
     });
     return { settings: resolve(), sources, locked: SETTING_KEYS.filter(isLocked), remoteConfig: opts.remoteConfig, tools: toolList };
   };
@@ -149,6 +210,8 @@ export const createSettings = async (opts: SettingsOptions) => {
 
   return {
     current: resolve,
+    // The names of the tools to offer, for the tool server and the heartbeat.
+    tools: toolNames,
     report,
     // Applies a partial change from the gateway. Nothing changes unless every part of it is valid.
     async apply(patch: unknown): Promise<ApplyResult> {
@@ -162,7 +225,16 @@ export const createSettings = async (opts: SettingsOptions) => {
       if (typeof patch !== "object" || patch === null || Array.isArray(patch)) {
         return refuse("settings must be an object");
       }
-      const entries = Object.entries(patch);
+      // A list of tool names, as earlier versions sent it, is taken as the two levels it amounts to.
+      const entries = Object.entries(patch).flatMap(([name, value]): [string, unknown][] => {
+        if (name !== "allowedTools" || !Array.isArray(value)) {
+          return [[name, value]];
+        }
+        const levels = accessOfTools(value.filter((v): v is string => {
+          return typeof v === "string" && findTool(v) !== undefined;
+        }));
+        return [["onDeviceTools", levels.onDeviceTools], ["remoteTools", levels.remoteTools]];
+      });
       const accepted: [SettingKey, unknown][] = [];
       for (const [name, value] of entries) {
         const key = SETTING_KEYS.find((k) => {
@@ -172,7 +244,7 @@ export const createSettings = async (opts: SettingsOptions) => {
           return refuse(`unknown setting "${name}"`);
         }
         if (isLocked(key)) {
-          return refuse(`${key} is fixed by the ${SETTING_ENV[key]} environment variable on this device`);
+          return refuse(`${key} is fixed by the ${lockedBy(key)} environment variable on this device`);
         }
         const parsed = DeviceSettings.shape[key].safeParse(value);
         if (!parsed.success) {

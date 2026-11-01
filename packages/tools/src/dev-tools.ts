@@ -157,6 +157,8 @@ const ghTool = (mode: "read" | "write"): ToolSpec => {
       },
     },
     needsApproval: mode === "write",
+    group: "remote",
+    level: mode === "write" ? "change" : "read",
     requires: "gh",
     describe: (a) => {
       return `gh ${Array.isArray(a.args)
@@ -251,6 +253,8 @@ const gitTool = (mode: "read" | "write"): ToolSpec => {
       },
     },
     needsApproval: mode === "write",
+    group: "device",
+    level: mode === "write" ? "change" : "read",
     requires: "git",
     describe: (a) => {
       return `git ${Array.isArray(a.args)
@@ -322,6 +326,8 @@ const jqTool: ToolSpec = {
     },
   },
   needsApproval: false,
+  group: "device",
+  level: "read",
   requires: "jq",
   describe: (a) => {
     return `jq ${show(a.filter)}${typeof a.file === "string" ? ` ${a.file}` : ""}`;
@@ -354,6 +360,8 @@ const fzfTool: ToolSpec = {
     },
   },
   needsApproval: false,
+  group: "device",
+  level: "read",
   requires: "fzf",
   describe: (a) => {
     return `fzf --filter ${show(a.query)}${typeof a.file === "string" ? ` ${a.file}` : ""}`;

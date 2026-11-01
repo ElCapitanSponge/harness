@@ -578,8 +578,10 @@ export class Sessions {
     if (!node.roots?.includes(root)) {
       throw new Error(`device "${device}" does not expose a project root named "${root}"`);
     }
+    // In a folder that can only be read, tools that could change it are not offered at all, so the model plans around that.
+    const readOnly = node.readOnlyRoots?.includes(root) ?? false;
     const specs = allTools.filter((t) => {
-      return node.allowedTools?.includes(t.def.function.name);
+      return node.allowedTools?.includes(t.def.function.name) && !(readOnly && t.group === "device" && t.level === "change");
     });
     if (specs.length === 0) {
       throw new Error(`device "${device}" does not allow any tools`);
@@ -603,6 +605,11 @@ export class Sessions {
         return n.nodeId === device;
       })?.platform;
       prompt = systemPrompt(root, platform);
+      if (this.opts.registry.live().find((n) => {
+        return n.nodeId === device;
+      })?.readOnlyRoots?.includes(root)) {
+        prompt += " This folder is read-only: you can look at its files but cannot change, create or delete anything in it.";
+      }
     }
     const now = Date.now();
     const session = new Session(

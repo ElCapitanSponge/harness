@@ -1,17 +1,32 @@
 import { Check, Copy, Lock, Monitor, Plus } from "lucide-react";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Badge, Checkbox, Input, Switch, Textarea } from "@/components/ui/fields";
+import { Badge, Input, Switch, Textarea } from "@/components/ui/fields";
 import { Dialog, DialogContent, DialogTrigger } from "@/components/ui/overlay";
 import { keyStore } from "@/lib/api";
 import { useDeviceSettings, useNodes, useSaveSettings } from "@/lib/queries";
 import type { NodeRecord, SettingKey, SettingsReport } from "@/lib/types";
+import { cn } from "@/lib/utils";
 
-// Used for an older agent that does not list its tools.
-const FALLBACK_TOOLS = ["read_file", "list_dir", "grep", "write_file", "edit_file", "run_command"].map((name) => {
-  return { name, installed: true, asksFirst: ["write_file", "edit_file", "run_command"].includes(name) };
-});
-const SETTING_ENV: Record<SettingKey, string> = { projectRoots: "PROJECT_ROOTS", allowedTools: "ALLOWED_TOOLS", modelControl: "ALLOW_MODEL_CONTROL", claude: "CLAUDE_ENABLED", gameProcesses: "GAME_PROCESSES", idleUnloadMinutes: "IDLE_UNLOAD_MINUTES" };
+type Access = "off" | "read" | "change";
+type ToolInfo = NonNullable<SettingsReport["tools"]>[number];
+
+const SETTING_ENV: Record<SettingKey, string> = {
+  projectRoots: "PROJECT_ROOTS",
+  readOnlyRoots: "READ_ONLY_ROOTS",
+  onDeviceTools: "ALLOW_ON_DEVICE_TOOLS",
+  remoteTools: "ALLOW_REMOTE_TOOLS",
+  modelControl: "ALLOW_MODEL_CONTROL",
+  claude: "CLAUDE_ENABLED",
+  gameProcesses: "GAME_PROCESSES",
+  idleUnloadMinutes: "IDLE_UNLOAD_MINUTES",
+};
+
+const ACCESS: { value: Access; label: string }[] = [
+  { value: "off", label: "Off" },
+  { value: "read", label: "Read-only" },
+  { value: "change", label: "Can change" },
+];
 
 const Field = ({ name, label, report, children }: { name: SettingKey; label: string; report: SettingsReport; children: React.ReactNode }) => {
   const locked = report.locked.includes(name);
@@ -23,6 +38,55 @@ const Field = ({ name, label, report, children }: { name: SettingKey; label: str
         {locked ? <Badge tone="warning"><Lock className="size-3" /> fixed by {SETTING_ENV[name]}</Badge> : <Badge>{source === "file" ? "set from here" : "default"}</Badge>}
       </div>
       {children}
+    </div>
+  );
+};
+
+// One group of tools: off, read-only or able to change things, and which tools that gives.
+const ToolGroupControl = ({ group, label, hint, value, onChange, disabled, tools }: { group: "device" | "remote"; label: string; hint: string; value: Access; onChange: (value: Access) => void; disabled: boolean; tools: ToolInfo[] }) => {
+  const members = tools.filter((t) => {
+    return t.group === group;
+  });
+  const included = (t: ToolInfo): boolean => {
+    return value === "change" || (value === "read" && t.level === "read");
+  };
+  return (
+    <div className="grid gap-2">
+      <div className="inline-flex w-fit rounded-lg border bg-card p-0.5" role="radiogroup" aria-label={label}>
+        {ACCESS.map((a) => {
+          return (
+            <button
+              key={a.value}
+              type="button"
+              role="radio"
+              aria-checked={value === a.value}
+              disabled={disabled}
+              className={cn("rounded-md px-3 py-1 font-semibold text-muted-foreground hover:text-foreground disabled:opacity-60", value === a.value && "bg-accent text-accent-foreground")}
+              onClick={() => {
+                onChange(a.value);
+              }}
+            >
+              {a.label}
+            </button>
+          );
+        })}
+      </div>
+      <p className="text-xs text-muted-foreground">{hint}</p>
+      {members.length > 0
+        ? (
+            <ul className="grid gap-x-5 gap-y-1 sm:grid-cols-2" aria-label={`${label}: tools`}>
+              {members.map((t) => {
+                return (
+                  <li key={t.name} className={cn("flex flex-wrap items-center gap-1.5 font-mono text-[13px]", !included(t) && "text-muted-foreground opacity-60")}>
+                    {t.name}
+                    {t.asksFirst ? <Badge tone="warning">asks first</Badge> : null}
+                    {t.installed ? null : <Badge tone="danger">not installed</Badge>}
+                  </li>
+                );
+              })}
+            </ul>
+          )
+        : null}
     </div>
   );
 };
@@ -47,7 +111,9 @@ const parseRoots = (text: string): Record<string, string> => {
 const SettingsForm = ({ node, report }: { node: NodeRecord; report: SettingsReport }) => {
   const save = useSaveSettings(node.nodeId);
   const [roots, setRoots] = useState(rootsText(report.settings.projectRoots));
-  const [tools, setTools] = useState(report.settings.allowedTools);
+  const [readOnly, setReadOnly] = useState(report.settings.readOnlyRoots);
+  const [onDevice, setOnDevice] = useState<Access>(report.settings.onDeviceTools);
+  const [remote, setRemote] = useState<Access>(report.settings.remoteTools);
   const [modelControl, setModelControl] = useState(report.settings.modelControl);
   const [claude, setClaude] = useState(report.settings.claude);
   const [games, setGames] = useState(report.settings.gameProcesses.join(", "));
@@ -55,11 +121,17 @@ const SettingsForm = ({ node, report }: { node: NodeRecord; report: SettingsRepo
   const off = (name: SettingKey): boolean => {
     return !report.remoteConfig || report.locked.includes(name);
   };
+  const rootNames = Object.keys(parseRoots(roots));
 
   const submit = (): void => {
     const all: Record<SettingKey, unknown> = {
       projectRoots: parseRoots(roots),
-      allowedTools: tools,
+      // Only names that are still folders, so removing a folder does not leave a stale name behind.
+      readOnlyRoots: readOnly.filter((name) => {
+        return rootNames.includes(name);
+      }),
+      onDeviceTools: onDevice,
+      remoteTools: remote,
       modelControl,
       claude,
       idleUnloadMinutes: Math.max(0, Math.floor(Number(idle) || 0)),
@@ -81,24 +153,34 @@ const SettingsForm = ({ node, report }: { node: NodeRecord; report: SettingsRepo
         }}
         />
       </Field>
-      <Field name="allowedTools" label="Tools coding sessions may run" report={report}>
-        <div className="grid gap-x-5 gap-y-2 sm:grid-cols-2">
-          {(report.tools ?? FALLBACK_TOOLS).map(({ name, installed, asksFirst }) => {
-            return (
-              <label key={name} className="flex items-center gap-2 font-mono text-[13px]">
-                <Checkbox disabled={off("allowedTools") || (!installed && !tools.includes(name))} checked={tools.includes(name)} onCheckedChange={(checked) => {
-                  setTools(checked === true ? [...tools, name] : tools.filter((t) => {
-                    return t !== name;
-                  }));
-                }}
-                />
-                {name}
-                {asksFirst ? <Badge tone="warning">asks first</Badge> : null}
-                {installed ? null : <Badge tone="danger">not installed</Badge>}
-              </label>
-            );
-          })}
-        </div>
+      <Field name="readOnlyRoots" label="Folders that can only be read" report={report}>
+        {rootNames.length === 0
+          ? <p className="text-xs text-muted-foreground">Add a project folder first.</p>
+          : (
+              <div className="grid gap-1.5 sm:grid-cols-2">
+                {rootNames.map((name) => {
+                  return (
+                    <label key={name} className="flex items-center gap-2 text-[13px]">
+                      <Switch disabled={off("readOnlyRoots")} checked={readOnly.includes(name)} aria-label={`${name} is read-only`} onCheckedChange={(checked) => {
+                        setReadOnly(checked ? [...readOnly, name] : readOnly.filter((n) => {
+                          return n !== name;
+                        }));
+                      }}
+                      />
+                      <span className="font-mono">{name}</span>
+                      <span className="text-xs text-muted-foreground">{readOnly.includes(name) ? "read only" : "can be changed"}</span>
+                    </label>
+                  );
+                })}
+              </div>
+            )}
+        <p className="text-xs text-muted-foreground">Nothing in a read-only folder can be written, edited, deleted or committed, and commands do not run there. Sessions there are not offered the tools that could.</p>
+      </Field>
+      <Field name="onDeviceTools" label="Tools on this device" report={report}>
+        <ToolGroupControl group="device" label="Tools on this device" hint="Work on this machine's files and programs: reading files, searching, git, jq, fzf. Can change adds writing and editing files, running commands and committing, which always ask first." value={onDevice} onChange={setOnDevice} disabled={off("onDeviceTools")} tools={report.tools ?? []} />
+      </Field>
+      <Field name="remoteTools" label="Tools that reach out" report={report}>
+        <ToolGroupControl group="remote" label="Tools that reach out" hint="Go beyond this machine: fetching web pages and GitHub. Can change adds opening pull requests and comments, which always ask first. Fetching a page asks each time." value={remote} onChange={setRemote} disabled={off("remoteTools")} tools={report.tools ?? []} />
       </Field>
       <Field name="modelControl" label="Let the gateway load and unload models" report={report}>
         <Switch disabled={off("modelControl")} checked={modelControl} aria-label="Model control" onCheckedChange={setModelControl} />

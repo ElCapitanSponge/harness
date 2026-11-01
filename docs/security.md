@@ -16,7 +16,8 @@ Each limit is enforced on the **device**, not by the gateway, so a compromised g
 | Control | Where | What it does |
 |---|---|---|
 | `PROJECT_ROOTS` | device | Nothing is exposed unless set. Only the named folders are reachable. Paths outside them, including through symlinks and `..`, are refused. |
-| `ALLOWED_TOOLS` | device | Only the listed tools run. The default is read-only (`read_file`, `list_dir`, `grep`). `write_file`, `edit_file` and `run_command` must be added on purpose. |
+| `ALLOW_ON_DEVICE_TOOLS`, `ALLOW_REMOTE_TOOLS` | device | Two groups of tools, each `off`, `read` or `change`. The defaults are reading on the device (`read`) and nothing that reaches out (`off`). Changing anything, and reaching the web or GitHub, must be turned on on purpose. The old `ALLOWED_TOOLS` list still works and, when set, decides exactly which tools run. |
+| `READ_ONLY_ROOTS` | device | Names of project folders that can only be read: the agent refuses every tool that could write, edit, delete or commit there, including commands, whatever the gateway asks for. The gateway also does not offer those tools to the model in such a folder. |
 | Audit log | device | Every tool call the gateway makes, including refused ones, is appended to `AUDIT_LOG` (default `~/.harness/audit.log`) as one JSON line: time, session, root, tool, a description, outcome. File contents are never logged. |
 | `ALLOW_MODEL_CONTROL` | device | Off by default. When on, the gateway can load and unload models in this device's LM Studio, but never while the device is busy, and model ids are checked before they reach the `lms` program. |
 | Approvals | gateway | Writes, edits and commands wait for a yes from whoever drives the session. No answer in five minutes is a no, and cancelling is a no. A decline ends the turn. |
@@ -34,7 +35,7 @@ Each limit is enforced on the **device**, not by the gateway, so a compromised g
 ## Recommended setup
 
 1. Keep the API key out of repositories and chat. It lives in each device's `.env` and the gateway's environment.
-2. Leave `ALLOWED_TOOLS` at its default on every device, and add the write tools only where you want sessions to change files.
+2. Leave the tool groups at their defaults on every device (reading on the device, nothing that reaches out), turn on `change` only where you want sessions to change files, and mark folders you only want read as read-only.
 3. Expose small project folders in `PROJECT_ROOTS`, not a home directory.
 4. Check `~/.harness/audit.log` after sessions you did not watch.
 5. Add the Tailscale ACL below so only your own devices can reach the gateway.

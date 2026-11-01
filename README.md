@@ -106,10 +106,11 @@ On the device that owns the files, set these before starting its node agent:
 
 ```bash
 PROJECT_ROOTS=proj=/home/me/code/proj        # name=path, several separated by ":" (";" on Windows)
-ALLOWED_TOOLS=read_file,list_dir,grep        # the default: read-only. Add write_file,edit_file,run_command to allow changes
+ALLOW_ON_DEVICE_TOOLS=read                   # off, read (the default) or change: write_file, edit_file, run_command, git_write
+READ_ONLY_ROOTS=docs                         # folders that can only be read, by name
 ```
 
-Nothing is exposed unless `PROJECT_ROOTS` is set, and only the tools in `ALLOWED_TOOLS` run, whatever the gateway asks for. Then, from any device:
+Nothing is exposed unless `PROJECT_ROOTS` is set, and only the tools your two tool groups allow run, whatever the gateway asks for. Then, from any device:
 
 ```bash
 harness nodes                                         # the ROOTS column shows what each device exposes
@@ -193,7 +194,10 @@ If no idle node matches, the gateway returns `503`.
 | `REMOTE_CONFIG` | node agent | unset. Set to `1` to let the page change this device's settings (see [devices.md](docs/devices.md)) |
 | `SETTINGS_FILE` | node agent | `~/.harness/agent-settings.json`. Where settings changed from the page are saved |
 | `PROJECT_ROOTS` | node agent | unset (no tools exposed). `name=path` entries for folders coding sessions may use |
-| `ALLOWED_TOOLS` | node agent | `read_file,list_dir,grep`. Add `write_file,edit_file,run_command` to allow changes |
+| `ALLOW_ON_DEVICE_TOOLS` | node agent | `read`. `off`, `read` or `change`: tools that work on this device's files and programs (`change` adds write, edit, commands and git changes) |
+| `ALLOW_REMOTE_TOOLS` | node agent | `off`. `off`, `read` or `change`: tools that reach out, the web and GitHub |
+| `READ_ONLY_ROOTS` | node agent | unset. Names of project folders that can only be read |
+| `ALLOWED_TOOLS` | node agent | unset. The older single list of tool names; when set it decides exactly which tools run |
 | `AUDIT_LOG` | node agent | `~/.harness/audit.log`. Every tool call the gateway makes on this device, one JSON line each |
 | `LMS_BIN` | CLI | `~/.lmstudio/bin/lms` |
 

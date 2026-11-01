@@ -85,6 +85,10 @@ _Avoid_: truncation, trimming
 **Context meter**:
 How many tokens a conversation holds against the window of the model that last answered. A number marked ~ is an estimate.
 
+**Read-only folder**:
+A project root marked so that nothing in it can be written, edited, deleted or committed by a session, and no command runs there. The agent enforces it, and the model is not offered the tools that could.
+_Avoid_: locked folder, protected folder
+
 **Developer tool**:
 A tool that runs a program on a device for a coding session: fetching a web page, or `gh`, `git`, `jq` or `fzf`. Each is off until the device's owner turns it on, reading and changing are separate tools, and changing always asks first.
 _Avoid_: plugin, command

@@ -115,3 +115,47 @@ describe("tools that need a program", () => {
     expect(createToolServer({ roots: { proj: dir }, allowed: ["git_read", "jq"] }).allowedNames()).toEqual(["git_read", "jq"]);
   });
 });
+
+describe("a folder that can only be read", () => {
+  const ask = async (name: string, args: Record<string, unknown>, root = "locked"): Promise<TunnelMessage> => {
+    const audit: string[] = [];
+    const server = createToolServer({
+      roots: { locked: dir, open: dir },
+      allowed: ["read_file", "write_file", "edit_file", "run_command", "git_write", "git_read"],
+      readOnly: ["locked"],
+      audit: (e) => {
+        audit.push(`${e.tool}:${e.outcome}`);
+      },
+    });
+    const out: TunnelMessage[] = [];
+    await server.handle({ type: "tool", id: "1", root, name, args }, (m) => {
+      out.push(m);
+    });
+    expect(out).toHaveLength(1);
+    return out[0]!;
+  };
+
+  it("lets files be read", async () => {
+    expect(await ask("read_file", { path: "a.txt" })).toMatchObject({ ok: true });
+  });
+
+  it("refuses everything that could write, edit, delete or commit there, and says why", async () => {
+    for (const [name, args] of [["write_file", { path: "b.txt", content: "x" }], ["edit_file", { path: "a.txt", old_string: "alpha", new_string: "z" }], ["run_command", { command: "rm a.txt" }], ["git_write", { args: ["commit", "-m", "x"] }]] as const) {
+      expect(await ask(name, { ...args })).toMatchObject({ ok: false, output: `project root "locked" is read-only on this device, so ${name} is not allowed there` });
+    }
+    // Nothing was touched.
+    expect(await fs.readFile(path.join(dir, "a.txt"), "utf8")).toBe("alpha\nbeta\n");
+    await expect(fs.access(path.join(dir, "b.txt"))).rejects.toThrow();
+  });
+
+  it("leaves another folder on the same device free to change", async () => {
+    expect(await ask("write_file", { path: "b.txt", content: "x" }, "open")).toMatchObject({ ok: true });
+  });
+
+  it("reports which roots are read-only, only those that exist", () => {
+    const server = createToolServer({ roots: { locked: dir }, allowed: [], readOnly: ["locked", "gone"] });
+    expect(server.readOnlyNames()).toEqual(["locked"]);
+    server.configure({ roots: { locked: dir }, allowed: [], readOnly: [] });
+    expect(server.readOnlyNames()).toEqual([]);
+  });
+});

@@ -2,7 +2,7 @@ import { spawn } from "node:child_process";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { devTools } from "./dev-tools.js";
-import { MAX_OUTPUT, num, resolveInside, show, str, truncate, type ToolSpec } from "./helpers.js";
+import { MAX_OUTPUT, num, resolveInside, show, str, truncate, type ToolLevel, type ToolSpec } from "./helpers.js";
 import { webFetch } from "./web-fetch.js";
 
 export { resolveInside, truncate, type ToolContext, type ToolSpec } from "./helpers.js";
@@ -47,6 +47,8 @@ const readFile: ToolSpec = {
     },
   },
   needsApproval: false,
+  group: "device",
+  level: "read",
   describe: (a) => {
     return `read ${show(a.path)}`;
   },
@@ -74,6 +76,8 @@ const listDir: ToolSpec = {
     },
   },
   needsApproval: false,
+  group: "device",
+  level: "read",
   describe: (a) => {
     return `list ${show(a.path, ".")}`;
   },
@@ -117,6 +121,8 @@ const grep: ToolSpec = {
     },
   },
   needsApproval: false,
+  group: "device",
+  level: "read",
   describe: (a) => {
     return `grep ${show(a.pattern)} in ${show(a.path, ".")}`;
   },
@@ -164,6 +170,8 @@ const writeFile: ToolSpec = {
     },
   },
   needsApproval: true,
+  group: "device",
+  level: "change",
   describe: (a) => {
     return `write ${show(a.path)} (${typeof a.content === "string" ? a.content.length : 0} characters)`;
   },
@@ -190,6 +198,8 @@ const editFile: ToolSpec = {
     },
   },
   needsApproval: true,
+  group: "device",
+  level: "change",
   describe: (a) => {
     return `edit ${show(a.path)}`;
   },
@@ -225,6 +235,8 @@ const runCommand: ToolSpec = {
     },
   },
   needsApproval: true,
+  group: "device",
+  level: "change",
   describe: (a) => {
     return `run: ${show(a.command)}`;
   },
@@ -258,6 +270,17 @@ const runCommand: ToolSpec = {
 };
 
 export const tools: ToolSpec[] = [readFile, listDir, grep, writeFile, editFile, runCommand, webFetch, ...devTools];
+
+// The names of the tools a device offers: each group is off, read-only, or able to change things.
+export const toolNamesFor = (device: ToolLevel | "off", remote: ToolLevel | "off"): string[] => {
+  const level = { device, remote };
+  return tools.filter((t) => {
+    const allowed = level[t.group];
+    return allowed === "change" || (allowed === "read" && t.level === "read");
+  }).map((t) => {
+    return t.def.function.name;
+  });
+};
 
 export const findTool = (name: string): ToolSpec | undefined => {
   return tools.find((t) => {
