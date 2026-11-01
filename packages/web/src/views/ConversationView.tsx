@@ -1,9 +1,10 @@
-import { Code2, MessageSquare } from "lucide-react";
+import { Code2, MessageSquare, RotateCcw } from "lucide-react";
 import { useEffect, useRef } from "react";
 import { useNavigate, useParams } from "react-router";
 import { Composer } from "@/components/Composer";
 import { ConversationActions } from "@/components/ConversationActions";
-import { Message, Waiting } from "@/components/Messages";
+import { Message, StatusLine } from "@/components/Messages";
+import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/fields";
 import { useConversation } from "@/lib/useConversation";
 import { useSessions } from "@/lib/queries";
@@ -28,7 +29,12 @@ const Conversation = ({ id }: { id: string }) => {
     }
   }, [state.items, state.busy]);
 
-  const waiting = state.busy && (last === undefined || last.kind === "user" || last.kind === "tool");
+  // The status line shows until words start to arrive, and again between a tool and the next call.
+  const waiting = state.busy && state.since !== undefined && (last === undefined || last.kind === "user" || last.kind === "tool" || (last.kind === "thinking" && !last.live) || (last.kind === "assistant" && !last.streaming));
+  const lastUser = state.items.findLast((i) => {
+    return i.kind === "user";
+  });
+  const failed = !state.busy && last?.kind === "note" && last.tone === "error" && lastUser?.kind === "user";
   const offline = info?.kind === "code" && !info.deviceConnected;
 
   return (
@@ -65,7 +71,20 @@ const Conversation = ({ id }: { id: string }) => {
               />
             );
           })}
-          {waiting ? <Waiting model={model || "the model"} /> : null}
+          {waiting && state.since !== undefined ? <StatusLine since={state.since} stage={state.stage} /> : null}
+          {failed
+            ? (
+                <div className="pl-10">
+                  <Button onClick={() => {
+                    stuck.current = true;
+                    void send(lastUser.text);
+                  }}
+                  >
+                    <RotateCcw /> Retry
+                  </Button>
+                </div>
+              )
+            : null}
           {sessions.isSuccess && !info ? <p className="text-center text-muted-foreground">This conversation no longer exists.</p> : null}
         </div>
       </div>

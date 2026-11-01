@@ -91,3 +91,27 @@ describe("parseCommand", () => {
     }).toThrow("unknown command");
   });
 });
+
+describe("parseCommand for conversations and device settings", () => {
+  it("parses sessions", () => {
+    expect(parseCommand(["sessions"])).toEqual({ name: "sessions" });
+  });
+
+  it("shows a device's settings, or changes one with a JSON value", () => {
+    expect(parseCommand(["settings", "anakin"])).toEqual({ name: "settings", device: "anakin" });
+    expect(parseCommand(["settings", "anakin", "claude", "true"])).toEqual({ name: "settings", device: "anakin", key: "claude", value: true });
+    expect(parseCommand(["settings", "anakin", "allowedTools", "[\"grep\"]"])).toEqual({ name: "settings", device: "anakin", key: "allowedTools", value: ["grep"] });
+  });
+
+  it("refuses settings without a device, a value, or valid JSON", () => {
+    expect(() => {
+      return parseCommand(["settings"]);
+    }).toThrow("needs a <device>");
+    expect(() => {
+      return parseCommand(["settings", "anakin", "claude"]);
+    }).toThrow("needs a JSON value");
+    expect(() => {
+      return parseCommand(["settings", "anakin", "claude", "yes"]);
+    }).toThrow("valid JSON");
+  });
+});

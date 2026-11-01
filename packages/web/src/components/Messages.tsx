@@ -2,7 +2,7 @@ import { Bot, Brain, ChevronRight, Loader2, ShieldQuestion, Wrench } from "lucid
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Markdown } from "@/components/Markdown";
-import type { Item } from "@/lib/conversation";
+import type { ConversationState, Item } from "@/lib/conversation";
 import { cn } from "@/lib/utils";
 
 // Seconds since a start time, ticking every second while `running`.
@@ -127,16 +127,34 @@ export const Message = ({ item, model, onAnswer }: { item: Item; model: string; 
   }
 };
 
-// Shown from when the person sent a message until the model starts to answer, so a slow load reads as work in progress.
-export const Waiting = ({ model }: { model: string }) => {
-  const [since] = useState(() => {
-    return Date.now();
-  });
+// What the request is doing, in a few words.
+export const stageLabel = (stage: ConversationState["stage"]): string => {
+  switch (stage?.name) {
+    case undefined:
+      return "Sending";
+    case "routing":
+      return "Finding a device";
+    case "freeing":
+      return `Freeing memory (unloading ${stage.detail ?? "a model"})`;
+    case "loading":
+      return `Loading ${stage.detail ?? "the model"}`;
+    case "waiting":
+      return `Waiting for ${stage.detail ?? "the model"}`;
+    case "thinking":
+      return "Thinking";
+    case "writing":
+      return "Writing";
+  }
+};
+
+// One status line from the moment Send is pressed until the first word arrives, with a running timer, so a slow
+// model load reads as work in progress and not a hang.
+export const StatusLine = ({ since, stage }: { since: number; stage: ConversationState["stage"] }) => {
   const elapsed = useElapsed(since, true);
   return (
     <div className="flex items-center gap-2 pl-10 text-[13px] text-muted-foreground" role="status">
       <Loader2 className="size-4 animate-spin" />
-      Waiting for {model}... {elapsed}s
+      {stageLabel(stage)}... {elapsed}s
     </div>
   );
 };

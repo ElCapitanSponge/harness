@@ -3,7 +3,7 @@ import { Store } from "@tanstack/store";
 import { useSelector } from "@tanstack/react-store";
 import { useEffect, useState } from "react";
 import { ApiError, api, authHeaders, keyStore, readEvents } from "./api";
-import { applyEvent, emptyConversation, type ConversationState, type StreamEvent } from "./conversation";
+import { applyEvent, emptyConversation, markBusy, type ConversationState, type StreamEvent } from "./conversation";
 
 const pause = (ms: number, signal: AbortSignal): Promise<void> => {
   return new Promise((resolve) => {
@@ -71,7 +71,7 @@ export const useConversation = (id: string) => {
   const send = async (text: string): Promise<void> => {
     // Busy at once, so the button changes before the first event comes back.
     store.setState((s) => {
-      return { ...s, busy: true };
+      return markBusy(s);
     });
     try {
       await api<unknown>(`/sessions/${id}/messages`, { method: "POST", body: { text } });

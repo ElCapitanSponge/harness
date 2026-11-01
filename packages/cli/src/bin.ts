@@ -1,11 +1,11 @@
 #!/usr/bin/env tsx
-import { isLiveEvent, nonEmpty, type ChatMessage, type SessionEvent } from "@harness/core";
+import { isLiveEvent, nonEmpty, type ChatMessage, type SessionEvent, type StageName } from "@harness/core";
 import readline from "node:readline/promises";
 import { runTurn, systemPrompt, type Approver } from "@harness/tools";
 import { Gateway } from "./api.js";
 import { isClaudeModel, runClaudeCode } from "./claudecode.js";
 import { parseCommand, USAGE } from "./commands.js";
-import { formatModels, formatNodes } from "./format.js";
+import { formatModels, formatNodes, formatSessions, formatSettings } from "./format.js";
 import { lms } from "@harness/lmstudio";
 
 const gateway = new Gateway(process.env.GATEWAY_URL ?? "http://127.0.0.1:8787", fetch, nonEmpty(process.env.HARNESS_API_KEY));
@@ -23,6 +23,22 @@ const readStdin = (): Promise<string> => {
       resolve(data.trim());
     });
   });
+};
+
+// What a stage means in words; thinking and writing are visible in the output itself.
+const stageText = (stage: StageName, detail?: string): string => {
+  switch (stage) {
+    case "routing":
+      return "finding a device";
+    case "freeing":
+      return `freeing memory (unloading ${detail ?? "a model"})`;
+    case "loading":
+      return `loading ${detail ?? "the model"}`;
+    case "waiting":
+      return `waiting for ${detail ?? "the model"}`;
+    default:
+      return "";
+  }
 };
 
 const chatOnce = async (model: string, history: ChatMessage[]): Promise<void> => {
@@ -87,6 +103,7 @@ const codeRemote = async (model: string, prompt: string, yes: boolean, device: s
   const rl = process.stdin.isTTY ? readline.createInterface({ input: process.stdin, output: process.stdout }) : undefined;
   // Events already shown, so a later turn does not replay earlier ones.
   let cursor = 0;
+  let lastStage = "";
   const ask = async (event: Extract<SessionEvent, { type: "approval" }>): Promise<void> => {
     let approve = false;
     let always = false;
@@ -110,6 +127,15 @@ const codeRemote = async (model: string, prompt: string, yes: boolean, device: s
     try {
       await gateway.sendMessage(session.id, text);
       for await (const event of gateway.sessionEvents(session.id, cursor, abort.signal)) {
+        // Where the request is before the first word, so a slow model load is not mistaken for a hang.
+        if (event.type === "stage") {
+          const text = stageText(event.stage, event.detail);
+          if (text && text !== lastStage) {
+            lastStage = text;
+            console.error(`  ... ${text}`);
+          }
+          continue;
+        }
         if (isLiveEvent(event)) {
           continue;
         }
@@ -257,6 +283,12 @@ const main = async (): Promise<void> => {
       return;
     case "models":
       console.log(formatModels(await gateway.nodes()));
+      return;
+    case "sessions":
+      console.log(formatSessions(await gateway.sessions()));
+      return;
+    case "settings":
+      console.log(formatSettings(await gateway.deviceSettings(cmd.device, cmd.key === undefined ? undefined : { [cmd.key]: cmd.value })));
       return;
     case "chat":
       return chat(cmd.model, cmd.prompt);

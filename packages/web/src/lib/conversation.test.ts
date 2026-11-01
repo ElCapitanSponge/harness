@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { applyEvent, emptyConversation, type ConversationState, type StreamEvent } from "./conversation.js";
+import { applyEvent, emptyConversation, markBusy, type ConversationState, type StreamEvent } from "./conversation.js";
 
 const run = (events: StreamEvent[], start: ConversationState = emptyConversation()): ConversationState => {
   let now = 1000;
@@ -61,5 +61,30 @@ describe("a conversation built from events", () => {
     const failed = run([{ type: "user", text: "q" }, { type: "error", message: "boom" }]);
     expect(failed.busy).toBe(false);
     expect(failed.items.at(-1)).toMatchObject({ tone: "error", text: "boom" });
+  });
+});
+
+describe("progress before the first word", () => {
+  it("is busy with a timer from the moment of sending, follows the stages, and clears when the turn ends", () => {
+    const sent = markBusy(emptyConversation(), 5000);
+    expect(sent).toMatchObject({ busy: true, since: 5000 });
+
+    const loading = applyEvent(sent, { type: "stage", stage: "loading", detail: "qwen" }, 6000);
+    expect(loading.stage).toEqual({ name: "loading", detail: "qwen" });
+    // A stage is live only: it does not move the cursor, so a resume does not skip stored events.
+    expect(loading.cursor).toBe(0);
+
+    // The echo of the person's own message keeps the original start time.
+    const echoed = applyEvent(loading, { type: "user", text: "hi" }, 7000);
+    expect(echoed.since).toBe(5000);
+
+    const done = applyEvent(applyEvent(echoed, { type: "stage", stage: "writing" }, 8000), { type: "done", stopped: false }, 9000);
+    expect(done).toMatchObject({ busy: false, since: undefined, stage: undefined });
+  });
+
+  it("clears on an error so a retry starts fresh", () => {
+    const failed = applyEvent(markBusy(emptyConversation(), 1000), { type: "error", message: "no device" }, 1500);
+    expect(failed).toMatchObject({ busy: false, since: undefined });
+    expect(failed.items.at(-1)).toMatchObject({ tone: "error", text: "no device" });
   });
 });

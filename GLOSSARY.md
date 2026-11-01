@@ -66,6 +66,10 @@ _Avoid_: function, plugin
 The folder on a device that a coding session may touch. Nothing outside it is reachable.
 _Avoid_: workspace, sandbox, working directory
 
+**Stage**:
+Where a request is before the first word arrives: finding a device, freeing memory, loading a model, waiting for it, then thinking and writing. Sent live to the page and the CLI, never stored.
+_Avoid_: status, phase
+
 **Approval**:
 The owner's yes or no to a tool that would change something. A no ends the turn, and no answer counts as no.
 _Avoid_: confirmation, permission

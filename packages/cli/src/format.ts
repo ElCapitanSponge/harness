@@ -1,4 +1,4 @@
-import type { NodeRecord } from "@harness/core";
+import type { NodeRecord, SessionInfo, SettingsReport } from "@harness/core";
 
 const table = (headers: string[], rows: string[][]): string => {
   const widths = headers.map((h, i) => {
@@ -12,6 +12,30 @@ const table = (headers: string[], rows: string[][]): string => {
     }).join("  ").trimEnd();
   };
   return [line(headers), ...rows.map(line)].join("\n");
+};
+
+// Saved conversations, newest activity first.
+export const formatSessions = (sessions: SessionInfo[], now = Date.now()): string => {
+  if (sessions.length === 0) {
+    return "No saved conversations.";
+  }
+  return table(
+    ["ID", "KIND", "TITLE", "MODEL", "WHERE", "ACTIVE"],
+    sessions.map((s) => {
+      const minutes = Math.max(0, Math.round((now - s.updated) / 60_000));
+      return [s.id.slice(0, 8), s.kind, s.title || "(new)", s.model, s.kind === "code" ? `${s.device}:${s.root}${s.deviceConnected ? "" : " (offline)"}` : "-", minutes < 1 ? "now" : `${String(minutes)}m ago`];
+    }),
+  );
+};
+
+// A device's settings, where each came from, and whether it accepts changes from here.
+export const formatSettings = (report: SettingsReport): string => {
+  const rows = Object.entries(report.settings).map(([key, value]) => {
+    const source = report.sources[key as keyof SettingsReport["sources"]];
+    return [key, JSON.stringify(value), report.locked.includes(key as SettingsReport["locked"][number]) ? "fixed by environment" : source];
+  });
+  return `${table(["SETTING", "VALUE", "SOURCE"], rows)}
+${report.remoteConfig ? "This device accepts changes from here." : "Read-only: start its agent with REMOTE_CONFIG=1 to change settings."}`;
 };
 
 export const formatNodes = (nodes: NodeRecord[], now = Date.now()): string => {

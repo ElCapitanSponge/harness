@@ -185,10 +185,17 @@ export type SessionEvent
 
 // Sent live while the model is still writing, and never stored or replayed: they only make a running turn feel
 // responsive. The stored "thinking" and "text" events carry the same words once the model has finished.
-export type LiveSessionEvent = { type: "thinking-delta"; text: string } | { type: "text-delta"; text: string };
+// Where a request is, from being sent to the first word: finding a device, freeing memory and loading a model on it,
+// waiting for it to answer, then its thinking and writing. Live only, like the deltas.
+export type StageName = "routing" | "freeing" | "loading" | "waiting" | "thinking" | "writing";
+
+export type LiveSessionEvent
+  = | { type: "thinking-delta"; text: string }
+    | { type: "text-delta"; text: string }
+    | { type: "stage"; stage: StageName; detail?: string };
 
 export const isLiveEvent = (event: { type: string }): event is LiveSessionEvent => {
-  return event.type.endsWith("-delta");
+  return event.type.endsWith("-delta") || event.type === "stage";
 };
 
 export interface SessionInfo {
