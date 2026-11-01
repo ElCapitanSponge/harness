@@ -123,3 +123,11 @@ describe("a skill the person started", () => {
     expect(state.items[1]).toMatchObject({ kind: "skill", name: "tdd", arguments: "parser", text: "Write the test." });
   });
 });
+
+describe("an imported conversation", () => {
+  it("starts with a note saying where it came from", () => {
+    const state = run([{ type: "imported", source: "ChatGPT", turns: 2 }, { type: "user", text: "q" }, { type: "text", text: "a" }]);
+    expect(kinds(state)).toEqual(["note", "user", "assistant"]);
+    expect(state.items[0]).toMatchObject({ kind: "note", tone: "info", text: expect.stringContaining("Imported from ChatGPT: 2 messages") as string });
+  });
+});

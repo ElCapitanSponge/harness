@@ -10,6 +10,7 @@ import { ConversationView } from "@/views/ConversationView";
 import { DevicesView } from "@/views/DevicesView";
 import { Layout } from "@/views/Layout";
 import { NewConversation } from "@/views/NewConversation";
+import { ImportView } from "@/views/ImportView";
 import { RouteError } from "@/views/RouteError";
 import { SkillsView } from "@/views/SkillsView";
 
@@ -41,6 +42,7 @@ const router = createBrowserRouter([
       { path: "c/:id", element: <ConversationView /> },
       { path: "manage/devices", element: <DevicesView /> },
       { path: "manage/skills", element: <SkillsView /> },
+      { path: "import", element: <ImportView /> },
       // The chart library is only fetched when the page is opened.
       { path: "manage/usage", lazy: async () => {
         return { Component: (await import("@/views/UsageView")).UsageView };

@@ -121,6 +121,11 @@ export const applyEvent = (state: ConversationState, event: StreamEvent, now: nu
         return { kind: "compaction", id, messages: event.messages, tokensBefore: event.tokensBefore, tokensAfter: event.tokensAfter, manual: event.manual };
       });
 
+    case "imported":
+      return push(state.items, (id) => {
+        return { kind: "note", id, text: `Imported from ${event.source}: ${String(event.turns)} message${event.turns === 1 ? "" : "s"}. Nothing was sent to a model; carry on with any model.`, tone: "info" };
+      });
+
     case "skill":
       return push(settle(state.items, now), (id) => {
         return { kind: "skill", id, name: event.name, arguments: event.arguments, text: event.text };

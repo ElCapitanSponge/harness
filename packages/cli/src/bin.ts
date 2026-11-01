@@ -1,5 +1,7 @@
 #!/usr/bin/env tsx
 import { isLiveEvent, nonEmpty, type ChatMessage, type SessionEvent, type StageName } from "@harness/core";
+import fs from "node:fs/promises";
+import path from "node:path";
 import readline from "node:readline/promises";
 import { runTurn, systemPrompt, type Approver } from "@harness/tools";
 import { Gateway } from "./api.js";
@@ -287,6 +289,32 @@ const main = async (): Promise<void> => {
     case "sessions":
       console.log(formatSessions(await gateway.sessions()));
       return;
+    case "export":
+      process.stdout.write(await gateway.exportSession(cmd.id));
+      return;
+    case "import": {
+      const parsed = await gateway.parseImport(path.basename(cmd.file), await fs.readFile(cmd.file, "utf8"));
+      const all = parsed.conversations;
+      if (!parsed.split) {
+        console.error("Could not split that text into turns; importing it as one message from you.");
+      }
+      if (all.length > 1 && !cmd.all && cmd.pick === undefined) {
+        console.log(`${String(all.length)} conversations in that file. Choose one with -n <number>, or take them all with --all:`);
+        all.forEach((c, i) => {
+          console.log(`  ${String(i + 1)}. ${c.title} (${c.source}, ${String(c.turns.length)} messages)`);
+        });
+        return;
+      }
+      const chosen = cmd.all ? all : all.slice((cmd.pick ?? 1) - 1, cmd.pick ?? 1);
+      if (chosen.length === 0) {
+        throw new Error(`there is no conversation number ${String(cmd.pick)} in that file`);
+      }
+      for (const c of chosen) {
+        const info = await gateway.importConversation({ title: c.title, source: c.source, turns: c.turns, model: cmd.model });
+        console.log(`imported "${c.title}" as ${info.id}`);
+      }
+      return;
+    }
     case "settings":
       console.log(formatSettings(await gateway.deviceSettings(cmd.device, cmd.key === undefined ? undefined : { [cmd.key]: cmd.value })));
       return;

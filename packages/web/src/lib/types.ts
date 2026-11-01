@@ -23,6 +23,24 @@ export interface SkillsFolder {
   note?: string;
 }
 
+// A transcript split into turns, as the gateway reads it, for the person to check before it is saved.
+export interface Turn {
+  role: "user" | "assistant";
+  text: string;
+}
+
+export interface ImportedConversation {
+  title: string;
+  source: string;
+  turns: Turn[];
+}
+
+export interface ParsedImport {
+  conversations: ImportedConversation[];
+  format: string;
+  split: boolean;
+}
+
 export type CatalogueState = "loaded" | "loads-on-use" | "cannot-load" | "busy";
 
 export interface CatalogueEntry {

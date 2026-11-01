@@ -19,6 +19,9 @@ _Avoid_: plugin, macro
 **Instruction file**:
 A project's AGENTS.md or CLAUDE.md, or the person's own CLAUDE.md, added to the model's instructions in a coding session.
 
+**Import**:
+Bringing a conversation from another tool in as a saved conversation, marked with where it came from. Nothing is sent to a model. See docs/importing.md.
+
 **Gateway**:
 The single always-on service that every client talks to. It knows which devices are connected, routes each request, and serves the web page.
 _Avoid_: server, hub, proxy

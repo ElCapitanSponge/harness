@@ -10,6 +10,7 @@ import { ClaudeState, askClaude } from "./claude.js";
 import { SUMMARY_PROMPT, compacted, historyTokens, planCompaction, transcriptOf } from "./compaction.js";
 import { estimateTokens, type UsageLedger } from "./ledger.js";
 import { resolveRoute } from "./routing.js";
+import { limitTurns, type Turn } from "./transcripts.js";
 
 export type { SessionEvent, SessionInfo };
 
@@ -759,6 +760,30 @@ export class Sessions {
       { id: randomUUID(), title: "", model: input.model, device, root, created: now, updated: now, history: [{ role: "system", content: prompt }] },
       this.deps,
       input.autoApprove ?? false,
+    );
+    this.sessions.set(session.id, session);
+    this.deps.persist?.(session);
+    return session;
+  }
+
+  // A conversation brought in from another tool, as a saved chat that carries on with whichever model is picked. The turns become
+  // events and history exactly as they are; nothing is sent to a model.
+  import(input: { title?: string; source: string; turns: Turn[]; model?: string; created?: number }): Session {
+    const turns = limitTurns(input.turns);
+    const now = Date.now();
+    const events: SessionEvent[] = [{ type: "imported", source: input.source, turns: turns.length }, ...turns.map((t): SessionEvent => {
+      return t.role === "user" ? { type: "user", text: t.text } : { type: "text", text: t.text };
+    })];
+    const history: ChatMessage[] = [{ role: "system", content: CHAT_PROMPT }, ...turns.map((t): ChatMessage => {
+      return { role: t.role, content: t.text };
+    })];
+    const first = turns.find((t) => {
+      return t.role === "user";
+    });
+    const given = input.title?.trim() ?? "";
+    const session = new Session(
+      { id: randomUUID(), title: given === "" ? (first ? titleFrom(first.text) : "Imported conversation") : given, model: input.model ?? "auto", device: "", root: "", created: input.created ?? now, updated: now, history, events },
+      this.deps,
     );
     this.sessions.set(session.id, session);
     this.deps.persist?.(session);

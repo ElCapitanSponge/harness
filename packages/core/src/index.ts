@@ -192,6 +192,15 @@ export const SessionApproval = z.object({ approve: z.boolean(), always: z.boolea
 // `model` picks the model for this message and those after it, so one conversation can move between models, devices and Claude.
 // `skill` is a skill the person started with / in the page; `text` is what they typed (the skill's name and its arguments).
 export const SessionMessage = z.object({ text: z.string().min(1), model: z.string().min(1).optional(), effort: z.enum(["default", ...EFFORTS]).optional(), skill: z.object({ name: z.string().min(1), arguments: z.string().optional() }).optional() });
+// A conversation to bring in: the turns, where they came from, and optionally the model to continue with.
+export const SessionImport = z.object({
+  title: z.string().trim().max(120).optional(),
+  source: z.string().trim().min(1).max(60).default("pasted transcript"),
+  model: z.string().min(1).optional(),
+  turns: z.array(z.object({ role: z.enum(["user", "assistant"]), text: z.string().min(1) })).min(1),
+});
+// Text or a file's content to be split into turns, for the person to check before importing.
+export const ImportParse = z.object({ name: z.string().optional(), content: z.string().min(1) });
 export const SessionRename = z.object({ title: z.string().trim().min(1).max(120) });
 
 // What happens in a coding session, in order. Sent to clients as server-sent events.
@@ -199,6 +208,8 @@ export type SessionEvent
   = | { type: "user"; text: string }
     | { type: "text"; text: string; model?: string; device?: string; reason?: string }
     | { type: "thinking"; text: string }
+    // The start of a conversation brought in from another tool. Nothing was sent to a model.
+    | { type: "imported"; source: string; turns: number }
     // A skill the person started: its name, what they gave it, and the instructions it put in the conversation.
     | { type: "skill"; name: string; arguments: string; text: string }
     | { type: "tool"; summary: string }

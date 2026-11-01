@@ -115,3 +115,24 @@ describe("parseCommand for conversations and device settings", () => {
     }).toThrow("valid JSON");
   });
 });
+
+describe("export and import", () => {
+  it("parses export, and import with a number, all, or neither", () => {
+    expect(parseCommand(["export", "abc"])).toEqual({ name: "export", id: "abc" });
+    expect(parseCommand(["import", "c.json"])).toEqual({ name: "import", file: "c.json", all: false, pick: undefined, model: undefined });
+    expect(parseCommand(["import", "c.json", "-n", "2", "-m", "qwen"])).toMatchObject({ pick: 2, model: "qwen" });
+    expect(parseCommand(["import", "c.json", "--all"])).toMatchObject({ all: true });
+  });
+
+  it("asks for what is missing", () => {
+    expect(() => {
+      return parseCommand(["export"]);
+    }).toThrow("conversation id");
+    expect(() => {
+      return parseCommand(["import"]);
+    }).toThrow("needs a file");
+    expect(() => {
+      return parseCommand(["import", "c.json", "-n", "0"]);
+    }).toThrow("invalid number");
+  });
+});
