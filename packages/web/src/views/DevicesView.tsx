@@ -215,6 +215,12 @@ const SettingsForm = ({ node, report }: { node: NodeRecord; report: SettingsRepo
   );
 };
 
+// An agent started before a setting existed does not send it. The form needs them all, so it is not shown for an older agent.
+const isCurrent = (report: SettingsReport): boolean => {
+  const s = report.settings as Partial<SettingsReport["settings"]>;
+  return Array.isArray(s.readOnlyRoots) && typeof s.onDeviceTools === "string" && typeof s.remoteTools === "string" && typeof s.idleUnloadMinutes === "number";
+};
+
 const DeviceCard = ({ node }: { node: NodeRecord }) => {
   const settings = useDeviceSettings(node.nodeId);
   return (
@@ -228,7 +234,14 @@ const DeviceCard = ({ node }: { node: NodeRecord }) => {
       </div>
       {settings.isPending ? <p className="text-muted-foreground">Loading settings...</p> : null}
       {settings.error ? <p className="text-muted-foreground">Its settings cannot be read: {settings.error.message}. An older agent does not support this; update it.</p> : null}
-      {settings.data
+      {settings.data && !isCurrent(settings.data)
+        ? (
+            <p className="text-muted-foreground" role="alert">
+              The agent on {node.nodeId} is older than this page and does not support these settings yet. Update it (pull the latest code) and restart it, then reload this page.
+            </p>
+          )
+        : null}
+      {settings.data && isCurrent(settings.data)
         ? (
             <>
               <p className="text-muted-foreground">

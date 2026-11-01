@@ -10,7 +10,8 @@ export interface Seed {
   queries?: [readonly unknown[], unknown][];
 }
 
-const Frame = ({ seed, dark, children }: { seed: Seed; dark: boolean; children: React.ReactNode }) => {
+// A story that brings its own router (to show a route that fails, say) sets `parameters.ownRouter`.
+const Frame = ({ seed, dark, ownRouter, children }: { seed: Seed; dark: boolean; ownRouter: boolean; children: React.ReactNode }) => {
   const [client] = useState(() => {
     const created = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: Infinity, refetchInterval: false } } });
     for (const [key, data] of seed.queries ?? []) {
@@ -23,9 +24,13 @@ const Frame = ({ seed, dark, children }: { seed: Seed; dark: boolean; children: 
   }, [dark]);
   return (
     <QueryClientProvider client={client}>
-      <MemoryRouter>
-        <div className="bg-background p-4 text-foreground">{children}</div>
-      </MemoryRouter>
+      {ownRouter
+        ? <div className="bg-background text-foreground">{children}</div>
+        : (
+            <MemoryRouter>
+              <div className="bg-background p-4 text-foreground">{children}</div>
+            </MemoryRouter>
+          )}
     </QueryClientProvider>
   );
 };
@@ -42,7 +47,7 @@ const preview: Preview = {
       setKey("storybook");
       const seed = (context.parameters.seed ?? {}) as Seed;
       return (
-        <Frame seed={seed} dark={context.globals.theme === "dark"}>
+        <Frame seed={seed} dark={context.globals.theme === "dark"} ownRouter={context.parameters.ownRouter === true}>
           <Story />
         </Frame>
       );

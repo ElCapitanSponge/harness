@@ -20,7 +20,7 @@ describe("toSse", () => {
 });
 
 describe("toPrompt with rich messages", () => {
-  it("reads text parts and ignores tool messages and null content", () => {
+  it("reads text parts and shows a tool result by the name of the tool it answers", () => {
     const out = toPrompt({
       model: "claude",
       messages: [
@@ -32,7 +32,7 @@ describe("toPrompt with rich messages", () => {
       ],
     });
     expect(out.system).toBe("be brief");
-    expect(out.prompt).toBe("User: hello\n\nAssistant: \n\nUser: again");
+    expect(out.prompt).toBe("User: hello\n\nAssistant:\n\n<tool_result name=\"tool\">\nignored\n</tool_result>\n\nUser: again");
   });
 });
 
@@ -71,9 +71,16 @@ describe("buildArgs", () => {
     expect(args.slice(args.indexOf("--model"), args.indexOf("--model") + 2)).toEqual(["--model", "sonnet"]);
   });
 
-  it("appends the system prompt when present", () => {
-    const args = buildArgs(req("claude", [{ role: "user", content: "x" }]), "be brief");
-    expect(args).toEqual(expect.arrayContaining(["--append-system-prompt", "be brief"]));
+  it("replaces the program's own system prompt with the one given, or a plain default, and leaves out its extra tools and skills", () => {
+    const given = buildArgs(req("claude", [{ role: "user", content: "x" }]), "be brief");
+    expect(given).toEqual(expect.arrayContaining(["--system-prompt", "be brief", "--strict-mcp-config", "--disable-slash-commands"]));
+    expect(given).not.toContain("--append-system-prompt");
+    expect(buildArgs(req("claude", [{ role: "user", content: "x" }]))).toEqual(expect.arrayContaining(["--system-prompt", "You are a helpful assistant. Answer clearly and say so when you are not sure."]));
+  });
+
+  it("passes the effort on when one is chosen", () => {
+    expect(buildArgs({ ...req("claude", [{ role: "user", content: "x" }]), effort: "high" })).toEqual(expect.arrayContaining(["--effort", "high"]));
+    expect(buildArgs(req("claude", [{ role: "user", content: "x" }]))).not.toContain("--effort");
   });
 });
 

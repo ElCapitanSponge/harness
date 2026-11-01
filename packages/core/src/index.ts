@@ -1,4 +1,7 @@
 import { z } from "zod";
+import { EFFORTS } from "./effort.js";
+
+export { EFFORTS, effortFor, effortLevels, type Effort } from "./effort.js";
 
 // Validation errors in the shape the API returns: { formErrors, fieldErrors }. Re-exported so other packages need no direct zod dependency.
 export const flattenError = z.flattenError;
@@ -42,6 +45,8 @@ export const ChatRequest = z.looseObject({
   stream: z.boolean().optional(),
   tools: z.array(Tool).optional(),
   tool_choice: z.unknown().optional(),
+  // How hard the model should think, where it can be told: low, medium, high, xhigh or max. Models that cannot be told ignore it.
+  effort: z.enum(EFFORTS).optional(),
 });
 export type ChatRequest = z.infer<typeof ChatRequest>;
 
@@ -183,7 +188,7 @@ export const SessionCreate = z.object({
 });
 export const SessionApproval = z.object({ approve: z.boolean(), always: z.boolean().optional() });
 // `model` picks the model for this message and those after it, so one conversation can move between models, devices and Claude.
-export const SessionMessage = z.object({ text: z.string().min(1), model: z.string().min(1).optional() });
+export const SessionMessage = z.object({ text: z.string().min(1), model: z.string().min(1).optional(), effort: z.enum(["default", ...EFFORTS]).optional() });
 export const SessionRename = z.object({ title: z.string().trim().min(1).max(120) });
 
 // What happens in a coding session, in order. Sent to clients as server-sent events.
