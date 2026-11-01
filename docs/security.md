@@ -27,6 +27,7 @@ Each limit is enforced on the **device**, not by the gateway, so a compromised g
 
 - **`run_command` is not sandboxed.** If a device allows it, an approved command can do anything that device's user can. Read what it asks to run. Leave it off on devices you do not want that on.
 - **Approvals are answered through the gateway.** If the gateway is compromised, the attacker can answer them. Keep `run_command` and the write tools off on devices where that matters, since the device-side allow list is the control they cannot bypass.
+- **`grep` runs in the agent's own process.** A model-written regular expression that backtracks badly can keep the agent busy for a long time, during which the device stops heartbeating and drops off the pool until it finishes. It cannot read outside the project root, but it can be slow. Restarting the agent clears it.
 - **The audit log is local and plain text.** Someone with a shell on the device can edit it. It records what the gateway asked for; it does not stop anything.
 - **Nothing here defends against a compromised device.** A device that is taken over can read what is sent to it (prompts, file contents the model asked for).
 
