@@ -1,0 +1,3 @@
+# The gateway runs as a container on TrueNAS, reachable only over the LAN and Tailscale
+
+The gateway is a container image on a private registry, run as an app on the TrueNAS server because it is always on, with the port bound to the LAN and Tailscale addresses only, never public. It refuses to start on a network address without an API key. We chose a container over a bare install (the host is not meant to be modified) and over a VM (not needed unless Claude must be logged in there), and a private image because the code is private. Tailscale Funnel and any public exposure are deliberately excluded.

@@ -15,3 +15,12 @@ Default five-role vocabulary (needs-triage, needs-info, ready-for-agent, ready-f
 ### Domain docs
 
 Single-context: one `GLOSSARY.md` and `docs/adr/` at the repo root. See `docs/agents/domain.md`.
+
+## Keeping context
+
+Project memory lives in git, not in chat:
+
+- `GLOSSARY.md` holds the project's vocabulary. Use its terms in code, issues and commits; when a term is settled or changes, update it in the same change.
+- `docs/adr/` holds decisions that are hard to reverse, surprising and a real trade-off. Add the next numbered file when one is made; mark an old one `superseded by ADR-NNNN` rather than rewriting history.
+- GitHub Issues hold the plan. Issue #2 is the roadmap for the web UI and device tunnel; close or update tickets as work lands.
+- Commits use Conventional Commits and reference the issue they advance (`Refs #N`).
