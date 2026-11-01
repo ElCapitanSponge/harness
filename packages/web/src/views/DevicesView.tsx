@@ -285,7 +285,7 @@ const AddDevice = () => {
 export const DevicesView = () => {
   const nodes = useNodes();
   return (
-    <div className="flex-1 overflow-y-auto">
+    <div className="flex-1 overflow-y-auto overflow-x-hidden">
       <div className="mx-auto grid max-w-3xl grid-cols-[minmax(0,1fr)] gap-4 px-4 py-6">
         <div className="flex items-center justify-between gap-3">
           <div>

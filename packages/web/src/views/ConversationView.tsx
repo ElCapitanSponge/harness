@@ -61,13 +61,13 @@ const Conversation = ({ id }: { id: string }) => {
 
       <div
         ref={scroller}
-        className="flex-1 overflow-y-auto overflow-x-hidden"
+        className="flex-1 overflow-hidden overflow-y-auto [scrollbar-gutter:stable_both-edges]"
         onScroll={(ev) => {
           const el = ev.currentTarget;
           stuck.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
         }}
       >
-        <div className="mx-auto grid max-w-3xl grid-cols-[minmax(0,1fr)] gap-4 px-4 py-6">
+        <div className="mx-auto grid max-w-3xl grid-cols-[minmax(0,1fr)] gap-4 overflow-hidden px-4 py-6">
           {state.items.map((item) => {
             return (
               <Message key={item.id} item={item} model={model} onAnswer={(approvalId, approve, always) => {
@@ -79,7 +79,7 @@ const Conversation = ({ id }: { id: string }) => {
           {waiting && state.since !== undefined ? <StatusLine since={state.since} stage={state.stage} /> : null}
           {failed
             ? (
-                <div className="pl-10">
+                <div className="px-10">
                   <Button onClick={() => {
                     stuck.current = true;
                     void send(lastUser.text);

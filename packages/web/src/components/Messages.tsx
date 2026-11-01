@@ -58,7 +58,7 @@ export const Message = ({ item, model, onAnswer }: { item: Item; model: string; 
           <div className="mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground">
             <Bot className="size-4" />
           </div>
-          <div className="min-w-0 flex-1">
+          <div className="min-w-0 flex-1 pr-10">
             <div className="mb-0.5 text-xs font-semibold text-muted-foreground">{item.model ?? model}{item.device ? <span className="font-normal"> on {item.device}</span> : null}</div>
             <Markdown text={item.text} />
             {item.streaming ? <span className="ml-0.5 inline-block h-4 w-1.5 animate-pulse bg-primary align-middle" aria-hidden /> : null}
@@ -68,14 +68,14 @@ export const Message = ({ item, model, onAnswer }: { item: Item; model: string; 
 
     case "thinking":
       return (
-        <div className="pl-10">
+        <div className="px-10">
           <Thinking item={item} />
         </div>
       );
 
     case "tool":
       return (
-        <div className="pl-10">
+        <div className="px-10">
           <div className="inline-flex max-w-full items-center gap-1.5 rounded-md border bg-card px-2 py-1 font-mono text-xs text-muted-foreground">
             <Wrench className="size-3.5 shrink-0" />
             <span className="break-all">{item.summary}</span>
@@ -97,7 +97,7 @@ export const Message = ({ item, model, onAnswer }: { item: Item; model: string; 
 
     case "approval":
       return (
-        <div className="pl-10">
+        <div className="px-10">
           <div className={cn("grid gap-2 rounded-lg border border-primary bg-card p-3 shadow-card", item.status !== "pending" && "border-border opacity-80 shadow-none")}>
             <div className="flex items-center gap-2 text-xs font-semibold text-muted-foreground">
               <ShieldQuestion className="size-4 text-primary" />
@@ -135,7 +135,7 @@ export const Message = ({ item, model, onAnswer }: { item: Item; model: string; 
 
     case "note":
       return (
-        <div className={cn("pl-10 text-[13px]", item.tone === "error" ? "text-destructive" : "text-muted-foreground")} role={item.tone === "error" ? "alert" : undefined}>
+        <div className={cn("px-10 text-[13px]", item.tone === "error" ? "text-destructive" : "text-muted-foreground")} role={item.tone === "error" ? "alert" : undefined}>
           {item.text}
         </div>
       );
@@ -169,7 +169,7 @@ export const stageLabel = (stage: ConversationState["stage"]): string => {
 export const StatusLine = ({ since, stage }: { since: number; stage: ConversationState["stage"] }) => {
   const elapsed = useElapsed(since, true);
   return (
-    <div className="flex items-center gap-2 pl-10 text-[13px] text-muted-foreground" role="status">
+    <div className="flex items-center gap-2 px-10 text-[13px] text-muted-foreground" role="status">
       <Loader2 className="size-4 animate-spin" />
       {stageLabel(stage)}... {elapsed}s
     </div>

@@ -112,6 +112,8 @@
 @layer base {
   * { @apply border-border; }
   html, body, #root { height: 100%; }
+  /* Nothing in the app scrolls sideways: whatever is too wide wraps, and anything that still is gets clipped, not scrolled to. */
+  html, body, #root { overflow-x: hidden; }
   body { @apply bg-background text-foreground font-sans text-sm antialiased; line-height: 20px; }
   :focus-visible { outline: 2px solid var(--ring); outline-offset: 1px; }
 }
@@ -128,7 +130,7 @@
 .prose-chat blockquote { border-left: 3px solid var(--border); padding-left: 0.75rem; color: var(--muted-foreground); }
 .prose-chat hr { border: 0; border-top: 1px solid var(--border); margin: 1rem 0; }
 .prose-chat :not(pre) > code { background: var(--code); border-radius: 4px; padding: 1px 5px; font: 0.85em var(--font-mono); }
-.prose-chat table { border-collapse: collapse; display: block; overflow-x: auto; }
+.prose-chat table { border-collapse: collapse; width: 100%; table-layout: fixed; overflow-wrap: anywhere; }
 .prose-chat th, .prose-chat td { border: 1px solid var(--border); padding: 4px 10px; text-align: left; }
 .prose-chat th { background: var(--muted); font-weight: 600; }
 .hljs { background: transparent; }
