@@ -196,9 +196,12 @@ If no idle node matches, the gateway returns `503`.
 
 | Package | Purpose |
 |---|---|
-| `packages/core` | Shared Zod schemas: chat request, model info, heartbeat |
-| `packages/node-agent` | Reports loaded models and a busy flag to the gateway |
-| `packages/gateway` | Node registry, router, OpenAI-compatible API, Claude backend |
+| `packages/core` | Shared Zod schemas and the tunnel protocol: chat request, heartbeat, tool calls, session events |
+| `packages/tools` | The sandboxed file and command tools, and the coding agent loop. Used by the CLI and the gateway |
+| `packages/claude` | Runs the `claude` CLI and shapes its answers as OpenAI responses |
+| `packages/lmstudio` | Wraps the `lms` CLI, with input checks |
+| `packages/node-agent` | Runs on each device: dials the gateway, reports models and busy state, answers relayed chat, tool, Claude and model-control requests |
+| `packages/gateway` | Node registry, router, tunnel, session store, OpenAI-compatible API and the web page |
 | `packages/cli` | The `harness` command |
 
 Routing policy lives in `packages/gateway/src/router.ts`, separate from transport, so tiering and fallback rules can change without touching the HTTP code.
