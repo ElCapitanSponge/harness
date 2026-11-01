@@ -7,6 +7,20 @@ export class Registry {
     this.nodes.set(hb.nodeId, { ...hb, lastSeen: Date.now() });
   }
 
+  // Records a load or unload the gateway just did, so the next request does not wait for the device's next heartbeat to see it.
+  setLoaded(nodeId: string, modelId: string, loaded: boolean): void {
+    const node = this.nodes.get(nodeId);
+    if (!node) {
+      return;
+    }
+    this.nodes.set(nodeId, {
+      ...node,
+      models: node.models.map((m) => {
+        return m.id === modelId ? { ...m, loaded } : m;
+      }),
+    });
+  }
+
   remove(nodeId: string): void {
     this.nodes.delete(nodeId);
   }

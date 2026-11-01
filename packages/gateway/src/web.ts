@@ -255,21 +255,60 @@ export const WEB_PAGE = String.raw`<!doctype html>
     } catch (e) { return "HTTP " + res.status; }
   }
 
+  // What choosing a model will do, in a few words, for the picker.
+  function stateLabel(m) {
+    if (m.state === "loaded") return "";
+    if (m.state === "loads-on-use") return " - loads when used";
+    if (m.state === "busy") return " - busy" + (m.busyReason ? " (" + m.busyReason + ")" : "");
+    return " - cannot load here";
+  }
+
+  function addOption(group, value, label, disabled) {
+    var opt = document.createElement("option");
+    opt.value = value;
+    opt.textContent = label;
+    opt.disabled = Boolean(disabled);
+    group.appendChild(opt);
+  }
+
+  // Lists every model on every device, grouped by device, whether or not it is loaded: choosing one that is not loaded
+  // loads it on that device. Claude is listed while a device that is logged in to it is connected.
   async function loadModels() {
-    var res = await fetch("/v1/models", { headers: authHeaders() });
+    var res = await fetch("/catalogue", { headers: authHeaders() });
     if (res.status === 401) throw new Error("That key was not accepted.");
     if (!res.ok) throw new Error(await errorText(res));
     var data = await res.json();
     var select = $("model");
     var previous = select.value;
     select.textContent = "";
-    data.data.forEach(function (m) {
-      var opt = document.createElement("option");
-      opt.value = m.id;
-      opt.textContent = m.id + " (" + m.owned_by + ")";
-      select.appendChild(opt);
+    var groups = {};
+    data.models.forEach(function (m) {
+      var group = groups[m.device];
+      if (!group) {
+        group = document.createElement("optgroup");
+        group.label = m.device;
+        groups[m.device] = group;
+        select.appendChild(group);
+      }
+      addOption(group, m.id, m.id + stateLabel(m), m.state === "busy" || m.state === "cannot-load");
     });
+    if (data.claude.available) {
+      var claudeGroup = document.createElement("optgroup");
+      claudeGroup.label = "Claude (through " + data.claude.device + ")";
+      data.claude.models.forEach(function (id) { addOption(claudeGroup, id, id, false); });
+      select.appendChild(claudeGroup);
+    }
+    if (!select.options.length) {
+      addOption(select, "", "No models: connect a device", true);
+      return;
+    }
     if (previous) select.value = previous;
+    // Never leave a model that cannot be used selected.
+    if (!select.value || (select.selectedOptions[0] && select.selectedOptions[0].disabled)) {
+      for (var i = 0; i < select.options.length; i++) {
+        if (!select.options[i].disabled) { select.value = select.options[i].value; break; }
+      }
+    }
   }
 
   async function connect(candidate) {
@@ -610,10 +649,25 @@ export const WEB_PAGE = String.raw`<!doctype html>
   $("forget").addEventListener("click", function () { forgetPast().catch(function (err) { note(err.message || "Could not delete.", "msg error"); }); });
   $("start").addEventListener("click", function () { startSession().catch(function (err) { note(err.message || "Could not start.", "msg error"); }); });
 
+  // Until the first word arrives, show that something is happening and for how long. A model that is not loaded yet is
+  // loaded first, which can take a minute.
+  function startWaiting(el, label) {
+    var started = Date.now();
+    function tick() {
+      el.textContent = "Waiting for " + label + "... " + Math.round((Date.now() - started) / 1000) + "s";
+    }
+    tick();
+    var timer = setInterval(tick, 1000);
+    return function stop() {
+      clearInterval(timer);
+    };
+  }
+
   async function send(text) {
     history.push({ role: "user", content: text });
     addMessage("you", text, "user");
     var body = addMessage($("model").value, "", undefined, true);
+    var stopWaiting = startWaiting(body, $("model").value);
     var reply = "";
     controller = new AbortController();
     setBusy(true);
@@ -628,11 +682,16 @@ export const WEB_PAGE = String.raw`<!doctype html>
       if (!res.ok) throw new Error(await errorText(res));
       var thought = null;
       await readStream(res, function (piece) {
+        stopWaiting();
         if (thought) thought.finish();
         reply += piece;
         streamMarkdown(body, reply);
       }, function (piece) {
-        if (!thought) thought = makeThought(body.parentNode, body, false);
+        if (!thought) {
+          stopWaiting();
+          body.textContent = "";
+          thought = makeThought(body.parentNode, body, false);
+        }
         keepScroll(function () { thought.add(piece); });
       });
       if (thought) thought.finish();
@@ -651,6 +710,7 @@ export const WEB_PAGE = String.raw`<!doctype html>
         body.textContent = (reply ? reply + "\n\n" : "") + (err.message || "Request failed.");
       }
     } finally {
+      stopWaiting();
       controller = null;
       setBusy(false);
       $("input").focus();
