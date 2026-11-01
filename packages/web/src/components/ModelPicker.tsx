@@ -1,5 +1,6 @@
 import { Select } from "@/components/ui/fields";
 import { useCatalogue } from "@/lib/queries";
+import { clockTime } from "@/lib/time";
 import type { CatalogueEntry } from "@/lib/types";
 
 const stateLabel = (m: CatalogueEntry): string => {
@@ -60,6 +61,15 @@ export const ModelPicker = ({ value, onChange, disabled, excludeClaude, classNam
             <optgroup label={`Claude (through ${data.claude.device ?? "a device"})`}>
               {data.claude.models.map((id) => {
                 return <option key={id} value={id} disabled={Boolean(excludeClaude)}>{id}</option>;
+              })}
+            </optgroup>
+          )
+        : null}
+      {data?.claude.limitedUntil !== undefined
+        ? (
+            <optgroup label={`Claude - limited until ${clockTime(data.claude.limitedUntil)}`}>
+              {data.claude.models.map((id) => {
+                return <option key={id} value={id} disabled>{id}</option>;
               })}
             </optgroup>
           )

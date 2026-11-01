@@ -5,6 +5,7 @@ import type { Registry } from "./registry.js";
 import type { Relay } from "./relay.js";
 import type { ModelLoader } from "./loader.js";
 import { isClaudeModel } from "./router.js";
+import { ClaudeState, askClaude } from "./claude.js";
 import { estimateTokens, type UsageLedger } from "./ledger.js";
 import { resolveRoute } from "./routing.js";
 
@@ -35,28 +36,26 @@ export interface SessionStore {
 // The window assumed for Claude models, which the Claude program does not report.
 const CLAUDE_CONTEXT = 200_000;
 
-export const createCompleter = (deps: { registry: Registry; relay: Pick<Relay, "request" | "callClaude">; loader: Pick<ModelLoader, "ensure"> }): Complete => {
+export const createCompleter = (deps: { registry: Registry; relay: Pick<Relay, "request" | "callClaude">; loader: Pick<ModelLoader, "ensure">; claude?: ClaudeState }): Complete => {
   return async (model, messages, tools, signal, hooks) => {
     // Claude answers through a device that is logged in to it, in one piece.
     if (isClaudeModel(model)) {
-      const device = deps.registry.live().find((n) => {
-        return n.claude;
-      });
-      if (!device) {
-        throw new Error("no connected device is logged in to Claude");
-      }
-      hooks?.stage?.("waiting", `Claude through ${device.nodeId}`);
+      hooks?.stage?.("waiting", "Claude");
       const claudeStarted = Date.now();
-      const reply = await deps.relay.callClaude(device.nodeId, JSON.stringify({ model, messages }));
-      if (!reply.ok) {
-        throw new Error(reply.output);
-      }
-      const text = (JSON.parse(reply.output) as { text: string }).text;
+      const { result, device } = await askClaude({ registry: deps.registry, relay: deps.relay, state: deps.claude ?? new ClaudeState() }, model, messages);
       hooks?.stage?.("writing");
-      hooks?.text?.(text);
-      // The Claude program reports no token counts through the gateway, so these are estimates against a 200k window.
-      hooks?.usage?.({ model, device: device.nodeId, promptTokens: estimateTokens(JSON.stringify(messages)), completionTokens: estimateTokens(text), durationMs: Date.now() - claudeStarted, contextLength: CLAUDE_CONTEXT, estimated: true });
-      return { role: "assistant", content: text };
+      hooks?.text?.(result.text);
+      // The program's own count where it gave one (cached input included), otherwise an estimate, against a 200k window.
+      hooks?.usage?.({
+        model,
+        device,
+        promptTokens: result.usage?.inputTokens ?? estimateTokens(JSON.stringify(messages)),
+        completionTokens: result.usage?.outputTokens ?? estimateTokens(result.text),
+        durationMs: Date.now() - claudeStarted,
+        contextLength: CLAUDE_CONTEXT,
+        estimated: result.usage === undefined,
+      });
+      return { role: "assistant", content: result.text };
     }
     hooks?.stage?.("routing", model);
     const route = await resolveRoute({ registry: deps.registry, loader: deps.loader }, { model, messages, tools }, (step) => {

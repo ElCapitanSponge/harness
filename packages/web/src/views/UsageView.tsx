@@ -5,9 +5,10 @@ import { scaleOrdinal } from "@tanstack/charts/scales/ordinal";
 import { tooltip } from "@tanstack/charts/tooltip";
 import { Chart } from "@tanstack/charts/react";
 import { useMemo, useState } from "react";
+import { ClaudePlan } from "@/components/ClaudeMeter";
 import { compact } from "@/components/ContextMeter";
 import { cn } from "@/lib/utils";
-import { useUsage } from "@/lib/queries";
+import { useClaudeStatus, useUsage } from "@/lib/queries";
 import type { ModelUsage, UsageSummary } from "@/lib/types";
 
 const RANGES = [
@@ -78,6 +79,7 @@ const Table = ({ title, rows }: { title: string; rows: { key: string; name: stri
 export const UsageView = () => {
   const [days, setDays] = useState<number>(7);
   const usage = useUsage(days);
+  const claude = useClaudeStatus().data;
   const data = usage.data;
   const anyEstimated = data?.byModel.some((m: ModelUsage) => {
     return m.estimated;
@@ -104,6 +106,15 @@ export const UsageView = () => {
             })}
           </div>
         </div>
+
+        {claude && (claude.device || claude.limitedUntil !== undefined)
+          ? (
+              <section className="rounded-xl border bg-card p-4 shadow-card">
+                <h2 className="mb-2 font-semibold">Claude plan</h2>
+                <ClaudePlan status={claude} detailed />
+              </section>
+            )
+          : null}
 
         {usage.isPending ? <p className="text-muted-foreground">Loading...</p> : null}
         {usage.error ? <p className="text-destructive" role="alert">{usage.error.message}</p> : null}

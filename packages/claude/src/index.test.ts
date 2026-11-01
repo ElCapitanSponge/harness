@@ -62,7 +62,7 @@ describe("toPrompt", () => {
 describe("buildArgs", () => {
   it("runs headless with no tools or session persistence", () => {
     const args = buildArgs(req("claude", [{ role: "user", content: "x" }]));
-    expect(args).toEqual(expect.arrayContaining(["-p", "--output-format", "json", "--no-session-persistence", "--tools", ""]));
+    expect(args).toEqual(expect.arrayContaining(["-p", "--output-format", "stream-json", "--verbose", "--no-session-persistence", "--tools", ""]));
     expect(args).not.toContain("--model");
   });
 

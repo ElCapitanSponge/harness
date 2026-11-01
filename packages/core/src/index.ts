@@ -198,6 +198,39 @@ export const isLiveEvent = (event: { type: string }): event is LiveSessionEvent 
   return event.type.endsWith("-delta") || event.type === "stage";
 };
 
+// One usage window of the Claude plan, as the claude program reports it: how much is used (0 to 1) and when it resets.
+export interface ClaudeWindow {
+  utilization: number;
+  // Seconds since the epoch.
+  resetsAt: number;
+}
+
+// What the claude program last said about the plan. A window can read 100 percent used while calls still succeed, if the plan
+// has extra usage switched on, so `limitedUntil` is set only when a request was actually refused.
+export interface ClaudeLimits {
+  status: string;
+  fiveHour?: ClaudeWindow;
+  sevenDay?: ClaudeWindow;
+  usingOverage?: boolean;
+  // Milliseconds since the epoch.
+  limitedUntil?: number;
+  // Milliseconds since the epoch.
+  observedAt: number;
+}
+
+// Where Claude stands, for the page: whether it can be used now, and what the plan has left.
+export interface ClaudeStatus {
+  // False until a Claude reply has been seen, because the program only reports the plan with a reply.
+  readable: boolean;
+  available: boolean;
+  device?: string;
+  limitedUntil?: number;
+  fiveHour?: ClaudeWindow;
+  sevenDay?: ClaudeWindow;
+  usingOverage?: boolean;
+  observedAt?: number;
+}
+
 // What one model has used, over some span of calls. `estimated` is true if any of the counts were estimated, not reported by the model server.
 export interface ModelUsage {
   model: string;

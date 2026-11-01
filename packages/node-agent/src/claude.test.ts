@@ -1,5 +1,6 @@
 import type { ChatRequest, TunnelMessage } from "@harness/core";
 import { describe, expect, it, vi } from "vitest";
+import { ClaudeLimitError } from "@harness/claude";
 import { createClaudeServer } from "./claude.js";
 
 const body = (over: Record<string, unknown> = {}): string => {
@@ -30,6 +31,15 @@ describe("createClaudeServer", () => {
       throw new Error("Not logged in");
     }, body());
     expect(reply).toEqual({ type: "tool-result", id: "c1", ok: false, output: "Not logged in" });
+  });
+
+  it("sends a refusal for a usage limit as data, with when it ends, so the gateway can stop asking", async () => {
+    const limits = { status: "rejected", observedAt: 1, limitedUntil: 99_000 };
+    const reply = await ask(async () => {
+      throw new ClaudeLimitError("5-hour limit reached", limits);
+    }, body());
+    expect(reply).toMatchObject({ ok: false });
+    expect(JSON.parse((reply as { output: string }).output)).toEqual({ limited: true, message: "5-hour limit reached", limits });
   });
 
   it("rejects a malformed request without starting the CLI", async () => {

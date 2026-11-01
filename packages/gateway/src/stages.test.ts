@@ -64,7 +64,7 @@ describe("progress stages", () => {
     });
     const { seen, hooks } = record();
     await createCompleter({ registry, relay: { request: vi.fn(), callClaude }, loader: { ensure: vi.fn() } })("claude", messages, [], signal, hooks);
-    expect(seen).toEqual(["waiting:Claude through mac", "writing"]);
+    expect(seen).toEqual(["waiting:Claude", "writing"]);
   });
 
   it("fail at once with the reason when no device can serve the model", async () => {

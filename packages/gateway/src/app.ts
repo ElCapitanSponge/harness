@@ -1,4 +1,4 @@
-import { toOpenAIResponse, toSse, type ClaudeResult } from "@harness/claude";
+import { toOpenAIResponse, toSse } from "@harness/claude";
 import { ChatRequest, DeviceToolRequest, ModelLoad, ModelUnload, SessionApproval, SessionCreate, SessionMessage, SessionRename, flattenError } from "@harness/core";
 import { findTool } from "@harness/tools";
 import { Hono, type Context } from "hono";
@@ -9,6 +9,7 @@ import type { ModelLoader } from "./loader.js";
 import { CLAUDE_MODEL_IDS, catalogue, isClaudeModel } from "./router.js";
 import { RouteError, resolveRoute } from "./routing.js";
 import type { UsageLedger } from "./ledger.js";
+import { ClaudeState, ClaudeUnavailableError, askClaude } from "./claude.js";
 import type { Sessions } from "./sessions.js";
 import { WEB_PAGE } from "./web.js";
 
@@ -19,12 +20,14 @@ export interface AppDeps {
   sessions: Sessions;
   // Every model call, for the usage routes. Without it the routes report nothing.
   ledger?: UsageLedger;
+  // What is known of the Claude plan: its windows, and whether Claude is limited right now.
+  claude?: ClaudeState;
   loader: Pick<ModelLoader, "ensure">;
   // Mounts the built web app. Without it the page is the single-file one in web.ts.
   mountWeb?: (app: Hono) => void;
 }
 
-export const createApp = ({ registry, apiKey, relay, sessions, ledger, loader, mountWeb }: AppDeps): Hono => {
+export const createApp = ({ registry, apiKey, relay, sessions, ledger, claude = new ClaudeState(), loader, mountWeb }: AppDeps): Hono => {
   const app = new Hono();
 
   // The page holds no secrets and must load before a key can be typed, so it is registered ahead of the auth middleware.
@@ -276,10 +279,17 @@ export const createApp = ({ registry, apiKey, relay, sessions, ledger, loader, m
     const claudeDevice = nodes.find((n) => {
       return n.claude;
     });
+    // While Claude is at its limit its models are listed with when they come back, so the page can show why they are greyed out.
+    const limitedUntil = claudeDevice ? claude.limitedUntil() : undefined;
     return c.json({
       models: catalogue(nodes),
-      claude: { available: claudeDevice !== undefined, device: claudeDevice?.nodeId, models: claudeDevice ? CLAUDE_MODEL_IDS : [] },
+      claude: { available: claudeDevice !== undefined && limitedUntil === undefined, device: claudeDevice?.nodeId, models: claudeDevice ? CLAUDE_MODEL_IDS : [], limitedUntil },
     });
+  });
+
+  // How much of the Claude plan is left, as the claude program last reported it.
+  app.get("/claude/usage", (c) => {
+    return c.json(claude.status());
   });
 
   app.get("/v1/models", (c) => {
@@ -296,7 +306,7 @@ export const createApp = ({ registry, apiKey, relay, sessions, ledger, loader, m
     const claudeDevice = registry.live().find((n) => {
       return n.claude;
     });
-    const claudeModels = claudeDevice
+    const claudeModels = claudeDevice && claude.limitedUntil() === undefined
       ? CLAUDE_MODEL_IDS.map((id) => {
           return { id, object: "model", owned_by: claudeDevice.nodeId };
         })
@@ -320,23 +330,22 @@ export const createApp = ({ registry, apiKey, relay, sessions, ledger, loader, m
           400,
         );
       }
-      const device = registry.live().find((n) => {
+      if (!registry.live().some((n) => {
         return n.claude;
-      });
-      if (!device) {
-        return c.json({ error: { message: "no connected device is logged in to Claude. Start a node agent with CLAUDE_ENABLED=1 on a device where `claude` is logged in" } }, 503);
+      })) {
+        return c.json({ error: { message: "no connected device is logged in to Claude. Turn Claude on for a device where `claude` is logged in (Devices page, or CLAUDE_ENABLED=1)" } }, 503);
       }
       try {
-        const reply = await relay.callClaude(device.nodeId, JSON.stringify(req));
-        if (!reply.ok) {
-          throw new Error(reply.output);
-        }
-        const result = JSON.parse(reply.output) as ClaudeResult;
+        const { result, device } = await askClaude({ registry, relay, state: claude }, req.model, req.messages, JSON.stringify(req));
         if (req.stream) {
-          return new Response(toSse(result), { headers: { "content-type": "text/event-stream", "x-harness-node": device.nodeId } });
+          return new Response(toSse(result), { headers: { "content-type": "text/event-stream", "x-harness-node": device } });
         }
-        return c.json(toOpenAIResponse(result), 200, { "x-harness-node": device.nodeId });
+        return c.json(toOpenAIResponse(result), 200, { "x-harness-node": device });
       } catch (err) {
+        // A limit is not a fault of the gateway: say when it ends, and let clients back off until then.
+        if (err instanceof ClaudeUnavailableError) {
+          return c.json({ error: { message: err.message } }, 429, { "retry-after": String(Math.max(1, Math.ceil((err.until - Date.now()) / 1000))) });
+        }
         return c.json({ error: { message: (err as Error).message } }, 502);
       }
     }
