@@ -193,7 +193,22 @@ The shortest route to the reported problem ("I could not use any model") is **A*
 
 These apply to the new front-end package from its first commit and, through their own ticket, to the rest of the repository.
 
-**Tools (checked against the npm registry on 2026-11-01).** Vite 8, React 19, `@vitejs/plugin-react` 6, `babel-plugin-react-compiler` 1.0 (stable), ESLint 10 with typescript-eslint 8, `eslint-plugin-react-hooks` 7 (its recommended set includes the rules powered by the React Compiler, which replace the separate `eslint-plugin-react-compiler`), `eslint-plugin-react`, `eslint-plugin-jsx-a11y`. There is no Prettier.
+**Tools (checked against the npm registry on 2026-11-01).** TypeScript 7, with TypeScript 6 alongside it for ESLint (below); Vite 8 and Oxc; React 19, `@vitejs/plugin-react` 6, `babel-plugin-react-compiler` 1.0 (stable); ESLint 10 with typescript-eslint 8; `eslint-plugin-react-hooks` 7 (its recommended set includes the rules powered by the React Compiler, which replace the separate `eslint-plugin-react-compiler`); `eslint-plugin-react`; `eslint-plugin-jsx-a11y`; and Oxc's linter, `oxlint`, with its type-aware mode (`oxlint-tsgolint`). There is no Prettier.
+
+**TypeScript 7 and 6 side by side.** Following the [TypeScript 7.0 announcement](https://devblogs.microsoft.com/typescript/announcing-typescript-7-0/): TypeScript 7 is the native compiler (about 10x faster) and ships no programmatic API yet, so tools that import `typescript` (typescript-eslint among them) keep using 6. The announcement's pattern, already applied in the repository (PR #47):
+
+```json
+{
+  "devDependencies": {
+    "@typescript/native": "npm:typescript@^7.0.2",
+    "typescript": "npm:@typescript/typescript6@^6.0.2"
+  }
+}
+```
+
+`tsc` is then TypeScript 7 (used for `pnpm typecheck` and the build's type check), `tsc6` is TypeScript 6, and anything that imports `typescript` gets the 6.0 API. Moving to 7 requires `tsconfig` changes the article lists: `baseUrl` is gone (use relative `paths`), `types` defaults to empty, and `rootDir` defaults to the config's folder.
+
+**Oxc.** Vite 8 builds with Rolldown and Oxc, which is what makes the front-end build fast. For linting, `oxlint` runs first because it is fast and has a type-aware mode that works with TypeScript 7 (through `oxlint-tsgolint`). ESLint stays for what `oxlint` does not cover: the typescript-eslint strict rules that have no Oxc equivalent and the compiler rules of `eslint-plugin-react-hooks`. A rule is configured in one of the two tools, never both. The ticket (#46) measures what `oxlint` covers and writes the split down.
 
 **React Compiler.** Enabled for every component. With Vite 8 and plugin-react 6 there are two ways to run it: a native build (`react({ compiler: true })`, which the plugin marks experimental) or the official Babel plugin through `@rolldown/plugin-babel` and its `reactCompilerPreset` helper. The Babel route is proposed because it is the stable compiler. The ticket confirms the choice with a build. Compiler diagnostics fail the build, so code the compiler cannot optimise is fixed rather than silently left slow.
 
@@ -205,7 +220,7 @@ These apply to the new front-end package from its first commit and, through thei
 | `any` | `@typescript-eslint/no-explicit-any` as an error, and the `no-unsafe-*` rules, so an `any` cannot arrive from elsewhere either |
 | `var` | `no-var` and `prefer-const` as errors |
 | Functions | arrow functions only: `func-style: expression`, `prefer-arrow-callback`, and a restriction on function declarations and function expressions. Exceptions that cannot be arrows: class methods, constructors, and generators (`function*`) |
-| Function bodies | arrow functions may use a concise body. If every arrow must use braces (`() => {}`), set `arrow-body-style` to `always`; this is one line to change |
+| Braces | always. Arrow functions always have a block body, `() => { return x; }` and never `() => x` (`arrow-body-style: always`), and every `if`, `else`, `for` and `while` has braces (`curly: all`) |
 | Hooks | `eslint-plugin-react-hooks` recommended: rules of hooks, exhaustive dependencies, and the compiler rules |
 | React | `eslint-plugin-react` with the JSX runtime config; `react/no-danger` as an error |
 | Accessibility | `eslint-plugin-jsx-a11y` strict |
