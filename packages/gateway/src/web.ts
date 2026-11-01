@@ -374,6 +374,11 @@ export const WEB_PAGE = String.raw`<!doctype html>
     while (session === s && !abort.signal.aborted) {
       try {
         var res = await fetch("/sessions/" + s.id + "/events?from=" + s.cursor, { headers: authHeaders(), signal: abort.signal });
+        if (res.status === 404) {
+          note("This session no longer exists.", "msg error");
+          endSession();
+          return;
+        }
         if (!res.ok) throw new Error(await errorText(res));
         await eachEvent(res, function (payload) {
           var event;
