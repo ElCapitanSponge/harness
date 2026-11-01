@@ -1,84 +1,14 @@
 import { spawn } from "node:child_process";
 import fs from "node:fs/promises";
 import path from "node:path";
-import type { Tool } from "@harness/core";
+import { devTools } from "./dev-tools.js";
+import { MAX_OUTPUT, num, resolveInside, show, str, truncate, type ToolSpec } from "./helpers.js";
+import { webFetch } from "./web-fetch.js";
 
-export interface ToolContext {
-  cwd: string;
-}
+export { resolveInside, truncate, type ToolContext, type ToolSpec } from "./helpers.js";
 
-export interface ToolSpec {
-  def: Tool;
-  needsApproval: boolean;
-  describe(args: Args): string;
-  run(args: Args, ctx: ToolContext): Promise<string>;
-}
-
-type Args = Record<string, unknown>;
-
-// Prints a tool argument the model supplied, which may be anything, as text for the person.
-const show = (value: unknown, fallback = ""): string => {
-  return typeof value === "string" || typeof value === "number" ? String(value) : fallback;
-};
-
-const MAX_OUTPUT = 20_000;
 const MAX_FILE_BYTES = 1_000_000;
 const SKIP_DIRS = new Set([".git", "node_modules", "dist", ".next", "bench-results"]);
-
-const str = (args: Args, key: string): string => {
-  const v = args[key];
-  if (typeof v !== "string") {
-    throw new Error(`"${key}" must be a string`);
-  }
-  return v;
-};
-
-const num = (args: Args, key: string): number | undefined => {
-  const v = args[key];
-  if (v === undefined || v === null) {
-    return undefined;
-  }
-  if (typeof v !== "number" || !Number.isFinite(v)) {
-    throw new Error(`"${key}" must be a number`);
-  }
-  return v;
-};
-
-export const truncate = (text: string, max = MAX_OUTPUT): string => {
-  return text.length <= max ? text : `${text.slice(0, max)}\n[... truncated ${text.length - max} characters]`;
-};
-
-const isInside = (root: string, target: string): boolean => {
-  const rel = path.relative(root, target);
-  return rel === "" || (!rel.startsWith("..") && !path.isAbsolute(rel));
-};
-
-// Resolve a path the model gave us and refuse anything outside the working directory,
-// including via symlinks (the nearest existing ancestor is resolved before checking).
-export const resolveInside = async (cwd: string, requested: string): Promise<string> => {
-  const root = await fs.realpath(cwd);
-  const abs = path.resolve(root, requested);
-  let probe = abs;
-  for (;;) {
-    try {
-      const real = await fs.realpath(probe);
-      const full = path.join(real, path.relative(probe, abs));
-      if (!isInside(root, full)) {
-        throw new Error(`path "${requested}" is outside the working directory`);
-      }
-      return full;
-    } catch (err) {
-      if ((err as Error).message.includes("outside the working directory")) {
-        throw err;
-      }
-      const parent = path.dirname(probe);
-      if (parent === probe) {
-        throw new Error(`cannot resolve path "${requested}"`, { cause: err });
-      }
-      probe = parent;
-    }
-  }
-};
 
 const readText = async (file: string): Promise<string> => {
   const stat = await fs.stat(file);
@@ -327,7 +257,7 @@ const runCommand: ToolSpec = {
   },
 };
 
-export const tools: ToolSpec[] = [readFile, listDir, grep, writeFile, editFile, runCommand];
+export const tools: ToolSpec[] = [readFile, listDir, grep, writeFile, editFile, runCommand, webFetch, ...devTools];
 
 export const findTool = (name: string): ToolSpec | undefined => {
   return tools.find((t) => {

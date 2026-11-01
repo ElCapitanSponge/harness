@@ -1,7 +1,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { DeviceSettings, SETTING_KEYS, nonEmpty, type SettingKey, type SettingsReport } from "@harness/core";
-import { findTool } from "@harness/tools";
+import { findTool, tools as allTools } from "@harness/tools";
 import type { AuditEntry } from "./audit.js";
 import { parseRoots } from "./toolserver.js";
 
@@ -71,6 +71,8 @@ export interface SettingsOptions {
   audit?: (entry: AuditEntry) => void;
   // Called with the new effective settings after a change, so the servers can pick them up without a restart.
   onChange?: (settings: DeviceSettings) => void;
+  // Whether a program the tools need is installed on this device.
+  installed?: (program: string) => boolean;
   warn?: (message: string) => void;
 }
 
@@ -122,7 +124,10 @@ export const createSettings = async (opts: SettingsOptions) => {
     for (const key of SETTING_KEYS) {
       sources[key] = isLocked(key) ? "env" : saved[key] === undefined ? "default" : "file";
     }
-    return { settings: resolve(), sources, locked: SETTING_KEYS.filter(isLocked), remoteConfig: opts.remoteConfig };
+    const toolList = allTools.map((t) => {
+      return { name: t.def.function.name, installed: t.requires === undefined || (opts.installed?.(t.requires) ?? true), asksFirst: t.needsApproval };
+    });
+    return { settings: resolve(), sources, locked: SETTING_KEYS.filter(isLocked), remoteConfig: opts.remoteConfig, tools: toolList };
   };
 
   const record = (summary: string, outcome: AuditEntry["outcome"], detail?: string): void => {

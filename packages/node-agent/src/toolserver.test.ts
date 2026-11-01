@@ -87,3 +87,31 @@ describe("createToolServer", () => {
     expect(r.ok).toBe(false);
   });
 });
+
+describe("tools that need a program", () => {
+  it("are not offered, and are refused, when the program is not on the device", async () => {
+    const audit: string[] = [];
+    const server = createToolServer({
+      roots: { proj: dir },
+      allowed: ["read_file", "git_read", "jq"],
+      installed: (program) => {
+        return program === "jq";
+      },
+      audit: (e) => {
+        audit.push(`${e.tool}:${e.outcome}`);
+      },
+    });
+    expect(server.allowedNames()).toEqual(["read_file", "jq"]);
+
+    const out: TunnelMessage[] = [];
+    await server.handle({ type: "tool", id: "1", root: "proj", name: "git_read", args: { args: ["status"] } }, (m) => {
+      out.push(m);
+    });
+    expect(out[0]).toMatchObject({ ok: false, output: "git is not installed on this device" });
+    expect(audit).toEqual(["git_read:refused"]);
+  });
+
+  it("are all offered when nothing says otherwise", () => {
+    expect(createToolServer({ roots: { proj: dir }, allowed: ["git_read", "jq"] }).allowedNames()).toEqual(["git_read", "jq"]);
+  });
+});

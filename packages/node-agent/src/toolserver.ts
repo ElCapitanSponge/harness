@@ -26,7 +26,12 @@ export const parseRoots = (value: string | undefined): Record<string, string> =>
 
 // Runs the tools the gateway asks for, only inside the project roots this device chose to expose and only the
 // tools in `allowed`. Anything else is refused here, whatever the gateway sends.
-export const createToolServer = (opts: { roots: Record<string, string>; allowed: string[]; audit?: (entry: AuditEntry) => void }) => {
+export const createToolServer = (opts: { roots: Record<string, string>; allowed: string[]; audit?: (entry: AuditEntry) => void; installed?: (program: string) => boolean }) => {
+  // A tool whose program is not on this device is neither offered nor run.
+  const usable = (name: string): boolean => {
+    const program = findTool(name)?.requires;
+    return program === undefined || (opts.installed?.(program) ?? true);
+  };
   let roots = opts.roots;
   let allowed = new Set(opts.allowed);
 
@@ -40,7 +45,7 @@ export const createToolServer = (opts: { roots: Record<string, string>; allowed:
       return Object.keys(roots);
     },
     allowedNames: (): string[] => {
-      return [...allowed];
+      return [...allowed].filter(usable);
     },
     async handle(msg: ToolRequest, send: (m: TunnelMessage) => void): Promise<void> {
       const started = Date.now();
@@ -67,6 +72,10 @@ export const createToolServer = (opts: { roots: Record<string, string>; allowed:
       }
       if (!tool || !allowed.has(msg.name)) {
         finish(false, `tool "${msg.name}" is not allowed on this device`, "refused", summary);
+        return;
+      }
+      if (!usable(msg.name)) {
+        finish(false, `${tool.requires ?? msg.name} is not installed on this device`, "refused", summary);
         return;
       }
       try {

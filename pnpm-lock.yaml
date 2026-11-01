@@ -127,6 +127,9 @@ importers:
       '@harness/core':
         specifier: workspace:*
         version: link:../core
+      undici:
+        specifier: ^8.12.3
+        version: 8.12.3
 
   packages/web:
     dependencies:

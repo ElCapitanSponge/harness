@@ -17,6 +17,14 @@ const report = (over: Partial<SettingsReport> = {}): SettingsReport => {
     sources: { projectRoots: "file", allowedTools: "default", modelControl: "file", claude: "file", gameProcesses: "default" },
     locked: [],
     remoteConfig: true,
+    tools: [
+      { name: "read_file", installed: true, asksFirst: false },
+      { name: "write_file", installed: true, asksFirst: true },
+      { name: "web_fetch", installed: true, asksFirst: true },
+      { name: "git_read", installed: true, asksFirst: false },
+      { name: "git_write", installed: true, asksFirst: true },
+      { name: "gh_read", installed: false, asksFirst: false },
+    ],
     ...over,
   };
 };
@@ -34,10 +42,14 @@ export const DeviceThatAcceptsChanges: StoryObj = {
     const canvas = within(canvasElement);
     await expect(await canvas.findByText("This device accepts settings changes from here.")).toBeVisible();
     await expect(canvas.getByRole("button", { name: "Save settings" })).toBeEnabled();
-    await expect(canvas.getByRole("checkbox", { name: "read_file" })).toBeChecked();
-    await expect(canvas.getByRole("checkbox", { name: "write_file" })).not.toBeChecked();
-    await userEvent.click(canvas.getByRole("checkbox", { name: "write_file" }));
-    await expect(canvas.getByRole("checkbox", { name: "write_file" })).toBeChecked();
+    await expect(canvas.getByRole("checkbox", { name: /^read_file/ })).toBeChecked();
+    await expect(canvas.getByRole("checkbox", { name: /^write_file/ })).not.toBeChecked();
+    // A tool that changes things says it asks first, and one whose program is missing says so and cannot be switched on.
+    await expect(canvas.getAllByText("asks first").length).toBeGreaterThan(0);
+    await expect(canvas.getByText("not installed")).toBeVisible();
+    await expect(canvas.getByRole("checkbox", { name: /gh_read/ })).toBeDisabled();
+    await userEvent.click(canvas.getByRole("checkbox", { name: /^write_file/ }));
+    await expect(canvas.getByRole("checkbox", { name: /^write_file/ })).toBeChecked();
   },
 };
 
@@ -50,7 +62,7 @@ export const ReadOnlyDevice: StoryObj = {
     const canvas = within(canvasElement);
     await expect(await canvas.findByText(/Read-only: start its agent with REMOTE_CONFIG=1/)).toBeVisible();
     await expect(canvas.queryByRole("button", { name: "Save settings" })).toBeNull();
-    await expect(canvas.getByRole("checkbox", { name: "read_file" })).toBeDisabled();
+    await expect(canvas.getByRole("checkbox", { name: /^read_file/ })).toBeDisabled();
   },
 };
 
