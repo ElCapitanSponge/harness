@@ -38,7 +38,7 @@ With `HARNESS_API_KEY` set, every route except the web page itself needs `Author
 | `PATCH /sessions/:id` | Rename: `{ title }`. |
 | `DELETE /sessions/:id` | Delete it, including from disk. |
 | `POST /sessions/:id/messages` | Send a message: `{ text, model?, effort?, skill? }`. `model` can be `auto`; `effort` is `default`, `low`, `medium`, `high`, `xhigh` or `max`; `skill` is `{ name, arguments? }` for a skill the person started. Returns `202`; follow the events. `409` if a turn is running. |
-| `GET /sessions/:id/events?from=N` | Server-sent events from event number `N`: stored events, then live ones. The stored kinds are `user`, `text`, `thinking`, `tool`, `approval`, `compacted`, `skill`, `imported`, `done`, `cancelled` and `error`; live ones (`stage`, `thinking-delta`, `text-delta`) are never stored. |
+| `GET /sessions/:id/events?from=N` | Server-sent events from event number `N`: stored events, then live ones. The stored kinds are `user`, `text`, `thinking`, `tool`, `change` (a file a write or edit changed, with its diff), `plan`, `approval`, `compacted`, `skill`, `imported`, `done`, `cancelled` and `error`; live ones (`stage`, `thinking-delta`, `text-delta`) are never stored. |
 | `POST /sessions/:id/approvals/:approvalId` | Answer an approval: `{ approve, always? }`. |
 | `POST /sessions/:id/cancel` | Stop the running turn. |
 | `POST /sessions/:id/compact` | Summarise the older turns now. |

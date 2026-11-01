@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { effortFor, sseData, textOf, type ChatMessage, type Effort, type NodeRecord, type LiveSessionEvent, type SessionEvent, type SessionInfo, type Tool, type ToolCall } from "@harness/core";
-import { contextPrompt, runTurn, systemPrompt, type ProjectContext, tools as allTools, type StreamHooks, type ToolSpec } from "@harness/tools";
+import { contextPrompt, planTool, readPlan, runTurn, systemPrompt, type ProjectContext, tools as allTools, type StreamHooks, type ToolSpec } from "@harness/tools";
 import type { Registry } from "./registry.js";
 import type { Relay } from "./relay.js";
 import type { ModelLoader } from "./loader.js";
@@ -564,11 +564,11 @@ export class Session {
   }
 
   private async run(abort: AbortController, offered: ToolSpec[]): Promise<void> {
-    let specs = offered;
+    let specs = this.kind === "code" ? [...offered, planTool] : offered;
     try {
       this.decide();
       if (this.kind === "code" && this.deps.projectContext) {
-        specs = await this.learnProject(offered);
+        specs = await this.learnProject(specs);
       }
       if (this.starting) {
         await this.runStartedSkill();
@@ -616,9 +616,21 @@ export class Session {
           }, { effort: this.effort });
         },
         run: async (name, args) => {
+          // The plan is the session's own, kept here and shown in the side panel; it touches no device.
+          if (name === "plan") {
+            const steps = readPlan(args);
+            this.emit({ type: "plan", steps });
+            return `plan saved: ${String(steps.filter((s) => {
+              return s.status === "done";
+            }).length)} of ${String(steps.length)} steps done`;
+          }
           const result = await this.deps.relay.callTool(this.device, this.root, name, args, { session: this.id });
           if (!result.ok) {
             throw new Error(result.output);
+          }
+          // What a write or edit changed is for the person's side panel; the model is only told the result.
+          if (result.change) {
+            this.emit({ type: "change", change: result.change });
           }
           return result.output;
         },

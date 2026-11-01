@@ -131,3 +131,26 @@ describe("an imported conversation", () => {
     expect(state.items[0]).toMatchObject({ kind: "note", tone: "info", text: expect.stringContaining("Imported from ChatGPT: 2 messages") as string });
   });
 });
+
+describe("the side panel's data", () => {
+  const change = (path: string, added: number, removed: number, created = false): StreamEvent => {
+    return { type: "change", change: { path, created, added, removed, patch: `@@ ${path}` } };
+  };
+
+  it("collects changed files, newest first, adding up several changes to one file and remembering that it was created", () => {
+    const state = run([change("a.ts", 2, 0, true), change("b.ts", 1, 1), change("a.ts", 3, 1)]);
+    expect(state.changes.map((f) => {
+      return f.path;
+    })).toEqual(["a.ts", "b.ts"]);
+    expect(state.changes[0]).toMatchObject({ path: "a.ts", created: true, added: 5, removed: 1 });
+    expect(state.changes[0]?.diffs).toHaveLength(2);
+    // They are data for the panel, not items in the thread.
+    expect(state.items).toEqual([]);
+    expect(state.cursor).toBe(3);
+  });
+
+  it("keeps the latest plan", () => {
+    const state = run([{ type: "plan", steps: [{ text: "a", status: "in_progress" }] }, { type: "plan", steps: [{ text: "a", status: "done" }, { text: "b", status: "pending" }] }]);
+    expect(state.plan).toEqual([{ text: "a", status: "done" }, { text: "b", status: "pending" }]);
+  });
+});

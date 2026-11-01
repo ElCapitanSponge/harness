@@ -65,6 +65,17 @@ harness tool anakin proj read_file '{"path":"package.json"}'   # run one tool, f
 
 In the web page, choose **Code** on the start screen, pick the device and folder, and describe the task. Changes ask on the page (`-y` for the command line approves everything for the session; an approval nobody answers counts as no after five minutes). A session can switch model between messages, including to Claude, and can use [skills](skills.md) with `/`.
 
+## The session panel
+
+In a coding session, the panel button in the header opens **This session** beside the conversation (a drawer over it on a phone). It shows:
+
+- **Plan.** The model can keep a short plan with the `plan` tool, marking each step to do, in progress or done as it works. The plan shows live and is saved with the conversation. The tool needs no approval and touches nothing: the gateway keeps the plan and no device is asked.
+- **Files.** Every file the session changed or created, newest first, with lines added and removed. Opening one shows its diff. When a file is written or edited, the device works out the diff and sends it beside the result; the model is only told the result (such as `wrote 120 characters to a.txt`), never the diff. A binary or very large file (over 5,000 lines, or a diff over 60,000 characters) is listed with a note instead of a diff.
+
+Both are stored as events of the conversation, so reopening it shows the panel as it was.
+
+Not built yet from the same plan: running commands in the background, and attaching images for models that can read them ([#28](https://github.com/ElCapitanSponge/harness/issues/28)).
+
 ## Loading models on another device
 
 ```bash

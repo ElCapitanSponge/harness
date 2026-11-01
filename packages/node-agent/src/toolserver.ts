@@ -1,5 +1,5 @@
 import path from "node:path";
-import type { RelayRequest, TunnelMessage } from "@harness/core";
+import type { FileChange, RelayRequest, TunnelMessage } from "@harness/core";
 import { findTool, truncate } from "@harness/tools";
 import type { AuditEntry } from "./audit.js";
 
@@ -57,8 +57,8 @@ export const createToolServer = (opts: { roots: Record<string, string>; allowed:
     },
     async handle(msg: ToolRequest, send: (m: TunnelMessage) => void): Promise<void> {
       const started = Date.now();
-      const finish = (ok: boolean, output: string, outcome: AuditEntry["outcome"], summary: string): void => {
-        send({ type: "tool-result", id: msg.id, ok, output });
+      const finish = (ok: boolean, output: string, outcome: AuditEntry["outcome"], summary: string, change?: FileChange): void => {
+        send({ type: "tool-result", id: msg.id, ok, output, ...(change ? { change } : {}) });
         opts.audit?.({
           time: new Date(started).toISOString(),
           session: msg.session,
@@ -97,7 +97,12 @@ export const createToolServer = (opts: { roots: Record<string, string>; allowed:
         return;
       }
       try {
-        finish(true, truncate(await tool.run(msg.args, { cwd })), "ok", summary);
+        // What a write or edit changed goes beside the result, for the person; the model only gets the result.
+        let change: FileChange | undefined;
+        const output = truncate(await tool.run(msg.args, { cwd, report: (c) => {
+          change = c;
+        } }));
+        finish(true, output, "ok", summary, change);
       } catch (err) {
         finish(false, (err as Error).message, "error", summary);
       }

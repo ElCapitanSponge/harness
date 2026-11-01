@@ -1,4 +1,4 @@
-import type { SessionEvent, StageName } from "@harness/core";
+import type { FileChange, PlanStep, SessionEvent, StageName } from "@harness/core";
 
 // What the page shows for a conversation, built up from the gateway's events. Kept free of React so it can be tested.
 
@@ -12,8 +12,22 @@ export type Item
     | { kind: "approval"; id: number; approvalId: string; tool: string; summary: string; status: "pending" | "allowed" | "declined" }
     | { kind: "note"; id: number; text: string; tone: "info" | "error" };
 
+// A file the session changed, for the side panel: totals over every write and edit, and each one's diff in order.
+export interface ChangedFile {
+  path: string;
+  // True if the session created it (its first change made the file).
+  created: boolean;
+  added: number;
+  removed: number;
+  diffs: { patch?: string; note?: string }[];
+}
+
 export interface ConversationState {
   items: Item[];
+  // Files the session changed, most recently changed first, and the model's plan as it stands. Both are rebuilt from the stored
+  // events when a conversation is reopened.
+  changes: ChangedFile[];
+  plan: PlanStep[];
   // A turn is running: from the person's message until it is done, cancelled or has failed.
   busy: boolean;
   // How many stored events have been seen, so a dropped connection resumes where it left off.
@@ -25,7 +39,7 @@ export interface ConversationState {
 }
 
 export const emptyConversation = (): ConversationState => {
-  return { items: [], busy: false, cursor: 0, next: 1 };
+  return { items: [], changes: [], plan: [], busy: false, cursor: 0, next: 1 };
 };
 
 export type StreamEvent = SessionEvent | { type: "thinking-delta"; text: string } | { type: "text-delta"; text: string } | { type: "stage"; stage: StageName; detail?: string };
@@ -120,6 +134,26 @@ export const applyEvent = (state: ConversationState, event: StreamEvent, now: nu
       return push(state.items, (id) => {
         return { kind: "compaction", id, messages: event.messages, tokensBefore: event.tokensBefore, tokensAfter: event.tokensAfter, manual: event.manual };
       });
+
+    case "change": {
+      const c: FileChange = event.change;
+      const earlier = state.changes.find((f) => {
+        return f.path === c.path;
+      });
+      const entry: ChangedFile = {
+        path: c.path,
+        created: earlier?.created ?? c.created,
+        added: (earlier?.added ?? 0) + c.added,
+        removed: (earlier?.removed ?? 0) + c.removed,
+        diffs: [...(earlier?.diffs ?? []), { patch: c.patch, note: c.note }],
+      };
+      return { ...state, cursor, changes: [entry, ...state.changes.filter((f) => {
+        return f.path !== c.path;
+      })] };
+    }
+
+    case "plan":
+      return { ...state, cursor, plan: event.steps };
 
     case "imported":
       return push(state.items, (id) => {

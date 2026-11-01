@@ -102,6 +102,22 @@ export interface NodeRecord extends Heartbeat {
   lastSeen: number;
 }
 
+// What a write or edit did to one file, for the side panel. The device works it out when the tool runs and sends it beside the
+// result; the model never sees it. `patch` is unified-diff hunks; `note` says why there is none (a binary or very large file).
+export const FileChange = z.object({
+  path: z.string(),
+  created: z.boolean(),
+  added: z.number().int(),
+  removed: z.number().int(),
+  patch: z.string().optional(),
+  note: z.string().optional(),
+});
+export type FileChange = z.infer<typeof FileChange>;
+
+// The model's plan for a session: short steps, each pending, in progress or done.
+export const PlanStep = z.object({ text: z.string().min(1).max(300), status: z.enum(["pending", "in_progress", "done"]) });
+export type PlanStep = z.infer<typeof PlanStep>;
+
 // Messages a device sends over its outbound tunnel to the gateway: its state, and replies to relayed requests.
 export const TunnelMessage = z.discriminatedUnion("type", [
   z.object({ type: z.literal("heartbeat"), heartbeat: Heartbeat }),
@@ -110,7 +126,7 @@ export const TunnelMessage = z.discriminatedUnion("type", [
   z.object({ type: z.literal("end"), id: z.string() }),
   z.object({ type: z.literal("fail"), id: z.string(), message: z.string() }),
   // The single reply to a tool call or a Claude request.
-  z.object({ type: z.literal("tool-result"), id: z.string(), ok: z.boolean(), output: z.string() }),
+  z.object({ type: z.literal("tool-result"), id: z.string(), ok: z.boolean(), output: z.string(), change: FileChange.optional() }),
 ]);
 export type TunnelMessage = z.infer<typeof TunnelMessage>;
 
@@ -208,6 +224,10 @@ export type SessionEvent
   = | { type: "user"; text: string }
     | { type: "text"; text: string; model?: string; device?: string; reason?: string }
     | { type: "thinking"; text: string }
+    // A file a write or edit changed, with its diff. Shown in the side panel, never sent to the model.
+    | { type: "change"; change: FileChange }
+    // The model's plan as it stands.
+    | { type: "plan"; steps: PlanStep[] }
     // The start of a conversation brought in from another tool. Nothing was sent to a model.
     | { type: "imported"; source: string; turns: number }
     // A skill the person started: its name, what they gave it, and the instructions it put in the conversation.

@@ -22,6 +22,9 @@ A project's AGENTS.md or CLAUDE.md, or the person's own CLAUDE.md, added to the 
 **Import**:
 Bringing a conversation from another tool in as a saved conversation, marked with where it came from. Nothing is sent to a model. See docs/guides/importing.md.
 
+**Session panel**:
+The panel beside a coding session showing the model's plan and the files it changed, with their diffs. See docs/guides/coding-sessions.md.
+
 **Gateway**:
 The single always-on service that every client talks to. It knows which devices are connected, routes each request, and serves the web page.
 _Avoid_: server, hub, proxy

@@ -1,6 +1,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { devTools } from "./dev-tools.js";
+import { fileChange } from "./diff.js";
 import { num, resolveInside, show, str, truncate, type ToolLevel, type ToolSpec } from "./helpers.js";
 import { runShell } from "./shell.js";
 import { skillTools } from "./skills.js";
@@ -179,8 +180,20 @@ const writeFile: ToolSpec = {
   async run(a, ctx) {
     const file = await resolveInside(ctx.cwd, str(a, "path"));
     const content = str(a, "content");
+    // What was there before, for the side panel: nothing if the file is new, or just a note if it is not readable as text.
+    const exists = await fs.stat(file).then(() => {
+      return true;
+    }, () => {
+      return false;
+    });
+    const before = exists
+      ? await readText(file).catch(() => {
+          return null;
+        })
+      : undefined;
     await fs.mkdir(path.dirname(file), { recursive: true });
     await fs.writeFile(file, content, "utf8");
+    ctx.report?.(before === null ? { path: rel(ctx.cwd, file), created: false, added: 0, removed: 0, note: "binary or large file, not shown" } : fileChange(rel(ctx.cwd, file), before, content));
     return `wrote ${content.length} characters to ${rel(ctx.cwd, file)}`;
   },
 };
@@ -219,9 +232,11 @@ const editFile: ToolSpec = {
     if (count > 1) {
       throw new Error(`old_string matches ${count} times; include more surrounding context`);
     }
-    await fs.writeFile(file, text.replace(oldText, () => {
+    const updated = text.replace(oldText, () => {
       return newText;
-    }), "utf8");
+    });
+    await fs.writeFile(file, updated, "utf8");
+    ctx.report?.(fileChange(rel(ctx.cwd, file), text, updated));
     return `edited ${rel(ctx.cwd, file)}`;
   },
 };

@@ -1,11 +1,13 @@
 import fs from "node:fs/promises";
 import path from "node:path";
-import type { Tool } from "@harness/core";
+import type { FileChange, Tool } from "@harness/core";
 
 // What every tool shares: its shape, argument reading, output limits, and keeping paths inside the project folder.
 
 export interface ToolContext {
   cwd: string;
+  // Called with what a write or edit changed, for the person to see. It does not go back to the model.
+  report?: (change: FileChange) => void;
   // The person's home folder, where their skills and CLAUDE.md are (the real one unless a test says otherwise).
   home?: string;
 }
