@@ -1,11 +1,11 @@
-# Harness
+# Torii
 
 Pools local language models on the owner's devices, and Claude, behind one endpoint, and lets a coding session work on the files of whichever device the owner chooses.
 
 ## Language
 
-**Harness**:
-The whole system: the gateway, the node agents, the CLI and the web page.
+**Torii** (the harness):
+The name of the whole system. The repository and packages are still called harness. The system is: the gateway, the node agents, the CLI and the web page.
 _Avoid_: platform, framework
 
 **Gateway**:
