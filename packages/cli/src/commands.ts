@@ -3,6 +3,8 @@ import { parseArgs } from "node:util";
 export type Command
   = | { name: "nodes" }
     | { name: "models" }
+    | { name: "sessions" }
+    | { name: "settings"; device: string; key?: string; value?: unknown }
     | { name: "chat"; model: string; prompt: string }
     | { name: "code"; model: string; prompt: string; yes: boolean; device?: string; root?: string }
     | { name: "tool"; device: string; root: string; tool: string; args: Record<string, unknown> }
@@ -15,6 +17,9 @@ export const USAGE = `harness - talk to local models and Claude through the gate
 Usage:
   harness nodes                         list nodes reporting to the gateway
   harness models                        list models across nodes
+  harness sessions                      list saved conversations (chats and coding sessions)
+  harness settings <device> [key json] show a device's settings, or change one (the device must run
+                                        with REMOTE_CONFIG=1), e.g. settings anakin claude true
   harness chat [-m model] [prompt...]   one-shot chat, or interactive with no prompt
   harness code [-m model] [-y] [-d device [-r root]] [prompt...]
                                         work on the files in the current directory (read, edit, run
@@ -51,6 +56,25 @@ export const parseCommand = (argv: string[]): Command => {
     case "nodes":
     case "models":
       return { name };
+    case "sessions":
+      return { name };
+    case "settings": {
+      const [device, key, json] = rest;
+      if (!device) {
+        throw new Error("settings needs a <device>");
+      }
+      if (key === undefined) {
+        return { name: "settings", device };
+      }
+      if (json === undefined) {
+        throw new Error("settings <device> <key> needs a JSON value");
+      }
+      try {
+        return { name: "settings", device, key, value: JSON.parse(json) as unknown };
+      } catch {
+        throw new Error("the value must be valid JSON, e.g. true or [\"read_file\"]");
+      }
+    }
     case "chat":
       return { name: "chat", model: values.model ?? "auto", prompt: rest.join(" ").trim() };
     case "code":

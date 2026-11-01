@@ -31,3 +31,7 @@ Open **Devices → Add a device** and copy the command for the machine's operati
 ## API
 
 `GET /devices/:id/settings` returns the effective settings, where each came from, which are locked and whether the device accepts changes. `PUT /devices/:id/settings` takes a partial object and returns the new report, or the device's reason with status 422.
+
+## From the command line
+
+`harness settings <device>` shows the same report as the page; `harness settings <device> <key> <json>` changes one setting (for example `harness settings anakin claude true`) on a device started with `REMOTE_CONFIG=1`. `harness sessions` lists saved conversations.

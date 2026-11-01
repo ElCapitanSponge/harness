@@ -179,8 +179,11 @@ describe("a coding session over the tunnel", () => {
       }
       await reader.cancel();
 
+      // Stages are live progress, not part of the conversation.
       const types = [...text.matchAll(/"type":"(\w+)"/g)].map((m) => {
         return m[1];
+      }).filter((t) => {
+        return t !== "stage";
       });
       expect(types).toEqual(["user", "tool", "text", "done"]);
       expect(text).toContain("The file greets you.");
@@ -256,6 +259,8 @@ describe("approvals over the tunnel", () => {
     await reader.cancel();
     return { root, types: [...text.matchAll(/"type":"([a-z-]+)"/g)].map((m) => {
       return m[1]!;
+    }).filter((t) => {
+      return t !== "stage";
     }) };
   };
 

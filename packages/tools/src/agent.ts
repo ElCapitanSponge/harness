@@ -1,4 +1,4 @@
-import { textOf, type ChatMessage, type Tool, type ToolCall } from "@harness/core";
+import { textOf, type ChatMessage, type StageName, type Tool, type ToolCall } from "@harness/core";
 import { tools as allTools, type ToolContext, type ToolSpec } from "./tools.js";
 
 export type Approver = (tool: string, summary: string) => Promise<boolean>;
@@ -7,6 +7,8 @@ export type Approver = (tool: string, summary: string) => Promise<boolean>;
 export interface StreamHooks {
   thinking?: (piece: string) => void;
   text?: (piece: string) => void;
+  // Where the request is before the first word arrives; `detail` names the device or model.
+  stage?: (stage: StageName, detail?: string) => void;
 }
 
 export interface AgentDeps {

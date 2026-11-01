@@ -1,6 +1,6 @@
-import type { NodeRecord } from "@harness/core";
+import type { NodeRecord, SettingsReport } from "@harness/core";
 import { describe, expect, it } from "vitest";
-import { formatModels, formatNodes } from "./format.js";
+import { formatModels, formatNodes, formatSessions, formatSettings } from "./format.js";
 
 const node = (over: Partial<NodeRecord> & { nodeId: string }): NodeRecord => {
   return {
@@ -47,5 +47,31 @@ describe("formatModels", () => {
     expect(lines[1]).toContain("16384");
     expect(lines[2]).toContain("aaa");
     expect(lines[3]).toContain("zzz");
+  });
+});
+
+describe("formatSessions and formatSettings", () => {
+  const session = { id: "0b1c2d3e-4f50-4a6b-8c7d-9e0f1a2b3c4d", model: "qwen", device: "", root: "", busy: false, events: 3, created: 0, updated: 0, kind: "chat" as const, title: "Why the build fails", deviceConnected: true };
+
+  it("lists conversations with their kind, title and where a coding session works", () => {
+    const out = formatSessions([session, { ...session, id: "ffffffff-4f50-4a6b-8c7d-9e0f1a2b3c4d", kind: "code", device: "pc", root: "proj", deviceConnected: false, title: "" }], 120_000);
+    expect(out).toContain("0b1c2d3e  chat");
+    expect(out).toContain("Why the build fails");
+    expect(out).toContain("pc:proj (offline)");
+    expect(out).toContain("(new)");
+    expect(formatSessions([])).toBe("No saved conversations.");
+  });
+
+  it("shows each setting with its source and whether changes are accepted", () => {
+    const report = {
+      settings: { projectRoots: {}, allowedTools: ["grep"], modelControl: false, claude: true, gameProcesses: [] },
+      sources: { projectRoots: "default", allowedTools: "file", modelControl: "default", claude: "env", gameProcesses: "default" },
+      locked: ["claude"],
+      remoteConfig: false,
+    } satisfies SettingsReport;
+    const out = formatSettings(report);
+    expect(out).toContain("fixed by environment");
+    expect(out).toContain("[\"grep\"]");
+    expect(out).toContain("REMOTE_CONFIG=1");
   });
 });

@@ -41,15 +41,21 @@ export const createCompleter = (deps: { registry: Registry; relay: Pick<Relay, "
       if (!device) {
         throw new Error("no connected device is logged in to Claude");
       }
+      hooks?.stage?.("waiting", `Claude through ${device.nodeId}`);
       const reply = await deps.relay.callClaude(device.nodeId, JSON.stringify({ model, messages }));
       if (!reply.ok) {
         throw new Error(reply.output);
       }
       const text = (JSON.parse(reply.output) as { text: string }).text;
+      hooks?.stage?.("writing");
       hooks?.text?.(text);
       return { role: "assistant", content: text };
     }
-    const route = await resolveRoute({ registry: deps.registry, loader: deps.loader }, { model, messages, tools });
+    hooks?.stage?.("routing", model);
+    const route = await resolveRoute({ registry: deps.registry, loader: deps.loader }, { model, messages, tools }, (step) => {
+      hooks?.stage?.(step.type, step.model);
+    });
+    hooks?.stage?.("waiting", `${route.model} on ${route.node.nodeId}`);
     const res = await deps.relay.request(route.node.nodeId, JSON.stringify({ model: route.model, messages, tools: tools.length > 0 ? tools : undefined, stream: true }), signal);
 
     if (!res.ok || !(res.headers.get("content-type") ?? "").includes("text/event-stream")) {
@@ -103,10 +109,16 @@ export const assembleStream = async (res: Response, hooks?: StreamHooks): Promis
 
     const thought = delta.reasoning_content ?? delta.reasoning;
     if (thought) {
+      if (reasoning === "" && content === "") {
+        hooks?.stage?.("thinking");
+      }
       reasoning += thought;
       hooks?.thinking?.(thought);
     }
     if (delta.content) {
+      if (content === "") {
+        hooks?.stage?.("writing");
+      }
       content += delta.content;
       hooks?.text?.(delta.content);
     }
@@ -322,6 +334,9 @@ export class Session {
             },
             text: (piece) => {
               this.emitLive({ type: "text-delta", text: piece });
+            },
+            stage: (stage, detail) => {
+              this.emitLive({ type: "stage", stage, detail });
             },
           });
         },

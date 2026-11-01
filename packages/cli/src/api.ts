@@ -1,4 +1,4 @@
-import { authHeaders, sseData, textOf, type ChatMessage, type DeviceToolResult, type NodeRecord, type SessionEvent, type SessionInfo, type Tool } from "@harness/core";
+import { authHeaders, sseData, textOf, type ChatMessage, type DeviceToolResult, type LiveSessionEvent, type NodeRecord, type SessionEvent, type SessionInfo, type SettingsReport, type Tool } from "@harness/core";
 
 export interface Completion {
   message: ChatMessage;
@@ -71,7 +71,22 @@ export class Gateway {
     return { method: "POST", headers: { "content-type": "application/json", ...authHeaders(this.apiKey) }, body: JSON.stringify(body) };
   }
 
-  async createSession(input: { model: string; device: string; root: string; autoApprove?: boolean }): Promise<SessionInfo> {
+  // Saved conversations, most recently active first.
+  async sessions(): Promise<SessionInfo[]> {
+    const res = await this.fetchImpl(`${this.baseUrl}/sessions`, { headers: authHeaders(this.apiKey), signal: AbortSignal.timeout(5000) });
+    await this.check(res);
+    return (await res.json()) as SessionInfo[];
+  }
+
+  // A device's effective settings, or, with a change, the settings after it.
+  async deviceSettings(device: string, change?: Record<string, unknown>): Promise<SettingsReport> {
+    const url = `${this.baseUrl}/devices/${encodeURIComponent(device)}/settings`;
+    const res = await this.fetchImpl(url, change ? { ...this.json(change), method: "PUT" } : { headers: authHeaders(this.apiKey) });
+    await this.check(res);
+    return (await res.json()) as SettingsReport;
+  }
+
+  async createSession(input: { model: string; device?: string; root?: string; autoApprove?: boolean }): Promise<SessionInfo> {
     const res = await this.fetchImpl(`${this.baseUrl}/sessions`, this.json(input));
     await this.check(res);
     return (await res.json()) as SessionInfo;
@@ -108,14 +123,14 @@ export class Gateway {
   }
 
   // Follows a session's events from index `from` until the caller stops iterating or aborts.
-  async* sessionEvents(sessionId: string, from = 0, signal?: AbortSignal): AsyncGenerator<SessionEvent> {
+  async* sessionEvents(sessionId: string, from = 0, signal?: AbortSignal): AsyncGenerator<SessionEvent | LiveSessionEvent> {
     const res = await this.fetchImpl(`${this.baseUrl}/sessions/${sessionId}/events?from=${from}`, { headers: authHeaders(this.apiKey), signal });
     await this.check(res);
     if (!res.body) {
       return;
     }
     for await (const data of sseData(res.body)) {
-      yield JSON.parse(data) as SessionEvent;
+      yield JSON.parse(data) as SessionEvent | LiveSessionEvent;
     }
   }
 

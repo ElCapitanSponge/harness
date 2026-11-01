@@ -1,4 +1,4 @@
-import type { SessionEvent } from "@harness/core";
+import type { SessionEvent, StageName } from "@harness/core";
 
 // What the page shows for a conversation, built up from the gateway's events. Kept free of React so it can be tested.
 
@@ -17,16 +17,24 @@ export interface ConversationState {
   // How many stored events have been seen, so a dropped connection resumes where it left off.
   cursor: number;
   next: number;
+  // When the running turn began, and where it is before the first word: finding a device, loading a model, waiting.
+  since?: number;
+  stage?: { name: StageName; detail?: string };
 }
 
 export const emptyConversation = (): ConversationState => {
   return { items: [], busy: false, cursor: 0, next: 1 };
 };
 
-export type StreamEvent = SessionEvent | { type: "thinking-delta"; text: string } | { type: "text-delta"; text: string };
+export type StreamEvent = SessionEvent | { type: "thinking-delta"; text: string } | { type: "text-delta"; text: string } | { type: "stage"; stage: StageName; detail?: string };
+
+// The turn is running from the moment Send is pressed, before any event has come back.
+export const markBusy = (state: ConversationState, now: number = Date.now()): ConversationState => {
+  return { ...state, busy: true, since: state.since ?? now };
+};
 
 const isDelta = (event: StreamEvent): boolean => {
-  return event.type === "thinking-delta" || event.type === "text-delta";
+  return event.type === "thinking-delta" || event.type === "text-delta" || event.type === "stage";
 };
 
 // Finishes any thinking or reply that was still being written.
@@ -47,6 +55,8 @@ const withNote = (state: ConversationState, cursor: number, text: string, tone: 
     ...state,
     cursor,
     busy: false,
+    since: undefined,
+    stage: undefined,
     items: [...settle(state.items, now), { kind: "note", id: state.next, text, tone }],
     next: state.next + 1,
   };
@@ -66,7 +76,10 @@ export const applyEvent = (state: ConversationState, event: StreamEvent, now: nu
     case "user":
       return { ...push(state.items, (id) => {
         return { kind: "user", id, text: event.text };
-      }), busy: true };
+      }), busy: true, since: state.since ?? now, stage: undefined };
+
+    case "stage":
+      return { ...state, stage: { name: event.stage, detail: event.detail } };
 
     case "thinking-delta":
       if (last?.kind === "thinking" && last.live) {
@@ -127,7 +140,7 @@ export const applyEvent = (state: ConversationState, event: StreamEvent, now: nu
       if (event.stopped) {
         return withNote(state, cursor, "Stopped at the step limit. Say continue to go on.", "info", now);
       }
-      return { ...state, cursor, busy: false, items: settle(state.items, now) };
+      return { ...state, cursor, busy: false, since: undefined, stage: undefined, items: settle(state.items, now) };
     }
 
     case "cancelled":
