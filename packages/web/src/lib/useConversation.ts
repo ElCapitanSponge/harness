@@ -41,6 +41,7 @@ const follow = async (id: string, store: Store<ConversationState>, signal: Abort
         });
         if (event.type === "done" || event.type === "cancelled" || event.type === "error") {
           void client.invalidateQueries({ queryKey: ["sessions"] });
+          void client.invalidateQueries({ queryKey: ["usage"] });
         }
       });
     } catch {

@@ -9,6 +9,19 @@ export interface StreamHooks {
   text?: (piece: string) => void;
   // Where the request is before the first word arrives; `detail` names the device or model.
   stage?: (stage: StageName, detail?: string) => void;
+  // What a model call cost, once it has finished. Counts are the server's own, or an estimate when it reported none.
+  usage?: (usage: CallUsage) => void;
+}
+
+export interface CallUsage {
+  model: string;
+  device: string;
+  promptTokens: number;
+  completionTokens: number;
+  durationMs: number;
+  // The model's context window in tokens, when known.
+  contextLength?: number;
+  estimated: boolean;
 }
 
 export interface AgentDeps {

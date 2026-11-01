@@ -36,17 +36,18 @@ export const findWebDist = async (dir: string): Promise<string | undefined> => {
   }
 };
 
-// Reads the build and returns what mounts it on an app.
+// Returns what mounts the build on an app. It fails now, not on the first request, if there is no build.
 export const loadWebApp = async (dist: string): Promise<(app: Hono) => void> => {
-  const index = await fs.readFile(path.join(dist, "index.html"), "utf8");
+  await fs.access(path.join(dist, "index.html"));
   return (app) => {
-    mount(app, dist, index);
+    mount(app, dist);
   };
 };
 
-const mount = (app: Hono, dist: string, index: string): void => {
-  const page = (c: Context) => {
-    return c.html(index, 200, PAGE_HEADERS);
+const mount = (app: Hono, dist: string): void => {
+  // The page is read on each request (it is small), so a rebuild shows without restarting the gateway.
+  const page = async (c: Context) => {
+    return c.html(await fs.readFile(path.join(dist, "index.html"), "utf8"), 200, PAGE_HEADERS);
   };
 
   app.get("/", page);

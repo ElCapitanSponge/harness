@@ -1,5 +1,5 @@
 // The shapes the gateway returns, for the parts of its API the page uses.
-export type { SessionEvent, SessionInfo, SettingsReport, SettingKey, NodeRecord } from "@harness/core";
+export type { ConversationUsage, ModelUsage, NodeRecord, SessionEvent, SessionInfo, SettingKey, SettingsReport, UsageSummary } from "@harness/core";
 
 export type CatalogueState = "loaded" | "loads-on-use" | "cannot-load" | "busy";
 

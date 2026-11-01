@@ -70,6 +70,13 @@ _Avoid_: workspace, sandbox, working directory
 Where a request is before the first word arrives: finding a device, freeing memory, loading a model, waiting for it, then thinking and writing. Sent live to the page and the CLI, never stored.
 _Avoid_: status, phase
 
+**Ledger**:
+The record of every model call the gateway makes: the conversation, device and model, the tokens in and out, the time taken and the model's context window. It feeds the context meter and the usage page.
+_Avoid_: log, metrics
+
+**Context meter**:
+How many tokens a conversation holds against the window of the model that last answered. A number marked ~ is an estimate.
+
 **Approval**:
 The owner's yes or no to a tool that would change something. A no ends the turn, and no answer counts as no.
 _Avoid_: confirmation, permission
