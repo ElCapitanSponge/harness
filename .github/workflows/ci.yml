@@ -21,8 +21,41 @@ jobs:
       - run: pnpm typecheck
       - run: pnpm test
 
-  publish-gateway:
+  # Builds the gateway image and runs it, so a Dockerfile or packaging mistake fails here and not on the NAS.
+  image-smoke:
     needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker build -t harness-gateway:ci .
+      - name: Refuses to start without an API key
+        run: |
+          set +e
+          out=$(docker run --rm harness-gateway:ci 2>&1)
+          code=$?
+          echo "$out"
+          [ "$code" -ne 0 ] || { echo "the gateway started without HARNESS_API_KEY"; exit 1; }
+          echo "$out" | grep -q "HARNESS_API_KEY" || { echo "expected a message about HARNESS_API_KEY"; exit 1; }
+      - name: Starts with a key and answers
+        run: |
+          set -euo pipefail
+          docker run -d --name gw -e HARNESS_API_KEY=ci-key -p 8787:8787 harness-gateway:ci
+          for i in $(seq 1 40); do
+            curl -fsS -o /dev/null http://127.0.0.1:8787/ && break
+            sleep 1
+          done
+          status() { curl -s -o /dev/null -w '%{http_code}' "$@"; }
+          [ "$(status http://127.0.0.1:8787/)" = 200 ] || { docker logs gw; exit 1; }
+          [ "$(status http://127.0.0.1:8787/v1/models)" = 401 ] || { echo "models answered without a key"; exit 1; }
+          [ "$(status -H 'authorization: Bearer ci-key' http://127.0.0.1:8787/v1/models)" = 200 ] || { echo "models rejected the right key"; exit 1; }
+          [ "$(status -H 'Connection: Upgrade' -H 'Upgrade: websocket' -H 'Sec-WebSocket-Version: 13' -H 'Sec-WebSocket-Key: x3JJHMbDL1EzLkh9GBhXDw==' http://127.0.0.1:8787/tunnel)" = 401 ] || { echo "tunnel accepted a connection without a key"; exit 1; }
+          docker exec gw sh -c 'test -w /data' || { echo "/data is not writable by the gateway user"; exit 1; }
+      - name: Gateway log
+        if: always()
+        run: docker logs gw || true
+
+  publish-gateway:
+    needs: [test, image-smoke]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     permissions:
