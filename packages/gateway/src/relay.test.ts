@@ -44,6 +44,19 @@ describe("Relay tools", () => {
   });
 });
 
+describe("Relay model control", () => {
+  it("sends the operation to the device and resolves with its answer", async () => {
+    const pending = relay.callModel("pc", "load", "qwen", 8192);
+    expect(sent[0]).toMatchObject({ type: "model", op: "load", model: "qwen", contextLength: 8192 });
+    relay.handle("pc", { type: "tool-result", id: lastId(), ok: true, output: "loaded qwen" });
+    expect(await pending).toEqual({ ok: true, output: "loaded qwen" });
+  });
+
+  it("rejects when the device is not connected", async () => {
+    await expect(relay.callModel("laptop", "unload")).rejects.toThrow("not connected");
+  });
+});
+
 describe("Relay Claude requests", () => {
   it("sends the request body to the device and resolves with its answer", async () => {
     const pending = relay.callClaude("pc", '{"model":"claude"}');

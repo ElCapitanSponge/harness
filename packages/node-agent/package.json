@@ -10,6 +10,7 @@
     "@harness/core": "workspace:*",
     "ws": "^8.22.1",
     "@harness/tools": "workspace:*",
-    "@harness/claude": "workspace:*"
+    "@harness/claude": "workspace:*",
+    "@harness/lmstudio": "workspace:*"
   }
 }

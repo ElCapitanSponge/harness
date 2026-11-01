@@ -86,6 +86,16 @@ export class Gateway {
     await this.check(await this.fetchImpl(`${this.baseUrl}/sessions/${sessionId}/approvals/${approvalId}`, this.json({ approve, always })));
   }
 
+  // Loads or unloads a model in a connected device's LM Studio.
+  async deviceModel(device: string, op: "load" | "unload", input: { model?: string; contextLength?: number }): Promise<string> {
+    const res = await this.fetchImpl(`${this.baseUrl}/devices/${encodeURIComponent(device)}/models/${op}`, this.json(input));
+    const body = (await res.json().catch(() => ({}))) as { error?: { message?: string }; ok?: boolean; output?: string };
+    if (res.status === 401) throw new Error("gateway rejected the API key (set HARNESS_API_KEY)");
+    if (!res.ok) throw new Error(body.error?.message ?? `gateway returned ${res.status}`);
+    if (!body.ok) throw new Error(body.output ?? "the device refused");
+    return body.output ?? "";
+  }
+
   async cancelSession(sessionId: string): Promise<void> {
     await this.check(await this.fetchImpl(`${this.baseUrl}/sessions/${sessionId}/cancel`, this.json({})));
   }

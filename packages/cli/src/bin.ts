@@ -6,7 +6,7 @@ import { Gateway } from "./api.js";
 import { isClaudeModel, runClaudeCode } from "./claudecode.js";
 import { parseCommand, USAGE } from "./commands.js";
 import { formatModels, formatNodes } from "./format.js";
-import { lms } from "./lms.js";
+import { lms } from "@harness/lmstudio";
 
 const gateway = new Gateway(process.env.GATEWAY_URL ?? "http://127.0.0.1:8787", fetch, process.env.HARNESS_API_KEY || undefined);
 
@@ -205,10 +205,18 @@ async function main(): Promise<void> {
       return;
     }
     case "load":
+      if (cmd.device) {
+        console.log(await gateway.deviceModel(cmd.device, "load", { model: cmd.model, contextLength: cmd.contextLength }));
+        return;
+      }
       await lms.serverStart().catch(() => undefined);
       console.log(await lms.load(cmd.model, cmd.contextLength));
       return;
     case "unload":
+      if (cmd.device) {
+        console.log(await gateway.deviceModel(cmd.device, "unload", { model: cmd.model }));
+        return;
+      }
       console.log(await lms.unload(cmd.model));
       return;
   }

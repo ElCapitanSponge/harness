@@ -5,6 +5,7 @@ import { listModels } from "./lmstudio.js";
 import { createAuditLog } from "./audit.js";
 import { createChatServer } from "./chat.js";
 import { createClaudeServer } from "./claude.js";
+import { createModelServer } from "./models.js";
 import { createToolServer } from "./toolserver.js";
 import { connectTunnel } from "./tunnel.js";
 
@@ -28,6 +29,7 @@ async function collect(): Promise<Heartbeat> {
     allowedTools: tools.allowedNames(),
     platform: process.platform,
     claude: config.claude,
+    modelControl: config.modelControl,
   };
 }
 
@@ -37,6 +39,7 @@ connectTunnel({
   apiKey: config.apiKey,
   heartbeat: collect,
   tools,
+  models: createModelServer({ enabled: config.modelControl, isBusy: async () => (await detectBusy(config.gameProcesses)).busy }),
   claude: config.claude ? createClaudeServer({ bin: config.claudeBin }) : undefined,
   chat: createChatServer({ inferenceUrl: config.inferenceUrl }),
 });

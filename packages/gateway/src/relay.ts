@@ -19,6 +19,8 @@ interface PendingTool {
 
 const TOOL_TIMEOUT_MS = 150_000;
 const CLAUDE_TIMEOUT_MS = 10 * 60_000;
+// Loading a large model can take a few minutes.
+const MODEL_TIMEOUT_MS = 6 * 60_000;
 
 interface Pending {
   nodeId: string;
@@ -113,6 +115,11 @@ export class Relay {
   // Asks a device that is logged in to Claude to answer a chat request. `body` is the raw request JSON.
   callClaude(nodeId: string, body: string, timeoutMs = CLAUDE_TIMEOUT_MS): Promise<ToolResult> {
     return this.rpc(nodeId, (id) => ({ type: "claude", id, body }), timeoutMs);
+  }
+
+  // Loads or unloads a model in a device's LM Studio.
+  callModel(nodeId: string, op: "load" | "unload", model?: string, contextLength?: number): Promise<ToolResult> {
+    return this.rpc(nodeId, (id) => ({ type: "model", id, op, model, contextLength }), MODEL_TIMEOUT_MS);
   }
 
   private rpc(nodeId: string, message: (id: string) => RelayRequest, timeoutMs: number): Promise<ToolResult> {

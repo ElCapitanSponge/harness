@@ -14,7 +14,20 @@ const defaultRun: Run = (bin, args) =>
 
 export const lmsBin = process.env.LMS_BIN ?? path.join(os.homedir(), ".lmstudio", "bin", process.platform === "win32" ? "lms.exe" : "lms");
 
-// Controls the LM Studio on this machine. Remote nodes will get this via their node-agent.
+// Controls the LM Studio on this machine, from the CLI directly or on behalf of the gateway through the node agent.
+
+// Model ids reach the `lms` program as arguments, so one that starts with a dash could be read as an option.
+export function validateModel(model: unknown): string {
+  if (typeof model !== "string" || !/^[A-Za-z0-9][\w.:@/+() -]{0,199}$/.test(model)) throw new Error("invalid model id");
+  return model;
+}
+
+export function validateContext(value: unknown): number | undefined {
+  if (value === undefined || value === null) return undefined;
+  if (typeof value !== "number" || !Number.isInteger(value) || value < 256 || value > 4_000_000) throw new Error("invalid context length");
+  return value;
+}
+
 export function loadArgs(model: string, contextLength?: number): string[] {
   const args = ["load", model, "-y"];
   if (contextLength) args.push("-c", String(contextLength));

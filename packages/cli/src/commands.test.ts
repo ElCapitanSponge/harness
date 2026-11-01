@@ -60,6 +60,12 @@ describe("parseCommand", () => {
     expect(() => parseCommand(["tool", "pc", "proj", "x", "[1]"])).toThrow("JSON object");
   });
 
+  it("parses load and unload with a device, to control a connected device's LM Studio", () => {
+    expect(parseCommand(["load", "qwen", "-c", "8192", "-d", "anakin"])).toEqual({ name: "load", model: "qwen", contextLength: 8192, device: "anakin" });
+    expect(parseCommand(["unload", "-d", "anakin"])).toEqual({ name: "unload", model: undefined, device: "anakin" });
+    expect(parseCommand(["load", "qwen"])).toMatchObject({ device: undefined });
+  });
+
   it("parses unload with and without a model", () => {
     expect(parseCommand(["unload"])).toEqual({ name: "unload", model: undefined });
     expect(parseCommand(["unload", "qwen3.5-9b"])).toEqual({ name: "unload", model: "qwen3.5-9b" });

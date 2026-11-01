@@ -16,7 +16,7 @@ Each device runs a **node agent** that reports which models it has loaded and wh
 
 ## Status
 
-Early. Today the gateway and one node agent run on a single machine and can be reached from other tailnet devices with an API key. Planned: a container image for TrueNAS, and node agents on additional devices (Mac, Linux). See issue #1.
+Working, and still being proven out. The gateway, node agents, CLI and web page (chat and coding sessions on any connected device) are built and tested, including end to end over a real tunnel. Not yet run in practice: the container image on TrueNAS, node agents on a Mac or Linux machine, and a real model making approved edits through a session. See issues #1 and #2.
 
 ## Requirements
 
@@ -117,6 +117,15 @@ harness tool anakin proj read_file '{"path":"package.json"}'   # run one tool, f
 
 Changes ask `[y/N/a]` here too (`-y` approves everything for the session; unanswered approvals count as no after five minutes). Claude models cannot drive these sessions yet.
 
+### Loading models on another device
+
+```bash
+harness load qwen3.5-9b -c 32768 -d anakin     # load on a connected device
+harness unload -d anakin                        # unload everything there
+```
+
+The device must start its agent with `ALLOW_MODEL_CONTROL=1` (off by default), and it refuses while a game from `GAME_PROCESSES` is running. Without `-d` the commands act on this machine's LM Studio as before.
+
 Chat apps (LibreChat and friends) can use the same gateway for plain chat. The gateway lists Claude models in `/v1/models` and streams Claude replies, but chat apps have no tools on your files, so use `harness code` for file work.
 
 ## Running the node agent as a service (macOS and Linux)
@@ -168,6 +177,7 @@ If no idle node matches, the gateway returns `503`.
 | `INFERENCE_URL` | node agent | `http://localhost:1234` (LM Studio) |
 | `NODE_ID` | node agent | machine hostname |
 | `GAME_PROCESSES` | node agent | comma-separated executable names; a match marks the node busy |
+| `ALLOW_MODEL_CONTROL` | node agent | unset. Set to `1` to let the gateway load and unload models in this device's LM Studio (refused while the device is busy) |
 | `PROJECT_ROOTS` | node agent | unset (no tools exposed). `name=path` entries for folders coding sessions may use |
 | `ALLOWED_TOOLS` | node agent | `read_file,list_dir,grep`. Add `write_file,edit_file,run_command` to allow changes |
 | `AUDIT_LOG` | node agent | `~/.harness/audit.log`. Every tool call the gateway makes on this device, one JSON line each |

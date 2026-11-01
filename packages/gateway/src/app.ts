@@ -1,6 +1,7 @@
 import { toOpenAIResponse, toSse, type ClaudeResult } from "@harness/claude";
-import { ChatRequest, DeviceToolRequest, SessionApproval, SessionCreate, SessionMessage } from "@harness/core";
-import { Hono } from "hono";
+import { ChatRequest, DeviceToolRequest, ModelLoad, ModelUnload, SessionApproval, SessionCreate, SessionMessage } from "@harness/core";
+import { findTool } from "@harness/tools";
+import { Hono, type Context } from "hono";
 import { bearerAuth } from "./auth.js";
 import type { Registry } from "./registry.js";
 import type { Relay } from "./relay.js";
@@ -11,7 +12,7 @@ import { WEB_PAGE } from "./web.js";
 export interface AppDeps {
   registry: Registry;
   apiKey?: string;
-  relay: Pick<Relay, "request" | "callTool" | "callClaude">;
+  relay: Pick<Relay, "request" | "callTool" | "callClaude" | "callModel">;
   sessions: Sessions;
 }
 
@@ -32,10 +33,15 @@ export function createApp({ registry, apiKey, relay, sessions }: AppDeps): Hono 
 
   app.get("/nodes", (c) => c.json(registry.live()));
 
-  // Runs one tool on a connected device. The device decides which roots and tools it allows.
+  // Runs one read-only tool on a connected device. The device also decides which roots and tools it allows.
   app.post("/devices/:nodeId/tools", async (c) => {
     const parsed = DeviceToolRequest.safeParse(await c.req.json().catch(() => undefined));
     if (!parsed.success) return c.json({ error: parsed.error.flatten() }, 400);
+    // Changes go through a coding session, where they wait for an approval. This endpoint is for looking around.
+    const spec = findTool(parsed.data.name);
+    if (!spec || spec.needsApproval) {
+      return c.json({ error: { message: `"${parsed.data.name}" is not a read-only tool; start a coding session to make changes` } }, 403);
+    }
     const nodeId = c.req.param("nodeId");
     if (!registry.live().some((n) => n.nodeId === nodeId)) return c.json({ error: { message: `device "${nodeId}" is not connected` } }, 404);
     try {
@@ -44,6 +50,26 @@ export function createApp({ registry, apiKey, relay, sessions }: AppDeps): Hono 
       return c.json({ error: { message: `device ${nodeId} failed: ${(err as Error).message}` } }, 502);
     }
   });
+
+  // Loads or unloads a model in a device's LM Studio. The device must have switched this on.
+  const modelControl = (op: "load" | "unload") => async (c: Context) => {
+    const parsed = (op === "load" ? ModelLoad : ModelUnload).safeParse(await c.req.json().catch(() => undefined));
+    if (!parsed.success) return c.json({ error: parsed.error.flatten() }, 400);
+    const nodeId = c.req.param("nodeId") ?? "";
+    const node = registry.live().find((n) => n.nodeId === nodeId);
+    if (!node) return c.json({ error: { message: `device "${nodeId}" is not connected` } }, 404);
+    if (!node.modelControl) {
+      return c.json({ error: { message: `device "${nodeId}" does not allow remote model control (start its agent with ALLOW_MODEL_CONTROL=1)` } }, 403);
+    }
+    const input = parsed.data as { model?: string; contextLength?: number };
+    try {
+      return c.json(await relay.callModel(nodeId, op, input.model, input.contextLength));
+    } catch (err) {
+      return c.json({ error: { message: `device ${nodeId} failed: ${(err as Error).message}` } }, 502);
+    }
+  };
+  app.post("/devices/:nodeId/models/load", modelControl("load"));
+  app.post("/devices/:nodeId/models/unload", modelControl("unload"));
 
   // Coding sessions: the model loop runs here, tool calls run on the chosen device.
   app.get("/sessions", (c) => c.json(sessions.list()));

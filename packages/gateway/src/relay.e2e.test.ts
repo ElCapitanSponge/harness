@@ -84,7 +84,8 @@ describe("tools run on the device through the tunnel", () => {
         status: 200,
         body: { ok: true, output: "1\thi from the device\n2\t" },
       });
-      expect((await call({ root: "proj", name: "write_file", args: { path: "x", content: "y" } })).body.ok).toBe(false);
+      // Changes are refused at the gateway too: this endpoint is for looking, sessions are for changing.
+      expect((await call({ root: "proj", name: "write_file", args: { path: "x", content: "y" } })).status).toBe(403);
       expect((await call({ root: "proj", name: "read_file", args: { path: "../../etc/passwd" } })).body.ok).toBe(false);
       expect((await call({ root: "nope", name: "list_dir" })).body.ok).toBe(false);
       await expect(fs.access(path.join(root, "x"))).rejects.toThrow();
