@@ -169,3 +169,15 @@ describe("the project context tool", () => {
     expect(createToolServer({ roots: { proj: dir }, allowed: ["read_file"] }).allowedNames()).not.toContain("project_context");
   });
 });
+
+describe("what a write changed", () => {
+  it("is sent beside the result for the person, and the result itself carries no diff", async () => {
+    const server = createToolServer({ roots: { proj: dir }, allowed: ["write_file"] });
+    let result: TunnelMessage | undefined;
+    await server.handle({ type: "tool", id: "t1", root: "proj", name: "write_file", args: { path: "a.txt", content: "alpha\nGAMMA\n" } }, (m) => {
+      return (result = m);
+    });
+    expect(result).toMatchObject({ type: "tool-result", ok: true, output: "wrote 12 characters to a.txt", change: { path: "a.txt", created: false, added: 1, removed: 1 } });
+    expect(JSON.stringify(result?.type === "tool-result" ? result.output : "")).not.toContain("@@");
+  });
+});

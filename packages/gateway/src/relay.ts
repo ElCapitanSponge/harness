@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import type { RelayRequest, TunnelMessage } from "@harness/core";
+import type { FileChange, RelayRequest, TunnelMessage } from "@harness/core";
 
 export interface Sender {
   send(data: string): void;
@@ -10,6 +10,8 @@ type Reply = Exclude<TunnelMessage, { type: "heartbeat" }>;
 export interface ToolResult {
   ok: boolean;
   output: string;
+  // What a write or edit changed, for the person to see. Never part of what the model is told.
+  change?: FileChange;
 }
 
 interface PendingTool {
@@ -198,7 +200,7 @@ export class Relay {
         return;
       }
       this.tools.delete(msg.id);
-      tool.settle({ ok: msg.ok, output: msg.output });
+      tool.settle({ ok: msg.ok, output: msg.output, ...(msg.change ? { change: msg.change } : {}) });
       return;
     }
     const pending = this.pending.get(msg.id);

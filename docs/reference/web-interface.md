@@ -31,6 +31,7 @@ The sidebar lists conversations and has **New conversation**, the Claude plan me
 - A tool the model wants to use that changes things shows an approval card: **Allow**, **Always allow <tool>** or **Decline**. Declining ends the turn.
 - A failed turn shows the reason and **Retry**.
 - The conversation menu has **Rename**, **Export as markdown** and **Delete**.
+- In a coding session the panel button opens the plan and the changed files with their diffs ([Coding sessions](../guides/coding-sessions.md#the-session-panel)).
 - A skill you start shows as a collapsed block; its text opens on a click.
 
 ## The message box

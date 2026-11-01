@@ -131,7 +131,7 @@ describe("Session turns", () => {
     const offered = (complete.mock.calls[0]![2] as { function: { name: string } }[]).map((t) => {
       return t.function.name;
     }).sort();
-    expect(offered).toEqual(["grep", "list_dir", "read_file"]);
+    expect(offered).toEqual(["grep", "list_dir", "plan", "read_file"]);
   });
 
   it("puts the project root and device platform in the system prompt", async () => {
@@ -584,5 +584,66 @@ describe("Session and a skill the person starts", () => {
     expect(() => {
       chat.send("/tdd", undefined, undefined, { name: "tdd" });
     }).toThrow("coding session");
+  });
+});
+
+describe("Session side panel data", () => {
+  it("records what a write changed as an event for the person, and never puts the diff in the model's context", async () => {
+    registry.upsert(beat({ allowedTools: ["read_file", "write_file"] }));
+    relay.callTool.mockResolvedValue({ ok: true, output: "wrote 5 characters to a.txt", change: { path: "a.txt", created: true, added: 1, removed: 0, patch: "@@ -0,0 +1,1 @@\n+hello" } });
+    const shown: string[] = [];
+    complete.mockImplementation(async (_model, messages) => {
+      shown.push(JSON.stringify(messages));
+      return shown.length === 1 ? { role: "assistant", content: null, tool_calls: [call("1", "write_file", { path: "a.txt", content: "hello" })] } : { role: "assistant", content: "done" };
+    });
+    const s = sessions.create({ model: "qwen", device: "pc", root: "proj", autoApprove: true });
+    s.send("write a.txt");
+    await until(() => {
+      return types(s).includes("done");
+    });
+    expect(types(s)).toEqual(["user", "tool", "change", "text", "done"]);
+    expect(s.events[2]).toEqual({ type: "change", change: expect.objectContaining({ path: "a.txt", added: 1 }) as unknown });
+    // The model saw the tool's result and nothing of the diff.
+    expect(shown[1]).toContain("wrote 5 characters to a.txt");
+    expect(shown[1]).not.toContain("@@");
+    expect(shown[1]).not.toContain("+hello");
+  });
+
+  it("offers the plan tool in a coding session, keeps the plan as an event, and answers the model", async () => {
+    const steps = [{ text: "read the code", status: "done" }, { text: "fix it", status: "in_progress" }];
+    script({ role: "assistant", content: null, tool_calls: [call("1", "plan", { steps })] }, { role: "assistant", content: "ok" });
+    const s = create();
+    s.send("do it");
+    await until(() => {
+      return types(s).includes("done");
+    });
+    expect(complete.mock.calls[0]?.[2].map((t) => {
+      return t.function.name;
+    })).toContain("plan");
+    expect(s.events.find((e) => {
+      return e.type === "plan";
+    })).toEqual({ type: "plan", steps });
+    // The plan never goes to the device.
+    expect(relay.callTool).not.toHaveBeenCalled();
+  });
+
+  it("tells the model what is wrong with a plan it got wrong, and keeps going", async () => {
+    script({ role: "assistant", content: null, tool_calls: [call("1", "plan", { steps: [] })] }, { role: "assistant", content: "ok" });
+    const s = create();
+    s.send("do it");
+    await until(() => {
+      return types(s).includes("done");
+    });
+    expect(types(s)).not.toContain("plan");
+  });
+
+  it("is not offered in a chat", async () => {
+    script({ role: "assistant", content: "hi" });
+    const chat = sessions.create({ model: "qwen" });
+    chat.send("hello");
+    await until(() => {
+      return types(chat).includes("done");
+    });
+    expect(complete.mock.calls[0]?.[2]).toEqual([]);
   });
 });

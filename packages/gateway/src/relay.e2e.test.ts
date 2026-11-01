@@ -192,7 +192,7 @@ describe("a coding session over the tunnel", () => {
       // The model was only offered the read-only tools this device allows.
       expect(((requests[0]?.tools ?? []) as { function: { name: string } }[]).map((t) => {
         return t.function.name;
-      }).sort()).toEqual(["list_dir", "read_file"]);
+      }).sort()).toEqual(["list_dir", "plan", "read_file"]);
     } finally {
       await fs.rm(root, { recursive: true, force: true });
     }
@@ -267,7 +267,7 @@ describe("approvals over the tunnel", () => {
   it("writes the file on the device only after it is approved", async () => {
     const { root, types } = await run(true);
     try {
-      expect(types).toEqual(["user", "tool", "approval", "approval-resolved", "text", "done"]);
+      expect(types).toEqual(["user", "tool", "approval", "approval-resolved", "change", "text", "done"]);
       expect(await fs.readFile(path.join(root, "notes.txt"), "utf8")).toBe("written on the device");
     } finally {
       await fs.rm(root, { recursive: true, force: true });
