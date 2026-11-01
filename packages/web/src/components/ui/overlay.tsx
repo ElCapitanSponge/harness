@@ -1,0 +1,54 @@
+import { Dialog as DialogPrimitive, DropdownMenu as MenuPrimitive } from "radix-ui";
+import { X } from "lucide-react";
+import type { ComponentProps } from "react";
+import { cn } from "@/lib/utils";
+
+export const Dialog = DialogPrimitive.Root;
+export const DialogTrigger = DialogPrimitive.Trigger;
+export const DialogClose = DialogPrimitive.Close;
+
+export const DialogContent = ({ className, children, title, description, ...props }: ComponentProps<typeof DialogPrimitive.Content> & { title: string; description?: string }) => {
+  return (
+    <DialogPrimitive.Portal>
+      <DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-black/40" />
+      <DialogPrimitive.Content
+        className={cn("fixed left-1/2 top-1/2 z-50 grid w-[calc(100%-2rem)] max-w-lg -translate-x-1/2 -translate-y-1/2 gap-4 rounded-xl border bg-popover p-6 text-popover-foreground shadow-raised", className)}
+        {...props}
+      >
+        <div className="grid gap-1">
+          <DialogPrimitive.Title className="text-lg font-semibold">{title}</DialogPrimitive.Title>
+          <DialogPrimitive.Description className={cn("text-muted-foreground", description ? "" : "sr-only")}>{description ?? title}</DialogPrimitive.Description>
+        </div>
+        {children}
+        <DialogPrimitive.Close className="absolute right-3 top-3 rounded-md p-1.5 text-muted-foreground hover:bg-muted" aria-label="Close">
+          <X className="size-4" />
+        </DialogPrimitive.Close>
+      </DialogPrimitive.Content>
+    </DialogPrimitive.Portal>
+  );
+};
+
+export const Menu = MenuPrimitive.Root;
+export const MenuTrigger = MenuPrimitive.Trigger;
+
+export const MenuContent = ({ className, ...props }: ComponentProps<typeof MenuPrimitive.Content>) => {
+  return (
+    <MenuPrimitive.Portal>
+      <MenuPrimitive.Content
+        align="end"
+        sideOffset={4}
+        className={cn("z-50 min-w-40 rounded-lg border bg-popover p-1 text-popover-foreground shadow-raised", className)}
+        {...props}
+      />
+    </MenuPrimitive.Portal>
+  );
+};
+
+export const MenuItem = ({ className, danger, ...props }: ComponentProps<typeof MenuPrimitive.Item> & { danger?: boolean }) => {
+  return (
+    <MenuPrimitive.Item
+      className={cn("flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-sm outline-none data-[highlighted]:bg-muted [&_svg]:size-4", danger && "text-destructive", className)}
+      {...props}
+    />
+  );
+};

@@ -1,0 +1,146 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* Colours follow the Fluent 2 web tokens (neutral backgrounds and strokes, communication-blue brand). Names are the shadcn ones so
+   the components read the same way, mapped onto Fluent: background = neutralBackground2, card = neutralBackground1. */
+:root {
+  --background: #fafafa;
+  --foreground: #242424;
+  --card: #ffffff;
+  --card-foreground: #242424;
+  --popover: #ffffff;
+  --popover-foreground: #242424;
+  --primary: #0f6cbd;
+  --primary-hover: #115ea3;
+  --primary-pressed: #0f548c;
+  --primary-foreground: #ffffff;
+  --secondary: #f5f5f5;
+  --secondary-foreground: #242424;
+  --muted: #f0f0f0;
+  --muted-foreground: #616161;
+  --accent: #ebf3fc;
+  --accent-foreground: #0f548c;
+  --destructive: #b10e1c;
+  --success: #107c10;
+  --warning: #bc4b09;
+  --border: #e0e0e0;
+  --input: #d1d1d1;
+  --ring: #0f6cbd;
+  --code: #f5f5f5;
+  --shadow-card: 0 0 2px rgb(0 0 0 / 0.12), 0 2px 4px rgb(0 0 0 / 0.14);
+  --shadow-raised: 0 0 8px rgb(0 0 0 / 0.12), 0 4px 8px rgb(0 0 0 / 0.14);
+  --hl-keyword: #8764b8;
+  --hl-string: #0b6a0b;
+  --hl-comment: #707070;
+  --hl-number: #bc4b09;
+  --hl-title: #0f548c;
+  --hl-add: #dff6dd;
+  --hl-del: #fdd3d3;
+}
+
+.dark {
+  --background: #1f1f1f;
+  --foreground: #ffffff;
+  --card: #292929;
+  --card-foreground: #ffffff;
+  --popover: #333333;
+  --popover-foreground: #ffffff;
+  --primary: #479ef5;
+  --primary-hover: #62abf5;
+  --primary-pressed: #2886de;
+  --primary-foreground: #0a0a0a;
+  --secondary: #333333;
+  --secondary-foreground: #ffffff;
+  --muted: #2e2e2e;
+  --muted-foreground: #adadad;
+  --accent: #082338;
+  --accent-foreground: #96c6fa;
+  --destructive: #dc626d;
+  --success: #54b054;
+  --warning: #f7a070;
+  --border: #3d3d3d;
+  --input: #666666;
+  --ring: #479ef5;
+  --code: #1a1a1a;
+  --shadow-card: 0 0 2px rgb(0 0 0 / 0.24), 0 2px 4px rgb(0 0 0 / 0.28);
+  --shadow-raised: 0 0 8px rgb(0 0 0 / 0.24), 0 4px 8px rgb(0 0 0 / 0.28);
+  --hl-keyword: #c4b5fd;
+  --hl-string: #86efac;
+  --hl-comment: #a8a29e;
+  --hl-number: #fdba74;
+  --hl-title: #93c5fd;
+  --hl-add: #14532d;
+  --hl-del: #7f1d1d;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-hover: var(--primary-hover);
+  --color-primary-pressed: var(--primary-pressed);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-code: var(--code);
+  --radius-sm: 2px;
+  --radius-md: 4px;
+  --radius-lg: 6px;
+  --radius-xl: 8px;
+  --radius-2xl: 12px;
+  --shadow-card: var(--shadow-card);
+  --shadow-raised: var(--shadow-raised);
+  --font-sans: "Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system, "Helvetica Neue", sans-serif;
+  --font-mono: ui-monospace, "Cascadia Code", "SF Mono", Menlo, Consolas, monospace;
+}
+
+@layer base {
+  * { @apply border-border; }
+  html, body, #root { height: 100%; }
+  body { @apply bg-background text-foreground font-sans text-sm antialiased; line-height: 20px; }
+  :focus-visible { outline: 2px solid var(--ring); outline-offset: 1px; }
+}
+
+/* Markdown from the model. */
+.prose-chat > :first-child { margin-top: 0; }
+.prose-chat > :last-child { margin-bottom: 0; }
+.prose-chat p, .prose-chat ul, .prose-chat ol, .prose-chat blockquote, .prose-chat table { margin: 0 0 0.75rem; }
+.prose-chat h1, .prose-chat h2, .prose-chat h3, .prose-chat h4 { font-weight: 600; margin: 1.1rem 0 0.4rem; line-height: 1.3; }
+.prose-chat h1 { font-size: 1.25rem; } .prose-chat h2 { font-size: 1.125rem; } .prose-chat h3 { font-size: 1rem; }
+.prose-chat ul { list-style: disc; padding-left: 1.4rem; } .prose-chat ol { list-style: decimal; padding-left: 1.4rem; }
+.prose-chat li { margin: 0.15rem 0; }
+.prose-chat a { color: var(--primary); text-decoration: underline; text-underline-offset: 2px; }
+.prose-chat blockquote { border-left: 3px solid var(--border); padding-left: 0.75rem; color: var(--muted-foreground); }
+.prose-chat hr { border: 0; border-top: 1px solid var(--border); margin: 1rem 0; }
+.prose-chat :not(pre) > code { background: var(--code); border-radius: 4px; padding: 1px 5px; font: 0.85em var(--font-mono); }
+.prose-chat table { border-collapse: collapse; display: block; overflow-x: auto; }
+.prose-chat th, .prose-chat td { border: 1px solid var(--border); padding: 4px 10px; text-align: left; }
+.prose-chat th { background: var(--muted); font-weight: 600; }
+.hljs { background: transparent; }
+.hljs-keyword, .hljs-selector-tag, .hljs-built_in, .hljs-literal { color: var(--hl-keyword); }
+.hljs-string, .hljs-attr, .hljs-regexp { color: var(--hl-string); }
+.hljs-comment, .hljs-quote { color: var(--hl-comment); font-style: italic; }
+.hljs-number, .hljs-symbol, .hljs-bullet { color: var(--hl-number); }
+.hljs-title, .hljs-function, .hljs-section, .hljs-name, .hljs-type { color: var(--hl-title); }
+.hljs-addition { background: var(--hl-add); display: inline-block; width: 100%; }
+.hljs-deletion { background: var(--hl-del); display: inline-block; width: 100%; }
+.hljs-meta { color: var(--hl-comment); }
+
+@media (prefers-reduced-motion: reduce) {
+  * { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+}

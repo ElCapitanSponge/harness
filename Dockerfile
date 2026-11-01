@@ -1,4 +1,17 @@
 # Gateway image. No secrets are baked in: pass HARNESS_API_KEY at run time.
+
+# The web app is built here, so the final image carries only its static files.
+FROM node:22-slim AS web
+RUN corepack enable
+WORKDIR /app
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+COPY packages/core/package.json packages/core/
+COPY packages/web/package.json packages/web/
+RUN pnpm install --frozen-lockfile --filter @harness/web...
+COPY packages/core packages/core
+COPY packages/web packages/web
+RUN pnpm --filter @harness/web build
+
 FROM node:22-slim
 
 ENV NODE_ENV=production
@@ -17,6 +30,7 @@ COPY packages/core packages/core
 COPY packages/tools packages/tools
 COPY packages/claude packages/claude
 COPY packages/gateway packages/gateway
+COPY --from=web /app/packages/web/dist packages/web/dist
 
 # Inside a container the port is published on the host's Tailscale address, so listen on all
 # container interfaces. The gateway still refuses to start without HARNESS_API_KEY.

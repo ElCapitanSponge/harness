@@ -13,6 +13,7 @@ import { Sessions, createCompleter } from "./sessions.js";
 import { importLegacySessions } from "./legacy.js";
 import { openDatabase, sqliteStore } from "./sqlite.js";
 import { attachTunnel } from "./tunnel.js";
+import { findWebDist, loadWebApp } from "./webapp.js";
 
 const apiKey = nonEmpty(process.env.HARNESS_API_KEY);
 
@@ -42,13 +43,17 @@ const sessions = new Sessions({
   store,
   stored: store.loadAll(),
 });
+// The built web app (pnpm build:web), if there is one; otherwise the single-file page in web.ts.
+const webDist = await findWebDist(process.env.WEB_DIST ?? path.resolve(import.meta.dirname, "../../web/dist"));
 const app = createApp({
   registry,
   relay,
   sessions,
   loader,
   apiKey,
+  mountWeb: webDist ? await loadWebApp(webDist) : undefined,
 });
+console.log(`[gateway] web app: ${webDist ?? "built-in page (run pnpm build:web for the new one)"}`);
 
 const port = Number(process.env.PORT ?? 8787);
 const hosts = await resolveHosts(process.env.HOST ?? "127.0.0.1");

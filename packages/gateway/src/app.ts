@@ -17,21 +17,26 @@ export interface AppDeps {
   relay: Pick<Relay, "request" | "callTool" | "callClaude" | "callModel" | "callSettings">;
   sessions: Sessions;
   loader: Pick<ModelLoader, "ensure">;
+  // Mounts the built web app. Without it the page is the single-file one in web.ts.
+  mountWeb?: (app: Hono) => void;
 }
 
-export const createApp = ({ registry, apiKey, relay, sessions, loader }: AppDeps): Hono => {
+export const createApp = ({ registry, apiKey, relay, sessions, loader, mountWeb }: AppDeps): Hono => {
   const app = new Hono();
 
   // The page holds no secrets and must load before a key can be typed, so it is registered ahead of the auth middleware.
-  app.get("/", (c) => {
-    return c.html(WEB_PAGE, 200, {
-      "cache-control": "no-store",
-      "x-content-type-options": "nosniff",
-      "referrer-policy": "no-referrer",
-      "content-security-policy": "default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; connect-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'",
+  if (mountWeb) {
+    mountWeb(app);
+  } else {
+    app.get("/", (c) => {
+      return c.html(WEB_PAGE, 200, {
+        "cache-control": "no-store",
+        "x-content-type-options": "nosniff",
+        "referrer-policy": "no-referrer",
+        "content-security-policy": "default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; connect-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'",
+      });
     });
-  },
-  );
+  }
 
   if (apiKey) {
     app.use("*", bearerAuth(apiKey));

@@ -55,3 +55,7 @@ These are enforced by the linter, not by review. A rule is an error or it is off
   }
 }
 ```
+
+## The web app
+
+`packages/web` is the page the gateway serves. `pnpm web` runs it with hot reload against a gateway on `localhost:8787` (set `GATEWAY_URL` for another); `pnpm build:web` builds it into `packages/web/dist`, which the gateway serves in preference to its built-in page. The same standards apply (arrow functions, braces, no `any`), plus the React hooks and React Compiler lint rules. See [ADR 0009](adr/0009-web-app-is-react-built-with-vite-served-by-the-gateway.md).
