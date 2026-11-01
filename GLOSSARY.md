@@ -85,6 +85,10 @@ _Avoid_: truncation, trimming
 **Context meter**:
 How many tokens a conversation holds against the window of the model that last answered. A number marked ~ is an estimate.
 
+**Developer tool**:
+A tool that runs a program on a device for a coding session: fetching a web page, or `gh`, `git`, `jq` or `fzf`. Each is off until the device's owner turns it on, reading and changing are separate tools, and changing always asks first.
+_Avoid_: plugin, command
+
 **Approval**:
 The owner's yes or no to a tool that would change something. A no ends the turn, and no answer counts as no.
 _Avoid_: confirmation, permission

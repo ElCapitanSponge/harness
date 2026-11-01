@@ -7,7 +7,10 @@ import { keyStore } from "@/lib/api";
 import { useDeviceSettings, useNodes, useSaveSettings } from "@/lib/queries";
 import type { NodeRecord, SettingKey, SettingsReport } from "@/lib/types";
 
-const TOOL_NAMES = ["read_file", "list_dir", "grep", "write_file", "edit_file", "run_command"];
+// Used for an older agent that does not list its tools.
+const FALLBACK_TOOLS = ["read_file", "list_dir", "grep", "write_file", "edit_file", "run_command"].map((name) => {
+  return { name, installed: true, asksFirst: ["write_file", "edit_file", "run_command"].includes(name) };
+});
 const SETTING_ENV: Record<SettingKey, string> = { projectRoots: "PROJECT_ROOTS", allowedTools: "ALLOWED_TOOLS", modelControl: "ALLOW_MODEL_CONTROL", claude: "CLAUDE_ENABLED", gameProcesses: "GAME_PROCESSES" };
 
 const Field = ({ name, label, report, children }: { name: SettingKey; label: string; report: SettingsReport; children: React.ReactNode }) => {
@@ -77,17 +80,19 @@ const SettingsForm = ({ node, report }: { node: NodeRecord; report: SettingsRepo
         />
       </Field>
       <Field name="allowedTools" label="Tools coding sessions may run" report={report}>
-        <div className="flex flex-wrap gap-x-5 gap-y-2">
-          {TOOL_NAMES.map((name) => {
+        <div className="grid gap-x-5 gap-y-2 sm:grid-cols-2">
+          {(report.tools ?? FALLBACK_TOOLS).map(({ name, installed, asksFirst }) => {
             return (
               <label key={name} className="flex items-center gap-2 font-mono text-[13px]">
-                <Checkbox disabled={off("allowedTools")} checked={tools.includes(name)} onCheckedChange={(checked) => {
+                <Checkbox disabled={off("allowedTools") || (!installed && !tools.includes(name))} checked={tools.includes(name)} onCheckedChange={(checked) => {
                   setTools(checked === true ? [...tools, name] : tools.filter((t) => {
                     return t !== name;
                   }));
                 }}
                 />
                 {name}
+                {asksFirst ? <Badge tone="warning">asks first</Badge> : null}
+                {installed ? null : <Badge tone="danger">not installed</Badge>}
               </label>
             );
           })}

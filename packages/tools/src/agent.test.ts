@@ -152,7 +152,7 @@ describe("runTurn", () => {
     const sentTools = (complete.mock.calls[0] as unknown as [ChatMessage[], { function: { name: string } }[]])[1];
     expect(sentTools.map((t) => {
       return t.function.name;
-    })).toEqual(["read_file", "list_dir", "grep", "write_file", "edit_file", "run_command"]);
+    })).toEqual(["read_file", "list_dir", "grep", "write_file", "edit_file", "run_command", "web_fetch", "gh_read", "gh_write", "git_read", "git_write", "jq", "fzf_filter"]);
   });
 });
 

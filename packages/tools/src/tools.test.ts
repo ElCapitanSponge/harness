@@ -143,7 +143,22 @@ describe("tool metadata", () => {
     const needs = Object.fromEntries(tools.map((t) => {
       return [t.def.function.name, t.needsApproval];
     }));
-    expect(needs).toEqual({ read_file: false, list_dir: false, grep: false, write_file: true, edit_file: true, run_command: true });
+    // Fetching a page asks too, because an address can carry information out. Reading with gh, git, jq and fzf does not.
+    expect(needs).toEqual({
+      read_file: false,
+      list_dir: false,
+      grep: false,
+      write_file: true,
+      edit_file: true,
+      run_command: true,
+      web_fetch: true,
+      gh_read: false,
+      gh_write: true,
+      git_read: false,
+      git_write: true,
+      jq: false,
+      fzf_filter: false,
+    });
   });
 });
 

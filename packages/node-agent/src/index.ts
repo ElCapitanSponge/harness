@@ -6,24 +6,34 @@ import { createAuditLog } from "./audit.js";
 import { createChatServer } from "./chat.js";
 import { createClaudeServer } from "./claude.js";
 import { createModelServer } from "./models.js";
+import { detectPrograms } from "./programs.js";
 import { createSettings } from "./settings.js";
+import { tools as toolSpecs } from "@harness/tools";
 import { createSettingsServer } from "./settingsserver.js";
 import { createToolServer } from "./toolserver.js";
 import { connectTunnel } from "./tunnel.js";
 
 const audit = createAuditLog(config.auditLog);
+// Which programs the tools need (gh, git, jq, fzf) are here. Checked once at start.
+const programs = await detectPrograms(toolSpecs.flatMap((t) => {
+  return t.requires ? [t.requires] : [];
+}));
+const installed = (program: string): boolean => {
+  return programs.has(program);
+};
 // Changes from the gateway reach the tool server through this, so they apply without a restart.
 const settings = await createSettings({
   file: config.settingsFile,
   remoteConfig: config.remoteConfig,
   audit,
+  installed,
   onChange: (next) => {
     tools.configure({ roots: next.projectRoots, allowed: next.allowedTools });
   },
 });
 const now = settings.current();
 
-const tools = createToolServer({ roots: now.projectRoots, allowed: now.allowedTools, audit });
+const tools = createToolServer({ roots: now.projectRoots, allowed: now.allowedTools, audit, installed });
 
 const collect = async (): Promise<Heartbeat> => {
   const current = settings.current();

@@ -7,7 +7,7 @@ Each device decides what the gateway may do on it. The **Devices** button on the
 | Setting | Environment variable | What it does |
 | --- | --- | --- |
 | Project folders | `PROJECT_ROOTS` | The folders coding sessions may work in, as `name=path`. |
-| Tools | `ALLOWED_TOOLS` | The tools coding sessions may run. Read-only by default; `write_file`, `edit_file` and `run_command` change files or run programs. |
+| Tools | `ALLOWED_TOOLS` | The tools coding sessions may run. Read-only by default; `write_file`, `edit_file` and `run_command` change files or run programs, and the web and developer tools (`web_fetch`, `gh_read`, `git_write` and the rest, see [dev-tools.md](dev-tools.md)) are off until turned on. |
 | Model control | `ALLOW_MODEL_CONTROL` | Lets the gateway load and unload models in this device's LM Studio. |
 | Claude | `CLAUDE_ENABLED` | Answers Claude requests with this device's logged-in `claude` CLI. |
 | Game programs | `GAME_PROCESSES` | Programs that mark the device busy so the GPU is left alone. |

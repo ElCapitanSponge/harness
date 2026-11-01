@@ -151,6 +151,8 @@ export interface SettingsReport {
   sources: Record<SettingKey, "default" | "file" | "env">;
   locked: SettingKey[];
   remoteConfig: boolean;
+  // Every tool this device knows: whether the program it needs is installed, and whether it asks before it runs. Absent from an older agent.
+  tools?: { name: string; installed: boolean; asksFirst: boolean }[];
 }
 
 // Body of a request to run one tool on a device, and the device's answer.
