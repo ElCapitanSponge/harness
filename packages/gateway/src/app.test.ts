@@ -21,13 +21,14 @@ const json = (body: unknown, headers: Record<string, string> = {}) => ({
 const chat = (over: Record<string, unknown> = {}) => ({ model: "auto", messages: [{ role: "user", content: "hi" }], ...over });
 
 let registry: Registry;
-let relay: { request: ReturnType<typeof vi.fn>; callTool: ReturnType<typeof vi.fn>; callClaude: ReturnType<typeof vi.fn> };
+let relay: { request: ReturnType<typeof vi.fn>; callTool: ReturnType<typeof vi.fn>; callClaude: ReturnType<typeof vi.fn>; callModel: ReturnType<typeof vi.fn> };
 
 const build = (apiKey?: string) => createApp({ registry, apiKey, relay: relay as never, sessions: new Sessions({ registry, relay: relay as never, complete: (async () => ({ role: "assistant", content: "ok" })) as never }) });
 
 beforeEach(() => {
   registry = new Registry();
   relay = {
+    callModel: vi.fn(async () => ({ ok: true, output: "loaded qwen" })),
     callClaude: vi.fn(async () => ({ ok: true, output: JSON.stringify({ text: "pong", model: "claude:sonnet" }) })),
     callTool: vi.fn(async () => ({ ok: true, output: "file contents" })), request: vi.fn(async () => new Response(JSON.stringify({ choices: [{ message: { role: "assistant", content: "hello" } }] }), { status: 200 })) };
 });
@@ -92,6 +93,14 @@ describe("device tools", () => {
     expect(relay.callTool).toHaveBeenCalledWith("pc", "proj", "read_file", { path: "a.txt" });
   });
 
+  it("refuses tools that change things or run commands, and tools that do not exist, without asking the device", async () => {
+    registry.upsert(beat());
+    for (const name of ["write_file", "edit_file", "run_command", "nope"]) {
+      expect((await call(build(), "pc", { root: "proj", name, args: {} })).status).toBe(403);
+    }
+    expect(relay.callTool).not.toHaveBeenCalled();
+  });
+
   it("defaults args to an empty object", async () => {
     registry.upsert(beat());
     await call(build(), "pc", { root: "proj", name: "list_dir" });
@@ -116,6 +125,43 @@ describe("device tools", () => {
     registry.upsert(beat());
     expect((await call(build("k"), "pc", { root: "proj", name: "list_dir" })).status).toBe(401);
     expect((await call(build("k"), "pc", { root: "proj", name: "list_dir" }, { authorization: "Bearer k" })).status).toBe(200);
+  });
+});
+
+describe("device model control", () => {
+  const post = (app: ReturnType<typeof build>, path: string, body: unknown, headers: Record<string, string> = {}) => app.request(path, json(body, headers));
+
+  it("loads and unloads a model on a device that allows it", async () => {
+    registry.upsert(beat({ modelControl: true }));
+    const app = build();
+    const loaded = await post(app, "/devices/pc/models/load", { model: "qwen", contextLength: 32768 });
+    expect(loaded.status).toBe(200);
+    expect(await loaded.json()).toEqual({ ok: true, output: "loaded qwen" });
+    expect(relay.callModel).toHaveBeenCalledWith("pc", "load", "qwen", 32768);
+
+    expect((await post(app, "/devices/pc/models/unload", {})).status).toBe(200);
+    expect(relay.callModel).toHaveBeenLastCalledWith("pc", "unload", undefined, undefined);
+  });
+
+  it("refuses a device that has not switched it on, without contacting it", async () => {
+    registry.upsert(beat());
+    const res = await post(build(), "/devices/pc/models/load", { model: "qwen" });
+    expect(res.status).toBe(403);
+    expect(JSON.stringify(await res.json())).toContain("ALLOW_MODEL_CONTROL=1");
+    expect(relay.callModel).not.toHaveBeenCalled();
+  });
+
+  it("returns 404 for an unknown device, 400 for a bad body, 502 when the device fails", async () => {
+    expect((await post(build(), "/devices/ghost/models/load", { model: "qwen" })).status).toBe(404);
+    registry.upsert(beat({ modelControl: true }));
+    expect((await post(build(), "/devices/pc/models/load", {})).status).toBe(400);
+    relay.callModel.mockRejectedValue(new Error("tunnel closed"));
+    expect((await post(build(), "/devices/pc/models/load", { model: "qwen" })).status).toBe(502);
+  });
+
+  it("requires the key", async () => {
+    registry.upsert(beat({ modelControl: true }));
+    expect((await post(build("k"), "/devices/pc/models/load", { model: "qwen" })).status).toBe(401);
   });
 });
 

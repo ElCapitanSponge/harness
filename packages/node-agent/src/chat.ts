@@ -36,7 +36,7 @@ export function createChatServer(opts: { inferenceUrl: string; fetchImpl?: typeo
   }
 
   return {
-    handle(msg: Exclude<RelayRequest, { type: "tool" }>, send: Send): void {
+    handle(msg: Extract<RelayRequest, { type: "request" | "cancel" }>, send: Send): void {
       if (msg.type === "cancel") {
         inflight.get(msg.id)?.abort();
         return;

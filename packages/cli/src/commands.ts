@@ -6,8 +6,8 @@ export type Command =
   | { name: "chat"; model: string; prompt: string }
   | { name: "code"; model: string; prompt: string; yes: boolean; device?: string; root?: string }
   | { name: "tool"; device: string; root: string; tool: string; args: Record<string, unknown> }
-  | { name: "load"; model: string; contextLength?: number }
-  | { name: "unload"; model?: string }
+  | { name: "load"; model: string; contextLength?: number; device?: string }
+  | { name: "unload"; model?: string; device?: string }
   | { name: "help" };
 
 export const USAGE = `harness - talk to local models and Claude through the gateway
@@ -21,8 +21,10 @@ Usage:
                                         commands). Runs on this machine; claude models launch Claude Code
   harness tool <device> <root> <tool> [json-args]
                                         run one tool on a connected device (debugging the remote tools)
-  harness load <model> [-c tokens]      load a model in local LM Studio
-  harness unload [model]                unload one model, or all if omitted
+  harness load <model> [-c tokens] [-d device]
+                                        load a model in LM Studio, here or on a connected device
+                                        (the device must run its agent with ALLOW_MODEL_CONTROL=1)
+  harness unload [model] [-d device]    unload one model, or all if omitted
 
 Models: a loaded model id, "auto", "claude", or "claude:<alias>" (e.g. claude:sonnet).
 Env: GATEWAY_URL (default http://127.0.0.1:8787)`;
@@ -72,10 +74,10 @@ export function parseCommand(argv: string[]): Command {
       if (contextLength !== undefined && (!Number.isInteger(contextLength) || contextLength <= 0)) {
         throw new Error(`invalid context length: ${values.context}`);
       }
-      return { name: "load", model, contextLength };
+      return { name: "load", model, contextLength, device: values.device };
     }
     case "unload":
-      return { name: "unload", model: rest[0] };
+      return { name: "unload", model: rest[0], device: values.device };
     default:
       throw new Error(`unknown command: ${name}`);
   }

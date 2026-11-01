@@ -17,6 +17,8 @@ export const config = {
   // Tools coding sessions may run on this device. Read-only by default; write_file, edit_file and run_command
   // change files or run programs, so add them here only if you want that.
   allowedTools: (env.ALLOWED_TOOLS ?? "read_file,list_dir,grep").split(",").map((s) => s.trim()).filter(Boolean),
+  // Let the gateway load and unload models in this device's LM Studio. Off unless you turn it on.
+  modelControl: env.ALLOW_MODEL_CONTROL === "1",
   // Every tool call the gateway makes on this device is appended here, one JSON line each.
   auditLog: env.AUDIT_LOG ?? path.join(os.homedir(), ".harness", "audit.log"),
   // Serve Claude requests from this device with its logged-in `claude` CLI. Off unless you turn it on.

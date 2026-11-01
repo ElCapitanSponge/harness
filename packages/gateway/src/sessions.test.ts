@@ -171,6 +171,20 @@ describe("Session turns", () => {
     expect(s.busy).toBe(false);
   });
 
+  it("stops the turn when it is cancelled while a tool is running, instead of asking the model again", async () => {
+    let finishTool!: () => void;
+    relay.callTool.mockImplementation(() => new Promise((resolve) => (finishTool = () => resolve({ ok: true, output: "x" }))));
+    script({ role: "assistant", content: null, tool_calls: [call("1", "read_file", { path: "a.txt" })] }, { role: "assistant", content: "should not be asked" });
+    const s = create();
+    s.send("go");
+    await until(() => relay.callTool.mock.calls.length === 1);
+    s.cancel();
+    finishTool();
+    await until(() => types(s).includes("cancelled"));
+    expect(complete).toHaveBeenCalledTimes(1);
+    expect(s.busy).toBe(false);
+  });
+
   it("stops at the step limit if the model keeps calling tools", async () => {
     complete.mockImplementation(async () => ({ role: "assistant", content: null, tool_calls: [call(String(Math.random()), "list_dir", {})] }) as ChatMessage);
     const s = create();

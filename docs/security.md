@@ -18,6 +18,7 @@ Each limit is enforced on the **device**, not by the gateway, so a compromised g
 | `PROJECT_ROOTS` | device | Nothing is exposed unless set. Only the named folders are reachable. Paths outside them, including through symlinks and `..`, are refused. |
 | `ALLOWED_TOOLS` | device | Only the listed tools run. The default is read-only (`read_file`, `list_dir`, `grep`). `write_file`, `edit_file` and `run_command` must be added on purpose. |
 | Audit log | device | Every tool call the gateway makes, including refused ones, is appended to `AUDIT_LOG` (default `~/.harness/audit.log`) as one JSON line: time, session, root, tool, a description, outcome. File contents are never logged. |
+| `ALLOW_MODEL_CONTROL` | device | Off by default. When on, the gateway can load and unload models in this device's LM Studio, but never while the device is busy, and model ids are checked before they reach the `lms` program. |
 | Approvals | gateway | Writes, edits and commands wait for a yes from whoever drives the session. No answer in five minutes is a no, and cancelling is a no. A decline ends the turn. |
 | Outbound tunnels | network | Devices connect out to the gateway, so they have no listening port for this and LM Studio stays on localhost. |
 | Tailscale ACLs | network | See below. Limits who can reach the gateway at all. |

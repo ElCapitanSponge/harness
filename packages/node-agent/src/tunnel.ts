@@ -2,6 +2,7 @@ import { HEARTBEAT_INTERVAL_MS, RelayRequest, TUNNEL_PATH, authHeaders, type Hea
 import { WebSocket } from "ws";
 import type { ChatServer } from "./chat.js";
 import type { ClaudeServer } from "./claude.js";
+import type { ModelServer } from "./models.js";
 import type { ToolServer } from "./toolserver.js";
 
 export function tunnelUrl(gatewayUrl: string): string {
@@ -18,6 +19,7 @@ interface TunnelOptions {
   chat?: ChatServer;
   tools?: ToolServer;
   claude?: ClaudeServer;
+  models?: ModelServer;
   intervalMs?: number;
   minRetryMs?: number;
   maxRetryMs?: number;
@@ -70,6 +72,7 @@ export function connectTunnel(opts: TunnelOptions): { close(): void } {
       };
       if (parsed.data.type === "tool") void opts.tools?.handle(parsed.data, send);
       else if (parsed.data.type === "claude") void opts.claude?.handle(parsed.data, send);
+      else if (parsed.data.type === "model") void opts.models?.handle(parsed.data, send);
       else opts.chat?.handle(parsed.data, send);
     });
     socket.on("error", (err) => {

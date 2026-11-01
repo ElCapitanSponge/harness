@@ -76,6 +76,8 @@ export const Heartbeat = z.object({
   allowedTools: z.array(z.string()).optional(),
   // True if the owner is logged in to the `claude` CLI on this device and has let it answer Claude requests.
   claude: z.boolean().optional(),
+  // True if this device lets the gateway load and unload models in its LM Studio.
+  modelControl: z.boolean().optional(),
   platform: z.string().optional(),
 });
 export type Heartbeat = z.infer<typeof Heartbeat>;
@@ -102,6 +104,14 @@ export const RelayRequest = z.discriminatedUnion("type", [
   z.object({ type: z.literal("cancel"), id: z.string() }),
   // A chat request to answer with the local `claude` CLI. `body` is the raw JSON of the chat request.
   z.object({ type: z.literal("claude"), id: z.string(), body: z.string() }),
+  // Load or unload a model in this device's LM Studio.
+  z.object({
+    type: z.literal("model"),
+    id: z.string(),
+    op: z.enum(["load", "unload"]),
+    model: z.string().optional(),
+    contextLength: z.number().optional(),
+  }),
   z.object({
     type: z.literal("tool"),
     id: z.string(),
@@ -151,6 +161,10 @@ export interface SessionInfo {
   // Whether the device is connected now. A session whose device is away can be read but not continued.
   deviceConnected: boolean;
 }
+
+// Loading or unloading a model on a device.
+export const ModelLoad = z.object({ model: z.string().min(1), contextLength: z.number().int().optional() });
+export const ModelUnload = z.object({ model: z.string().min(1).optional() });
 
 export const TUNNEL_PATH = "/tunnel";
 

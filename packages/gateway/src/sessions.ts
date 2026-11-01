@@ -157,7 +157,11 @@ export class Session {
     try {
       const outcome = await runTurn(this.history, {
         tools: specs,
-        complete: (messages, tools) => this.deps.complete(this.model, messages, tools, abort.signal),
+        complete: async (messages, tools) => {
+          // A cancel that arrived while a tool was running must stop the turn before the next model call.
+          if (abort.signal.aborted) throw new Error("cancelled");
+          return this.deps.complete(this.model, messages, tools, abort.signal);
+        },
         run: async (name, args) => {
           const result = await this.deps.relay.callTool(this.device, this.root, name, args, { session: this.id });
           if (!result.ok) throw new Error(result.output);
@@ -191,7 +195,8 @@ export class Sessions {
       complete: opts.complete,
       resolve: (device, root) => this.resolve(device, root),
       connected: (device) => opts.registry.live().some((n) => n.nodeId === device),
-      persist: (session) => void opts.store?.save(session.toStored()).catch((err: Error) => console.warn(`[gateway] could not save session ${session.id}: ${err.message}`)),
+      // A session that was deleted while its last turn was still ending must not be written back.
+      persist: (session) => this.sessions.has(session.id) && void opts.store?.save(session.toStored()).catch((err: Error) => console.warn(`[gateway] could not save session ${session.id}: ${err.message}`)),
     };
     // Sessions from before a restart come back as they were at the end of their last turn.
     for (const stored of opts.stored ?? []) this.sessions.set(stored.id, new Session(stored, this.deps));

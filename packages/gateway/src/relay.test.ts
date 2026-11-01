@@ -44,6 +44,19 @@ describe("Relay tools", () => {
   });
 });
 
+describe("Relay model control", () => {
+  it("sends the operation to the device and resolves with its answer", async () => {
+    const pending = relay.callModel("pc", "load", "qwen", 8192);
+    expect(sent[0]).toMatchObject({ type: "model", op: "load", model: "qwen", contextLength: 8192 });
+    relay.handle("pc", { type: "tool-result", id: lastId(), ok: true, output: "loaded qwen" });
+    expect(await pending).toEqual({ ok: true, output: "loaded qwen" });
+  });
+
+  it("rejects when the device is not connected", async () => {
+    await expect(relay.callModel("laptop", "unload")).rejects.toThrow("not connected");
+  });
+});
+
 describe("Relay Claude requests", () => {
   it("sends the request body to the device and resolves with its answer", async () => {
     const pending = relay.callClaude("pc", '{"model":"claude"}');
@@ -139,6 +152,13 @@ describe("Relay", () => {
     const res = await pending;
     await res.body!.cancel();
     expect(sent.at(-1)).toEqual({ type: "cancel", id });
+  });
+
+  it("does not send a request whose signal is already cancelled", async () => {
+    const abort = new AbortController();
+    abort.abort();
+    await expect(relay.request("pc", "{}", abort.signal)).rejects.toThrow("cancelled");
+    expect(sent).toEqual([]);
   });
 
   it("ignores replies for unknown ids and replies from a different device", async () => {

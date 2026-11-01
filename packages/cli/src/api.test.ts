@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { Gateway, sseData } from "./api.js";
-import { loadArgs, unloadArgs } from "./lms.js";
+import { loadArgs, unloadArgs } from "@harness/lmstudio";
 
 const respond = (body: unknown, init: { ok?: boolean; status?: number; headers?: Record<string, string> } = {}) =>
   vi.fn().mockResolvedValue({
@@ -117,6 +117,25 @@ describe("sseData", () => {
     const frame = (text: string) => text + lf + lf;
     const out = await collect(body(frame('data: {"a":1}'), ": keepalive" + lf + lf + 'data: {"b"', ":2}" + lf + lf));
     expect(out).toEqual(['{"a":1}', '{"b":2}']);
+  });
+});
+
+describe("Gateway.deviceModel", () => {
+  it("asks the gateway to load a model on a device and returns the device's answer", async () => {
+    const f = vi.fn(async () => new Response(JSON.stringify({ ok: true, output: "loaded qwen" })));
+    const out = await new Gateway("http://g", f as unknown as typeof fetch, "k").deviceModel("my pc", "load", { model: "qwen", contextLength: 8192 });
+    expect(out).toBe("loaded qwen");
+    const [url, init] = (f.mock.calls as unknown as [string, { body: string; headers: Record<string, string> }][])[0]!;
+    expect(url).toBe("http://g/devices/my%20pc/models/load");
+    expect(JSON.parse(init.body)).toEqual({ model: "qwen", contextLength: 8192 });
+    expect(init.headers.authorization).toBe("Bearer k");
+  });
+
+  it("surfaces the gateway's refusal and the device's own", async () => {
+    const forbidden = vi.fn(async () => new Response(JSON.stringify({ error: { message: "does not allow remote model control" } }), { status: 403 }));
+    await expect(new Gateway("http://g", forbidden as unknown as typeof fetch).deviceModel("pc", "load", { model: "m" })).rejects.toThrow("remote model control");
+    const busy = vi.fn(async () => new Response(JSON.stringify({ ok: false, output: "this device is busy right now" })));
+    await expect(new Gateway("http://g", busy as unknown as typeof fetch).deviceModel("pc", "load", { model: "m" })).rejects.toThrow("busy");
   });
 });
 

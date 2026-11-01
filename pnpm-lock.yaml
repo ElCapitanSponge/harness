@@ -38,6 +38,9 @@ importers:
       '@harness/core':
         specifier: workspace:*
         version: link:../core
+      '@harness/lmstudio':
+        specifier: workspace:*
+        version: link:../lmstudio
       '@harness/tools':
         specifier: workspace:*
         version: link:../tools
@@ -72,6 +75,8 @@ importers:
         specifier: ^8.22.1
         version: 8.22.1
 
+  packages/lmstudio: {}
+
   packages/node-agent:
     dependencies:
       '@harness/claude':
@@ -80,6 +85,9 @@ importers:
       '@harness/core':
         specifier: workspace:*
         version: link:../core
+      '@harness/lmstudio':
+        specifier: workspace:*
+        version: link:../lmstudio
       '@harness/tools':
         specifier: workspace:*
         version: link:../tools
