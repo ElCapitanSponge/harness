@@ -16,6 +16,7 @@
     "gateway": "pnpm --filter @harness/gateway start",
     "agent": "pnpm --filter @harness/node-agent start",
     "web": "pnpm --filter @harness/web dev",
+    "storybook": "pnpm --filter @harness/web storybook",
     "build:web": "pnpm --filter @harness/web build"
   },
   "devDependencies": {
