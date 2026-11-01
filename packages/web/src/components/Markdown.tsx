@@ -45,7 +45,7 @@ const CodeBlock = ({ children }: ComponentProps<"pre">) => {
 // react-markdown's safe-scheme filtering.
 export const Markdown = ({ text }: { text: string }) => {
   return (
-    <div className="prose-chat break-words">
+    <div className="prose-chat min-w-0 [overflow-wrap:anywhere]">
       <ReactMarkdown
         remarkPlugins={[remarkGfm]}
         rehypePlugins={[[rehypeHighlight, { detect: false, ignoreMissing: true }]]}

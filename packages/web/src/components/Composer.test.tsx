@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { Composer } from "./Composer";
@@ -52,5 +52,70 @@ describe("Composer drafts", () => {
     await userEvent.type(screen.getByLabelText("Message"), "hi{Enter}");
     expect(onSend).toHaveBeenCalledWith("hi");
     spy.mockRestore();
+  });
+});
+
+describe("Composer markdown", () => {
+  const boxOf = (): HTMLTextAreaElement => {
+    return screen.getByLabelText("Message");
+  };
+
+  it("wraps the selection with the shortcuts, and again takes it off", async () => {
+    render(<Composer draftKey="md1" busy={false} onSend={vi.fn()} />);
+    await userEvent.type(boxOf(), "make this bold");
+    boxOf().setSelectionRange(5, 9);
+    await userEvent.keyboard("{Control>}b{/Control}");
+    expect(boxOf()).toHaveValue("make **this** bold");
+    await userEvent.keyboard("{Control>}b{/Control}");
+    expect(boxOf()).toHaveValue("make this bold");
+  });
+
+  it("does the same from the toolbar, for code and for lists", async () => {
+    render(<Composer draftKey="md2" busy={false} onSend={vi.fn()} />);
+    await userEvent.type(boxOf(), "a{Shift>}{Enter}{/Shift}b");
+    boxOf().setSelectionRange(0, 3);
+    await userEvent.click(screen.getByRole("button", { name: "Bulleted list" }));
+    expect(boxOf()).toHaveValue("- a\n- b");
+    await userEvent.click(screen.getByRole("button", { name: "Code block" }));
+    expect(boxOf().value).toContain("```");
+  });
+
+  it("carries a list on with Shift+Enter instead of sending", async () => {
+    const onSend = vi.fn();
+    render(<Composer draftKey="md3" busy={false} onSend={onSend} />);
+    await userEvent.type(boxOf(), "- one{Shift>}{Enter}{/Shift}two");
+    expect(boxOf()).toHaveValue("- one\n- two");
+    expect(onSend).not.toHaveBeenCalled();
+  });
+
+  it("adds a line inside a code block on Enter, and sends the whole of it on Ctrl+Enter", async () => {
+    const onSend = vi.fn();
+    render(<Composer draftKey="md4" busy={false} onSend={onSend} />);
+    await userEvent.type(boxOf(), "```ts{Enter}const a = 1;{Enter}");
+    expect(onSend).not.toHaveBeenCalled();
+    expect(boxOf()).toHaveValue("```ts\nconst a = 1;\n");
+    await userEvent.type(boxOf(), "```{Enter}");
+    // The block is closed now, so Enter sends.
+    expect(onSend).toHaveBeenCalledWith("```ts\nconst a = 1;\n```");
+  });
+
+  it("sends from inside a code block with Ctrl+Enter", async () => {
+    const onSend = vi.fn();
+    render(<Composer draftKey="md5" busy={false} onSend={onSend} />);
+    await userEvent.type(boxOf(), "```{Enter}code");
+    await userEvent.keyboard("{Control>}{Enter}{/Control}");
+    expect(onSend).toHaveBeenCalledWith("```\ncode");
+  });
+
+  it("previews what will be sent, and goes back to editing without losing it", async () => {
+    render(<Composer draftKey="md6" busy={false} onSend={vi.fn()} />);
+    await userEvent.type(boxOf(), "**bold** and `code`");
+    await userEvent.click(screen.getByRole("button", { name: "Preview" }));
+    const preview = screen.getByLabelText("Preview of your message");
+    expect(within(preview).getByText("bold").tagName).toBe("STRONG");
+    expect(within(preview).getByText("code").tagName).toBe("CODE");
+    expect(screen.getByRole("button", { name: "Bold" })).toBeDisabled();
+    await userEvent.click(screen.getByRole("button", { name: "Edit" }));
+    expect(boxOf()).toHaveValue("**bold** and `code`");
   });
 });

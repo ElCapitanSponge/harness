@@ -42,7 +42,7 @@ const Conversation = ({ id }: { id: string }) => {
   const offline = info?.kind === "code" && !info.deviceConnected;
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col">
+    <div className="flex min-h-0 min-w-0 flex-1 flex-col">
       <header className="flex items-center gap-2 border-b bg-card px-4 py-2">
         {info?.kind === "code" ? <Code2 className="size-4 text-muted-foreground" /> : <MessageSquare className="size-4 text-muted-foreground" />}
         <h1 className="min-w-0 flex-1 truncate text-base font-semibold">{info ? (info.title || "New conversation") : "Conversation"}</h1>
@@ -61,13 +61,13 @@ const Conversation = ({ id }: { id: string }) => {
 
       <div
         ref={scroller}
-        className="flex-1 overflow-y-auto"
+        className="flex-1 overflow-y-auto overflow-x-hidden"
         onScroll={(ev) => {
           const el = ev.currentTarget;
           stuck.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
         }}
       >
-        <div className="mx-auto grid max-w-3xl gap-4 px-4 py-6">
+        <div className="mx-auto grid max-w-3xl grid-cols-[minmax(0,1fr)] gap-4 px-4 py-6">
           {state.items.map((item) => {
             return (
               <Message key={item.id} item={item} model={model} onAnswer={(approvalId, approve, always) => {
