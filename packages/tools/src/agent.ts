@@ -3,8 +3,14 @@ import { tools as allTools, type ToolContext, type ToolSpec } from "./tools.js";
 
 export type Approver = (tool: string, summary: string) => Promise<boolean>;
 
+// Called as the model writes, for callers that want to show progress before the reply is complete.
+export interface StreamHooks {
+  thinking?(piece: string): void;
+  text?(piece: string): void;
+}
+
 export interface AgentDeps {
-  complete(messages: ChatMessage[], tools: Tool[]): Promise<ChatMessage>;
+  complete(messages: ChatMessage[], tools: Tool[], hooks?: StreamHooks): Promise<ChatMessage>;
   approve: Approver;
   // Where tools run when `run` is not given: the local machine, inside ctx.cwd.
   ctx?: ToolContext;
@@ -13,6 +19,10 @@ export interface AgentDeps {
   // Runs a tool somewhere else, such as on a device over the gateway. It should throw on failure.
   run?(name: string, args: Record<string, unknown>): Promise<string>;
   onText(text: string): void;
+  // The model's reasoning for a step, when it gives any, and the live pieces of it and of the reply as they stream.
+  onThinking?(text: string): void;
+  onThinkingDelta?(piece: string): void;
+  onTextDelta?(piece: string): void;
   onTool(summary: string): void;
   maxSteps?: number;
 }
@@ -56,6 +66,13 @@ async function execute(call: ToolCall, deps: AgentDeps): Promise<{ result: strin
   }
 }
 
+// Some models send their reasoning alongside the answer, under one of two names. It is shown but never sent back.
+function reasoningOf(message: ChatMessage): string {
+  const m = message as { reasoning_content?: unknown; reasoning?: unknown };
+  const value = typeof m.reasoning_content === "string" ? m.reasoning_content : typeof m.reasoning === "string" ? m.reasoning : "";
+  return value.trim();
+}
+
 // One user turn: keep calling the model and running its tool calls until it answers without any.
 // If the user declines an action the turn ends there, so a model cannot keep retrying it.
 export async function runTurn(history: ChatMessage[], deps: AgentDeps): Promise<{ stopped: boolean; declined?: boolean }> {
@@ -63,7 +80,9 @@ export async function runTurn(history: ChatMessage[], deps: AgentDeps): Promise<
   const maxSteps = deps.maxSteps ?? 25;
 
   for (let step = 0; step < maxSteps; step++) {
-    const reply = await deps.complete(history, defs);
+    const reply = await deps.complete(history, defs, { thinking: deps.onThinkingDelta, text: deps.onTextDelta });
+    const thought = reasoningOf(reply);
+    if (thought && deps.onThinking) deps.onThinking(thought);
     const calls = reply.tool_calls ?? [];
     history.push({ role: "assistant", content: reply.content ?? "", ...(calls.length ? { tool_calls: calls } : {}) });
 
