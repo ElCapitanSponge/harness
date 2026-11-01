@@ -7,6 +7,7 @@ export type Item
     | { kind: "assistant"; id: number; text: string; streaming: boolean }
     | { kind: "thinking"; id: number; text: string; live: boolean; startedAt: number; seconds: number }
     | { kind: "tool"; id: number; summary: string }
+    | { kind: "compaction"; id: number; messages: number; tokensBefore: number; tokensAfter: number; manual: boolean }
     | { kind: "approval"; id: number; approvalId: string; tool: string; summary: string; status: "pending" | "allowed" | "declined" }
     | { kind: "note"; id: number; text: string; tone: "info" | "error" };
 
@@ -112,6 +113,11 @@ export const applyEvent = (state: ConversationState, event: StreamEvent, now: nu
       }
       return push(settle(state.items, now), (id) => {
         return { kind: "assistant", id, text: event.text, streaming: false };
+      });
+
+    case "compacted":
+      return push(state.items, (id) => {
+        return { kind: "compaction", id, messages: event.messages, tokensBefore: event.tokensBefore, tokensAfter: event.tokensAfter, manual: event.manual };
       });
 
     case "tool":

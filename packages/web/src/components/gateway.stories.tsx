@@ -61,7 +61,7 @@ export const NoModels: StoryObj = {
 
 const usage = (over: Partial<NonNullable<ConversationUsage["last"]>>, models: ConversationUsage["byModel"] = []): ConversationUsage => {
   return {
-    last: { model: "qwen3-coder-30b", device: "anakin", promptTokens: 6200, completionTokens: 400, contextLength: 32_768, estimated: false, ...over },
+    last: { time: 0, model: "qwen3-coder-30b", device: "anakin", promptTokens: 6200, completionTokens: 400, contextLength: 32_768, estimated: false, ...over },
     byModel: models.length > 0 ? models : [{ model: "qwen3-coder-30b", device: "anakin", calls: 4, promptTokens: 21_000, completionTokens: 1800, estimated: false }],
   };
 };
@@ -75,6 +75,30 @@ export const ContextHalfFull: StoryObj = {
     const meter = within(canvasElement).getByRole("button", { name: /6\.6k/ });
     await expect(meter).toHaveTextContent("6.6k / 33k");
     await expect(within(canvasElement).getByRole("progressbar")).toHaveAttribute("aria-valuenow", "20");
+  },
+};
+
+export const CompactingAt80: StoryObj = {
+  parameters: seed([[["usage", "conversation", "c4"], { ...usage({ promptTokens: 24_000, completionTokens: 1000 }), compactAt: 0.8 }]]),
+  render: () => {
+    return <ContextMeter id="c4" />;
+  },
+  play: async ({ canvasElement }) => {
+    await userEvent.click(within(canvasElement).getByRole("button", { name: /25k/ }));
+    const body = within(canvasElement.ownerDocument.body);
+    await expect(await body.findByText(/compacts itself at 80%/)).toBeVisible();
+    await expect(body.getByRole("button", { name: /Compact now/ })).toBeEnabled();
+  },
+};
+
+export const CompactNotWhileBusy: StoryObj = {
+  parameters: seed([[["usage", "conversation", "c5"], usage({})]]),
+  render: () => {
+    return <ContextMeter id="c5" busy />;
+  },
+  play: async ({ canvasElement }) => {
+    await userEvent.click(within(canvasElement).getByRole("button", { name: /6\.6k/ }));
+    await expect(await within(canvasElement.ownerDocument.body).findByRole("button", { name: /Compact now/ })).toBeDisabled();
   },
 };
 

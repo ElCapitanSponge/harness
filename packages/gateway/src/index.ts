@@ -9,6 +9,7 @@ import { assertSafeBinding } from "./auth.js";
 import { resolveHosts } from "./hosts.js";
 import { Registry } from "./registry.js";
 import { Relay } from "./relay.js";
+import { ClaudeState } from "./claude.js";
 import { Sessions, createCompleter } from "./sessions.js";
 import { importLegacySessions } from "./legacy.js";
 import { sqliteLedger } from "./ledger.js";
@@ -27,6 +28,7 @@ const dataDir = process.env.HARNESS_DATA_DIR ?? path.join(os.homedir(), ".harnes
 const db = openDatabase(path.join(dataDir, "harness.db"));
 const store = sqliteStore(db);
 const ledger = sqliteLedger(db);
+const claude = new ClaudeState();
 const imported = await importLegacySessions(path.join(dataDir, "sessions"), store);
 if (imported > 0) {
   console.log(`[gateway] moved ${imported} saved conversation${imported === 1 ? "" : "s"} into the database`);
@@ -39,11 +41,14 @@ const loader = new ModelLoader({
   unloadOthers: process.env.HARNESS_KEEP_LOADED !== "1",
   defaultContext: Number(process.env.HARNESS_DEFAULT_CONTEXT ?? 32_768),
 });
+// Compact a conversation when its context is this percent full before a message (0 turns it off).
+const compactPercent = Number(process.env.HARNESS_COMPACT_AT ?? "80");
 const sessions = new Sessions({
   ledger,
+  compactAt: Number.isFinite(compactPercent) && compactPercent > 0 && compactPercent < 100 ? compactPercent / 100 : 0,
   registry,
   relay,
-  complete: createCompleter({ registry, relay, loader }),
+  complete: createCompleter({ registry, relay, loader, claude }),
   store,
   stored: store.loadAll(),
 });
@@ -54,6 +59,7 @@ const app = createApp({
   relay,
   sessions,
   ledger,
+  claude,
   loader,
   apiKey,
   mountWeb: webDist ? await loadWebApp(webDist) : undefined,

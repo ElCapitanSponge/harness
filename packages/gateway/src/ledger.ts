@@ -42,7 +42,7 @@ export const sqliteLedger = (db: DatabaseSync): UsageLedger => {
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   );
   const latest = db.prepare(
-    "SELECT model, device, prompt_tokens AS prompt, completion_tokens AS completion, context_length AS context, estimated FROM usage WHERE conversation_id = ? ORDER BY id DESC LIMIT 1",
+    "SELECT time, model, device, prompt_tokens AS prompt, completion_tokens AS completion, context_length AS context, estimated FROM usage WHERE conversation_id = ? ORDER BY id DESC LIMIT 1",
   );
   const perModel = (where: string) => {
     return db.prepare(
@@ -67,10 +67,10 @@ export const sqliteLedger = (db: DatabaseSync): UsageLedger => {
     },
 
     forConversation(id) {
-      const row = latest.get(id) as { model: string; device: string; prompt: number; completion: number; context: number | null; estimated: number } | undefined;
+      const row = latest.get(id) as { time: number; model: string; device: string; prompt: number; completion: number; context: number | null; estimated: number } | undefined;
       return {
         last: row
-          ? { model: row.model, device: row.device, promptTokens: row.prompt, completionTokens: row.completion, contextLength: row.context ?? undefined, estimated: row.estimated > 0 }
+          ? { time: row.time, model: row.model, device: row.device, promptTokens: row.prompt, completionTokens: row.completion, contextLength: row.context ?? undefined, estimated: row.estimated > 0 }
           : undefined,
         byModel: (modelsOfConversation.all(id) as unknown as ModelRow[]).map(toModelUsage),
       };

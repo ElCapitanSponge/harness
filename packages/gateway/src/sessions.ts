@@ -1,10 +1,12 @@
 import { randomUUID } from "node:crypto";
-import { sseData, type ChatMessage, type LiveSessionEvent, type SessionEvent, type SessionInfo, type Tool, type ToolCall } from "@harness/core";
+import { sseData, textOf, type ChatMessage, type LiveSessionEvent, type SessionEvent, type SessionInfo, type Tool, type ToolCall } from "@harness/core";
 import { runTurn, systemPrompt, tools as allTools, type StreamHooks, type ToolSpec } from "@harness/tools";
 import type { Registry } from "./registry.js";
 import type { Relay } from "./relay.js";
 import type { ModelLoader } from "./loader.js";
 import { isClaudeModel } from "./router.js";
+import { ClaudeState, askClaude } from "./claude.js";
+import { SUMMARY_PROMPT, compacted, historyTokens, planCompaction, transcriptOf } from "./compaction.js";
 import { estimateTokens, type UsageLedger } from "./ledger.js";
 import { resolveRoute } from "./routing.js";
 
@@ -35,28 +37,26 @@ export interface SessionStore {
 // The window assumed for Claude models, which the Claude program does not report.
 const CLAUDE_CONTEXT = 200_000;
 
-export const createCompleter = (deps: { registry: Registry; relay: Pick<Relay, "request" | "callClaude">; loader: Pick<ModelLoader, "ensure"> }): Complete => {
+export const createCompleter = (deps: { registry: Registry; relay: Pick<Relay, "request" | "callClaude">; loader: Pick<ModelLoader, "ensure">; claude?: ClaudeState }): Complete => {
   return async (model, messages, tools, signal, hooks) => {
     // Claude answers through a device that is logged in to it, in one piece.
     if (isClaudeModel(model)) {
-      const device = deps.registry.live().find((n) => {
-        return n.claude;
-      });
-      if (!device) {
-        throw new Error("no connected device is logged in to Claude");
-      }
-      hooks?.stage?.("waiting", `Claude through ${device.nodeId}`);
+      hooks?.stage?.("waiting", "Claude");
       const claudeStarted = Date.now();
-      const reply = await deps.relay.callClaude(device.nodeId, JSON.stringify({ model, messages }));
-      if (!reply.ok) {
-        throw new Error(reply.output);
-      }
-      const text = (JSON.parse(reply.output) as { text: string }).text;
+      const { result, device } = await askClaude({ registry: deps.registry, relay: deps.relay, state: deps.claude ?? new ClaudeState() }, model, messages);
       hooks?.stage?.("writing");
-      hooks?.text?.(text);
-      // The Claude program reports no token counts through the gateway, so these are estimates against a 200k window.
-      hooks?.usage?.({ model, device: device.nodeId, promptTokens: estimateTokens(JSON.stringify(messages)), completionTokens: estimateTokens(text), durationMs: Date.now() - claudeStarted, contextLength: CLAUDE_CONTEXT, estimated: true });
-      return { role: "assistant", content: text };
+      hooks?.text?.(result.text);
+      // The program's own count where it gave one (cached input included), otherwise an estimate, against a 200k window.
+      hooks?.usage?.({
+        model,
+        device,
+        promptTokens: result.usage?.inputTokens ?? estimateTokens(JSON.stringify(messages)),
+        completionTokens: result.usage?.outputTokens ?? estimateTokens(result.text),
+        durationMs: Date.now() - claudeStarted,
+        contextLength: CLAUDE_CONTEXT,
+        estimated: result.usage === undefined,
+      });
+      return { role: "assistant", content: result.text };
     }
     hooks?.stage?.("routing", model);
     const route = await resolveRoute({ registry: deps.registry, loader: deps.loader }, { model, messages, tools }, (step) => {
@@ -204,7 +204,11 @@ interface SessionDeps {
   persist?(session: Session): void;
   // Every model call is recorded here, for the usage page and the context meter.
   ledger?: UsageLedger;
+  // Compact when the context is this fraction full (0.8 is 80 percent). Zero or absent turns automatic compaction off.
+  compactAt?: number;
 }
+
+export type CompactResult = { ok: true; messages: number; tokensBefore: number; tokensAfter: number } | { ok: false; reason: string };
 
 export class Session {
   readonly id: string;
@@ -220,6 +224,10 @@ export class Session {
   private abort: AbortController | undefined;
   private approvals = new Map<string, (approved: boolean, always?: boolean) => void>();
   private always = new Set<string>();
+  // When the history was last compacted and how big it was after, so the meter can show that before the next reply.
+  compaction: { time: number; tokensAfter: number } | undefined;
+  // The call whose size last made automatic compaction fail, so one failure does not repeat on every message.
+  private compactFailedFor = 0;
 
   constructor(
     init: Pick<StoredSession, "id" | "title" | "model" | "device" | "root" | "created" | "updated"> & { history: ChatMessage[]; events?: SessionEvent[] },
@@ -353,7 +361,78 @@ export class Session {
     });
   };
 
+  // Replaces the older turns with a summary the model writes, so the conversation can go on. The system prompt and the most
+  // recent turns stay as they were. Refused while a turn is running.
+  async compact(): Promise<CompactResult> {
+    if (this.abort) {
+      return { ok: false, reason: "the conversation is busy with a turn" };
+    }
+    const abort = new AbortController();
+    this.abort = abort;
+    try {
+      return await this.compactNow(abort, true);
+    } finally {
+      this.abort = undefined;
+      this.deps.persist?.(this);
+    }
+  }
+
+  private async compactNow(abort: AbortController, manual: boolean): Promise<CompactResult> {
+    const plan = planCompaction(this.history);
+    if (!plan) {
+      return { ok: false, reason: "there is nothing older to summarise yet" };
+    }
+    const tokensBefore = historyTokens(this.history);
+    const window = this.deps.ledger?.forConversation(this.id).last?.contextLength;
+    try {
+      const reply = await this.deps.complete(
+        this.model,
+        [{ role: "system", content: SUMMARY_PROMPT }, { role: "user", content: transcriptOf(plan.older, window ? window * 2 : 48_000) }],
+        [],
+        abort.signal,
+        {
+          stage: (stage, detail) => {
+            this.emitLive({ type: "stage", stage, detail });
+          },
+          usage: (usage) => {
+            this.deps.ledger?.record({ time: Date.now(), conversationId: this.id, ...usage });
+          },
+        },
+      );
+      const summary = textOf(reply.content).trim();
+      if (!summary) {
+        throw new Error("the model wrote no summary");
+      }
+      const next = compacted(plan, summary);
+      this.history.splice(0, this.history.length, ...next);
+      const tokensAfter = historyTokens(next);
+      this.compaction = { time: Date.now(), tokensAfter };
+      this.emit({ type: "compacted", messages: plan.older.length, tokensBefore, tokensAfter, manual });
+      return { ok: true, messages: plan.older.length, tokensBefore, tokensAfter };
+    } catch (err) {
+      return { ok: false, reason: err instanceof Error ? err.message : String(err) };
+    }
+  }
+
+  // Before a turn: the last call's time, if it left the context full enough that the conversation should compact first.
+  private compactionDue(): number | undefined {
+    const at = this.deps.compactAt ?? 0;
+    const last = this.deps.ledger?.forConversation(this.id).last;
+    if (at <= 0 || !last?.contextLength || last.time <= this.compactFailedFor || (this.compaction && this.compaction.time >= last.time)) {
+      return undefined;
+    }
+    return (last.promptTokens + last.completionTokens) / last.contextLength >= at ? last.time : undefined;
+  }
+
   private async run(abort: AbortController, specs: ToolSpec[]): Promise<void> {
+    // A failure to summarise does not stop the turn; it is tried again after the next model call, not on every message.
+    const due = this.compactionDue();
+    if (due !== undefined) {
+      this.emitLive({ type: "stage", stage: "compacting" });
+      if (!(await this.compactNow(abort, false)).ok) {
+        this.compactFailedFor = due;
+      }
+    }
     const mark = this.history.length - 1;
     try {
       const outcome = await runTurn(this.history, {
@@ -412,16 +491,22 @@ export class Session {
 const CHAT_PROMPT = "You are a helpful assistant. Answer clearly and say so when you are not sure.";
 
 export class Sessions {
+  // The context fill at which conversations compact themselves, as a fraction; zero is off.
+  get compactAt(): number {
+    return this.opts.compactAt ?? 0;
+  }
+
   private sessions = new Map<string, Session>();
   private deps: SessionDeps;
 
   constructor(
-    private opts: { registry: Registry; relay: Pick<Relay, "callTool">; complete: Complete; store?: SessionStore; stored?: StoredSession[]; ledger?: UsageLedger },
+    private opts: { registry: Registry; relay: Pick<Relay, "callTool">; complete: Complete; store?: SessionStore; stored?: StoredSession[]; ledger?: UsageLedger; compactAt?: number },
   ) {
     this.deps = {
       relay: opts.relay,
       complete: opts.complete,
       ledger: opts.ledger,
+      compactAt: opts.compactAt,
       resolve: (device, root) => {
         return this.resolve(device, root);
       },

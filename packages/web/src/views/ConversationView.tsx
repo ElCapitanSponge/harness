@@ -44,7 +44,7 @@ const Conversation = ({ id }: { id: string }) => {
         {info?.kind === "code" ? <Code2 className="size-4 text-muted-foreground" /> : <MessageSquare className="size-4 text-muted-foreground" />}
         <h1 className="min-w-0 flex-1 truncate text-base font-semibold">{info ? (info.title || "New conversation") : "Conversation"}</h1>
         {info ? <Badge tone="brand">{info.model}</Badge> : null}
-        {info ? <ContextMeter id={id} /> : null}
+        {info ? <ContextMeter id={id} busy={state.busy} /> : null}
         {info?.kind === "code" ? <Badge tone={info.deviceConnected ? "neutral" : "warning"}>{info.device}:{info.root}{info.deviceConnected ? "" : " offline"}</Badge> : null}
         {info
           ? (

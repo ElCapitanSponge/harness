@@ -64,6 +64,15 @@ describe("a conversation built from events", () => {
   });
 });
 
+describe("compaction", () => {
+  it("shows a marker in the conversation, counted as a stored event, and does not end the turn", () => {
+    const state = run([{ type: "user", text: "q" }, { type: "compacted", messages: 6, tokensBefore: 9000, tokensAfter: 1200, manual: false }]);
+    expect(state.items.at(-1)).toMatchObject({ kind: "compaction", messages: 6, tokensBefore: 9000, tokensAfter: 1200, manual: false });
+    expect(state.busy).toBe(true);
+    expect(state.cursor).toBe(2);
+  });
+});
+
 describe("progress before the first word", () => {
   it("is busy with a timer from the moment of sending, follows the stages, and clears when the turn ends", () => {
     const sent = markBusy(emptyConversation(), 5000);

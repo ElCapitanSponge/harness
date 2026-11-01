@@ -48,6 +48,14 @@ export const ErrorNote: Story = { args: item({ kind: "note", id: 8, tone: "error
 
 export const InfoNote: Story = { args: item({ kind: "note", id: 9, tone: "info", text: "Cancelled." }) };
 
+export const CompactedAutomatically: Story = {
+  args: item({ kind: "compaction", id: 12, messages: 14, tokensBefore: 26_400, tokensAfter: 3100, manual: false }),
+  play: async ({ canvasElement }) => {
+    // The person sees that it happened, and by how much.
+    await expect(within(canvasElement).getByRole("separator", { name: "Conversation compacted" })).toHaveTextContent("Compacted automatically: 14 earlier messages summarised, about 26k to 3.1k tokens");
+  },
+};
+
 export const ApprovalWaiting: Story = {
   args: item({ kind: "approval", id: 10, approvalId: "a1", tool: "write_file", summary: "write src/sum.js (42 bytes)", status: "pending" }),
   play: async ({ canvasElement, args }) => {
@@ -75,6 +83,7 @@ export const WaitingForTheModel: StoryObj<typeof StatusLine> = {
         <StatusLine since={Date.now() - 3000} stage={undefined} />
         <StatusLine since={Date.now() - 9000} stage={{ name: "loading", detail: "qwen3-coder-30b" }} />
         <StatusLine since={Date.now() - 21000} stage={{ name: "waiting", detail: "qwen3-coder-30b on anakin" }} />
+        <StatusLine since={Date.now() - 6000} stage={{ name: "compacting" }} />
       </div>
     );
   },

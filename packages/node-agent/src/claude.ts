@@ -1,5 +1,5 @@
 import { ChatRequest, type RelayRequest, type TunnelMessage } from "@harness/core";
-import { runClaude, type ClaudeResult } from "@harness/claude";
+import { ClaudeLimitError, runClaude, type ClaudeResult } from "@harness/claude";
 
 type ClaudeMessage = Extract<RelayRequest, { type: "claude" }>;
 
@@ -22,7 +22,9 @@ export const createClaudeServer = (opts: { bin: string; enabled?: () => boolean;
         const result = await run(opts.bin, parsed.data);
         send({ type: "tool-result", id: msg.id, ok: true, output: JSON.stringify(result) });
       } catch (err) {
-        send({ type: "tool-result", id: msg.id, ok: false, output: (err as Error).message });
+        // A refusal for hitting a usage limit travels as data, so the gateway can stop offering Claude until it ends.
+        const output = err instanceof ClaudeLimitError ? JSON.stringify({ limited: true, message: err.message, limits: err.limits }) : (err as Error).message;
+        send({ type: "tool-result", id: msg.id, ok: false, output });
       }
     },
   };

@@ -179,6 +179,7 @@ export type SessionEvent
     | { type: "tool"; summary: string }
     | { type: "approval"; id: string; tool: string; summary: string }
     | { type: "approval-resolved"; id: string; approved: boolean }
+    | { type: "compacted"; messages: number; tokensBefore: number; tokensAfter: number; manual: boolean }
     | { type: "done"; stopped: boolean; declined?: boolean }
     | { type: "cancelled" }
     | { type: "error"; message: string };
@@ -187,7 +188,7 @@ export type SessionEvent
 // responsive. The stored "thinking" and "text" events carry the same words once the model has finished.
 // Where a request is, from being sent to the first word: finding a device, freeing memory and loading a model on it,
 // waiting for it to answer, then its thinking and writing. Live only, like the deltas.
-export type StageName = "routing" | "freeing" | "loading" | "waiting" | "thinking" | "writing";
+export type StageName = "routing" | "freeing" | "loading" | "waiting" | "thinking" | "writing" | "compacting";
 
 export type LiveSessionEvent
   = | { type: "thinking-delta"; text: string }
@@ -197,6 +198,39 @@ export type LiveSessionEvent
 export const isLiveEvent = (event: { type: string }): event is LiveSessionEvent => {
   return event.type.endsWith("-delta") || event.type === "stage";
 };
+
+// One usage window of the Claude plan, as the claude program reports it: how much is used (0 to 1) and when it resets.
+export interface ClaudeWindow {
+  utilization: number;
+  // Seconds since the epoch.
+  resetsAt: number;
+}
+
+// What the claude program last said about the plan. A window can read 100 percent used while calls still succeed, if the plan
+// has extra usage switched on, so `limitedUntil` is set only when a request was actually refused.
+export interface ClaudeLimits {
+  status: string;
+  fiveHour?: ClaudeWindow;
+  sevenDay?: ClaudeWindow;
+  usingOverage?: boolean;
+  // Milliseconds since the epoch.
+  limitedUntil?: number;
+  // Milliseconds since the epoch.
+  observedAt: number;
+}
+
+// Where Claude stands, for the page: whether it can be used now, and what the plan has left.
+export interface ClaudeStatus {
+  // False until a Claude reply has been seen, because the program only reports the plan with a reply.
+  readable: boolean;
+  available: boolean;
+  device?: string;
+  limitedUntil?: number;
+  fiveHour?: ClaudeWindow;
+  sevenDay?: ClaudeWindow;
+  usingOverage?: boolean;
+  observedAt?: number;
+}
 
 // What one model has used, over some span of calls. `estimated` is true if any of the counts were estimated, not reported by the model server.
 export interface ModelUsage {
@@ -223,7 +257,9 @@ export interface UsageSummary {
 
 // One conversation's use of models, and how full the context was after the latest call.
 export interface ConversationUsage {
-  last?: { model: string; device: string; promptTokens: number; completionTokens: number; contextLength?: number; estimated: boolean };
+  // The fraction of the context at which a conversation compacts itself (0.8 is 80 percent), or 0 when that is off.
+  compactAt?: number;
+  last?: { time: number; model: string; device: string; promptTokens: number; completionTokens: number; contextLength?: number; estimated: boolean };
   byModel: ModelUsage[];
 }
 

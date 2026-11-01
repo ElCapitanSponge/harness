@@ -2,6 +2,7 @@ import { useSelector } from "@tanstack/react-store";
 import { BarChart3, Code2, Menu as MenuIcon, MessageSquare, Monitor, Moon, PanelLeftClose, Plus, Sun, SunMoon, LogOut } from "lucide-react";
 import { useState } from "react";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router";
+import { ClaudeMeter } from "@/components/ClaudeMeter";
 import { ConversationActions } from "@/components/ConversationActions";
 import { ToriiMark } from "@/components/ToriiMark";
 import { Button } from "@/components/ui/button";
@@ -102,6 +103,7 @@ const Sidebar = ({ onNavigate }: { onNavigate: () => void }) => {
       </nav>
 
       <div className="grid gap-1 border-t pt-2">
+        <ClaudeMeter />
         <NavLink
           to="/manage/devices"
           onClick={onNavigate}

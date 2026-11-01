@@ -59,7 +59,7 @@ describe("the usage ledger", () => {
     ledger.record(call({ model: "claude", device: "mac", promptTokens: 1500, completionTokens: 200, contextLength: 200_000, estimated: true }));
     ledger.record(call({ conversationId: "other" }));
     const usage = ledger.forConversation("c1");
-    expect(usage.last).toEqual({ model: "claude", device: "mac", promptTokens: 1500, completionTokens: 200, contextLength: 200_000, estimated: true });
+    expect(usage.last).toEqual({ time: NOW, model: "claude", device: "mac", promptTokens: 1500, completionTokens: 200, contextLength: 200_000, estimated: true });
     expect(usage.byModel).toHaveLength(2);
     expect(ledger.forConversation("none")).toEqual({ last: undefined, byModel: [] });
   });

@@ -1,5 +1,8 @@
 import { execFile } from "node:child_process";
-import { textOf, type ChatRequest } from "@harness/core";
+import { textOf, type ChatRequest, type ClaudeLimits } from "@harness/core";
+import { ClaudeLimitError, limitedUntil, readLimits, type RateLimitInfo } from "./limits.js";
+
+export { ClaudeLimitError } from "./limits.js";
 
 export type Exec = (bin: string, args: string[], input: string) => Promise<string>;
 
@@ -37,7 +40,8 @@ export const toPrompt = (req: ChatRequest): { system?: string; prompt: string } 
 
 export const buildArgs = (req: ChatRequest, system?: string): string[] => {
   const alias = req.model.replace(/^claude:?/, "");
-  const args = ["-p", "--output-format", "json", "--no-session-persistence", "--tools", ""];
+  // stream-json carries the plan's usage windows (rate_limit_event) that plain json leaves out; it needs --verbose.
+  const args = ["-p", "--output-format", "stream-json", "--verbose", "--no-session-persistence", "--tools", ""];
   if (alias) {
     args.push("--model", alias);
   }
@@ -50,16 +54,72 @@ export const buildArgs = (req: ChatRequest, system?: string): string[] => {
 export interface ClaudeResult {
   text: string;
   model: string;
+  // What the program counted for the call. Prompt tokens include its cached input.
+  usage?: { inputTokens: number; outputTokens: number };
+  limits?: ClaudeLimits;
 }
+
+interface ResultEvent {
+  result?: string;
+  is_error?: boolean;
+  model?: string;
+  usage?: { input_tokens?: number; cache_creation_input_tokens?: number; cache_read_input_tokens?: number; output_tokens?: number };
+}
+
+const LIMIT_WORDS = /limit|quota|usage cap|too many requests/i;
+
+// Reads what the claude program printed: a stream of JSON lines, or (older versions, tests) one JSON object.
+export const parseClaudeOutput = (out: string, fallbackModel: string, now = Date.now()): ClaudeResult => {
+  const events: Record<string, unknown>[] = [];
+  const text = out.trim();
+  if (text.startsWith("{") && !text.includes("\n{")) {
+    events.push(JSON.parse(text) as Record<string, unknown>);
+  } else {
+    for (const line of text.split(/\r?\n/)) {
+      if (!line.trim()) {
+        continue;
+      }
+      try {
+        events.push(JSON.parse(line) as Record<string, unknown>);
+      } catch {
+        // Not JSON: ignore, the result event is what matters.
+      }
+    }
+  }
+
+  const result = events.findLast((e) => {
+    return e.type === "result" || typeof e.result === "string" || e.is_error === true;
+  }) as ResultEvent | undefined;
+  const assistantModel = (events.find((e) => {
+    return e.type === "assistant";
+  }) as { message?: { model?: string } } | undefined)?.message?.model;
+  const info = (events.findLast((e) => {
+    return e.type === "rate_limit_event";
+  }) as { rate_limit_info?: RateLimitInfo } | undefined)?.rate_limit_info;
+  const limits = info ? readLimits(info, now) : undefined;
+
+  if (!result) {
+    throw new Error("claude returned no result");
+  }
+  if (result.is_error || typeof result.result !== "string") {
+    const message = result.result ?? "claude returned no result";
+    // A refusal for hitting a limit is told apart from other failures by the wording, and by the program saying it rejected the call.
+    if (result.is_error && (LIMIT_WORDS.test(message) || (limits !== undefined && /reject/i.test(limits.status)))) {
+      const known = limits ?? { status: "limited", observedAt: now };
+      throw new ClaudeLimitError(message, { ...known, limitedUntil: limitedUntil(known, info, now) });
+    }
+    throw new Error(message);
+  }
+
+  const u = result.usage;
+  const usage = u ? { inputTokens: (u.input_tokens ?? 0) + (u.cache_creation_input_tokens ?? 0) + (u.cache_read_input_tokens ?? 0), outputTokens: u.output_tokens ?? 0 } : undefined;
+  return { text: result.result, model: result.model ?? assistantModel ?? fallbackModel, ...(usage ? { usage } : {}), ...(limits ? { limits } : {}) };
+};
 
 export const runClaude = async (bin: string, req: ChatRequest, exec: Exec = defaultExec): Promise<ClaudeResult> => {
   const { system, prompt } = toPrompt(req);
   const out = await exec(bin, buildArgs(req, system), prompt);
-  const parsed = JSON.parse(out) as { result?: string; is_error?: boolean; model?: string };
-  if (parsed.is_error || typeof parsed.result !== "string") {
-    throw new Error(parsed.result ?? "claude returned no result");
-  }
-  return { text: parsed.result, model: parsed.model ?? req.model };
+  return parseClaudeOutput(out, req.model);
 };
 
 // Claude answers in one piece, so a streamed reply is a single content chunk, a stop chunk and [DONE].

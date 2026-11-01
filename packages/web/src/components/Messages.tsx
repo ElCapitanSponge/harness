@@ -1,8 +1,9 @@
-import { Bot, Brain, ChevronRight, Loader2, ShieldQuestion, Wrench } from "lucide-react";
+import { Bot, Brain, ChevronRight, Layers, Loader2, ShieldQuestion, Wrench } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Markdown } from "@/components/Markdown";
 import type { ConversationState, Item } from "@/lib/conversation";
+import { compact as compactTokens } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
 // Seconds since a start time, ticking every second while `running`.
@@ -80,6 +81,18 @@ export const Message = ({ item, model, onAnswer }: { item: Item; model: string; 
         </div>
       );
 
+    case "compaction":
+      return (
+        <div className="flex items-center gap-3 text-xs text-muted-foreground" role="separator" aria-label="Conversation compacted">
+          <span className="h-px flex-1 bg-border" />
+          <span className="flex items-center gap-1.5">
+            <Layers className="size-3.5" />
+            {item.manual ? "Compacted" : "Compacted automatically"}: {item.messages} earlier messages summarised, about {compactTokens(item.tokensBefore)} to {compactTokens(item.tokensAfter)} tokens
+          </span>
+          <span className="h-px flex-1 bg-border" />
+        </div>
+      );
+
     case "approval":
       return (
         <div className="pl-10">
@@ -144,6 +157,8 @@ export const stageLabel = (stage: ConversationState["stage"]): string => {
       return "Thinking";
     case "writing":
       return "Writing";
+    case "compacting":
+      return "Compacting the conversation to free space";
   }
 };
 
