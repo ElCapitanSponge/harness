@@ -4,6 +4,8 @@ export type Command
   = | { name: "nodes" }
     | { name: "models" }
     | { name: "sessions" }
+    | { name: "export"; id: string }
+    | { name: "import"; file: string; all: boolean; pick?: number; model?: string }
     | { name: "settings"; device: string; key?: string; value?: unknown }
     | { name: "chat"; model: string; prompt: string }
     | { name: "code"; model: string; prompt: string; yes: boolean; device?: string; root?: string }
@@ -18,6 +20,11 @@ Usage:
   harness nodes                         list nodes reporting to the gateway
   harness models                        list models across nodes
   harness sessions                      list saved conversations (chats and coding sessions)
+  harness export <id>                   print a saved conversation as markdown (redirect it to a file)
+  harness import <file> [-n number | --all] [-m model]
+                                        bring in a Claude Code .jsonl, a ChatGPT or Claude.ai export, or a
+                                        markdown/text transcript; with several conversations in the file,
+                                        pick one by number (shown when you omit it) or take them all
   harness settings <device> [key json] show a device's settings, or change one (the device must run
                                         with REMOTE_CONFIG=1), e.g. settings anakin claude true
   harness chat [-m model] [prompt...]   one-shot chat, or interactive with no prompt
@@ -45,6 +52,8 @@ export const parseCommand = (argv: string[]): Command => {
       yes: { type: "boolean", short: "y" },
       device: { type: "string", short: "d" },
       root: { type: "string", short: "r" },
+      all: { type: "boolean" },
+      number: { type: "string", short: "n" },
     },
   });
   const [name, ...rest] = positionals;
@@ -58,6 +67,22 @@ export const parseCommand = (argv: string[]): Command => {
       return { name };
     case "sessions":
       return { name };
+    case "export": {
+      if (!rest[0]) {
+        throw new Error("export needs a conversation id (see: harness sessions)");
+      }
+      return { name: "export", id: rest[0] };
+    }
+    case "import": {
+      if (!rest[0]) {
+        throw new Error("import needs a file");
+      }
+      const pick = values.number ? Number(values.number) : undefined;
+      if (pick !== undefined && (!Number.isInteger(pick) || pick < 1)) {
+        throw new Error(`invalid number: ${values.number ?? ""}`);
+      }
+      return { name: "import", file: rest[0], all: values.all ?? false, pick, model: values.model };
+    }
     case "settings": {
       const [device, key, json] = rest;
       if (!device) {

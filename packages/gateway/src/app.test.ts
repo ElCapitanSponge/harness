@@ -447,3 +447,42 @@ describe("skills", () => {
     expect(await (await build().request("/skills?device=other")).json()).toEqual([]);
   });
 });
+
+describe("importing and exporting conversations", () => {
+  const post = (app: ReturnType<typeof build>, url: string, body: unknown) => {
+    return app.request(url, json(body));
+  };
+
+  it("splits a pasted transcript for checking, saving nothing, and says plainly when a file is not understood", async () => {
+    const app = build();
+    const res = await post(app, "/import/parse", { name: "chat.md", content: "## User\n\nhi\n\n## Assistant\n\nhello" });
+    expect(await res.json()).toMatchObject({ format: "headings", split: true, conversations: [{ turns: [{ role: "user", text: "hi" }, { role: "assistant", text: "hello" }] }] });
+    expect((await app.request("/sessions")).status).toBe(200);
+    expect(await (await app.request("/sessions")).json()).toEqual([]);
+
+    const bad = await post(app, "/import/parse", { name: "x.json", content: "{\"a\":1}" });
+    expect(bad.status).toBe(422);
+    expect((await post(app, "/import/parse", { content: "" })).status).toBe(400);
+  });
+
+  it("saves the turns as a conversation marked as imported, sends nothing to a model, and exports it again", async () => {
+    const app = build();
+    const res = await post(app, "/sessions/import", { title: "Sorting", source: "ChatGPT", turns: [{ role: "user", text: "How do I sort?" }, { role: "assistant", text: "Use sorted()." }] });
+    expect(res.status).toBe(201);
+    const info = await res.json() as { id: string; title: string; kind: string; model: string };
+    expect(info).toMatchObject({ title: "Sorting", kind: "chat", model: "auto" });
+
+    // The import marker and the two turns are stored as events; nothing was asked of a model.
+    expect((await (await app.request("/sessions")).json() as { events: number }[])[0]?.events).toBe(3);
+
+    const exported = await app.request(`/sessions/${info.id}/export`);
+    expect(exported.headers.get("content-type")).toContain("text/markdown");
+    expect(exported.headers.get("content-disposition")).toContain("Sorting.md");
+    expect(await exported.text()).toBe("# Sorting\n\n## You\n\nHow do I sort?\n\n## Assistant\n\nUse sorted().\n");
+    expect((await app.request("/sessions/nope/export")).status).toBe(404);
+  });
+
+  it("refuses an import with no turns", async () => {
+    expect((await post(build(), "/sessions/import", { turns: [] })).status).toBe(400);
+  });
+});

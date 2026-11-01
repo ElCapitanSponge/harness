@@ -1,5 +1,5 @@
 import { toOpenAIResponse, toSse } from "@harness/claude";
-import { ChatRequest, DeviceToolRequest, ModelLoad, ModelUnload, SessionApproval, SessionCreate, SessionMessage, SessionRename, flattenError } from "@harness/core";
+import { ChatRequest, DeviceToolRequest, ModelLoad, ModelUnload, ImportParse, SessionApproval, SessionCreate, SessionImport, SessionMessage, SessionRename, flattenError } from "@harness/core";
 import { findTool, type ProjectContext } from "@harness/tools";
 import { Hono, type Context } from "hono";
 import { bearerAuth } from "./auth.js";
@@ -11,6 +11,7 @@ import { RouteError, resolveRoute } from "./routing.js";
 import type { UsageLedger } from "./ledger.js";
 import { ClaudeState, ClaudeUnavailableError, askClaude } from "./claude.js";
 import type { Sessions } from "./sessions.js";
+import { parseImportFile, toMarkdown } from "./transcripts.js";
 import { WEB_PAGE } from "./web.js";
 
 export interface AppDeps {
@@ -177,6 +178,44 @@ export const createApp = ({ registry, apiKey, relay, sessions, ledger, claude = 
   });
 
   // Coding sessions: the model loop runs here, tool calls run on the chosen device.
+  // Splits pasted text or a dropped file into the turns it finds, for the person to check. Nothing is saved.
+  app.post("/import/parse", async (c) => {
+    const parsed = ImportParse.safeParse(await c.req.json().catch(() => {
+      return undefined;
+    }));
+    if (!parsed.success) {
+      return c.json({ error: flattenError(parsed.error) }, 400);
+    }
+    try {
+      return c.json(parseImportFile(parsed.data.name ?? "pasted.txt", parsed.data.content));
+    } catch (err) {
+      return c.json({ error: { message: (err as Error).message } }, 422);
+    }
+  });
+
+  app.post("/sessions/import", async (c) => {
+    const parsed = SessionImport.safeParse(await c.req.json().catch(() => {
+      return undefined;
+    }));
+    if (!parsed.success) {
+      return c.json({ error: flattenError(parsed.error) }, 400);
+    }
+    try {
+      return c.json(sessions.import(parsed.data).info(), 201);
+    } catch (err) {
+      return c.json({ error: { message: (err as Error).message } }, 422);
+    }
+  });
+
+  app.get("/sessions/:id/export", (c) => {
+    const session = sessions.get(c.req.param("id"));
+    if (!session) {
+      return c.json({ error: { message: "no such session" } }, 404);
+    }
+    const name = session.title.replace(/[^\w -]+/g, "").trim().slice(0, 60) || "conversation";
+    return c.body(toMarkdown(session.title, session.events), 200, { "content-type": "text/markdown; charset=utf-8", "content-disposition": `attachment; filename="${name}.md"` });
+  });
+
   app.get("/sessions", (c) => {
     return c.json(sessions.list());
   });

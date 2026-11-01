@@ -78,6 +78,26 @@ export class Gateway {
     return (await res.json()) as SessionInfo[];
   }
 
+  // A conversation as markdown.
+  async exportSession(id: string): Promise<string> {
+    const res = await this.fetchImpl(`${this.baseUrl}/sessions/${id}/export`, { headers: authHeaders(this.apiKey) });
+    await this.check(res);
+    return res.text();
+  }
+
+  // Splits a file's text into the conversations it holds, without saving anything.
+  async parseImport(name: string, content: string): Promise<{ format: string; split: boolean; conversations: { title: string; source: string; turns: { role: "user" | "assistant"; text: string }[] }[] }> {
+    const res = await this.fetchImpl(`${this.baseUrl}/import/parse`, this.json({ name, content }));
+    await this.check(res);
+    return (await res.json()) as Awaited<ReturnType<Gateway["parseImport"]>>;
+  }
+
+  async importConversation(input: { title: string; source: string; turns: { role: "user" | "assistant"; text: string }[]; model?: string }): Promise<SessionInfo> {
+    const res = await this.fetchImpl(`${this.baseUrl}/sessions/import`, this.json(input));
+    await this.check(res);
+    return (await res.json()) as SessionInfo;
+  }
+
   // A device's effective settings, or, with a change, the settings after it.
   async deviceSettings(device: string, change?: Record<string, unknown>): Promise<SettingsReport> {
     const url = `${this.baseUrl}/devices/${encodeURIComponent(device)}/settings`;

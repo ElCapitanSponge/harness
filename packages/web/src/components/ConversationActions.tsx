@@ -1,8 +1,9 @@
-import { MoreHorizontal, Pencil, Trash2 } from "lucide-react";
+import { Download, MoreHorizontal, Pencil, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/fields";
 import { Dialog, DialogContent, Menu, MenuContent, MenuItem, MenuTrigger } from "@/components/ui/overlay";
+import { downloadExport } from "@/lib/download";
 import { useDeleteConversation, useRenameConversation } from "@/lib/queries";
 import type { SessionInfo } from "@/lib/types";
 
@@ -28,6 +29,12 @@ export const ConversationActions = ({ info, onDeleted, className }: { info: Sess
           }}
           >
             <Pencil /> Rename
+          </MenuItem>
+          <MenuItem onSelect={() => {
+            void downloadExport(info.id, info.title);
+          }}
+          >
+            <Download /> Export as markdown
           </MenuItem>
           <MenuItem danger onSelect={() => {
             setDialog("delete");
