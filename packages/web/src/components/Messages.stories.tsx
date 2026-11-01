@@ -23,6 +23,28 @@ const item = (value: Item): { item: Item } => {
 
 export const FromYou: Story = { args: item({ kind: "user", id: 1, text: "Why does the build fail on Windows?" }) };
 
+export const FromYouWithMarkdown: Story = {
+  args: item({ kind: "user", id: 30, text: "Please **summarise** this:\n\n- the feedback\n- the `ui` issues\n\n```ts\nconst a = 1;\n```" }),
+  play: async ({ canvasElement }) => {
+    // What you wrote is shown as you wrote it in markdown: emphasis, lists and code, not the raw marks.
+    const canvas = within(canvasElement);
+    await expect(canvas.getByText("summarise").tagName).toBe("STRONG");
+    await expect(canvas.getAllByRole("listitem")).toHaveLength(2);
+    // The code is highlighted, so its words sit in separate elements; the text as a whole is still there.
+    await expect(canvasElement).toHaveTextContent("const a = 1;");
+  },
+};
+
+export const TextThatCannotBreak: Story = {
+  // A model that writes with non-breaking spaces gives lines with nowhere to wrap. They must wrap inside the column, not push the page wider.
+  args: item({ kind: "assistant", id: 31, streaming: false, text: "Objective:\u00a0Transition\u00a0to\u00a0using\u00a0Torii\u00a0as\u00a0the\u00a0primary\u00a0daily\u00a0driver\u00a0and\u00a0replace\u00a0the\u00a0previous\u00a0tool\u00a0entirely\u00a0so\u00a0that\u00a0the\u00a0harness\u00a0needs\u00a0to\u00a0support\u00a0several\u00a0key\u00a0capabilities", model: "gemma" }),
+  decorators: [
+    (Story) => {
+      return <div className="w-72 overflow-hidden border"><Story /></div>;
+    },
+  ],
+};
+
 export const Reply: Story = {
   args: item({
     kind: "assistant",

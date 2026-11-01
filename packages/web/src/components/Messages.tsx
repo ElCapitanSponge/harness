@@ -36,7 +36,7 @@ const Thinking = ({ item }: { item: Extract<Item, { kind: "thinking" }> }) => {
         {label}
         {item.live ? <Loader2 className="size-3 animate-spin" /> : null}
       </summary>
-      <div className="mt-1 whitespace-pre-wrap break-words border-l-2 pl-3 text-[13px] leading-5">{item.text}</div>
+      <div className="mt-1 whitespace-pre-wrap border-l-2 pl-3 [overflow-wrap:anywhere] text-[13px] leading-5">{item.text}</div>
     </details>
   );
 };
@@ -45,8 +45,10 @@ export const Message = ({ item, model, onAnswer }: { item: Item; model: string; 
   switch (item.kind) {
     case "user":
       return (
-        <div className="flex justify-end">
-          <div className="max-w-[85%] whitespace-pre-wrap break-words rounded-xl bg-accent px-4 py-2 text-accent-foreground">{item.text}</div>
+        <div className="flex min-w-0 justify-end">
+          <div className="min-w-0 max-w-[85%] rounded-xl bg-accent px-4 py-2 text-accent-foreground">
+            <Markdown text={item.text} />
+          </div>
         </div>
       );
 

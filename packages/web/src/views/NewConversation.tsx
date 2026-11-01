@@ -49,7 +49,7 @@ export const NewConversation = () => {
   };
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col">
+    <div className="flex min-h-0 min-w-0 flex-1 flex-col">
       <div className="flex flex-1 flex-col items-center justify-center gap-6 overflow-y-auto p-6">
         <div className="text-center">
           <h1 className="text-2xl font-semibold">What shall we work on?</h1>
