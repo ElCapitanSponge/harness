@@ -128,7 +128,7 @@ The device must start its agent with `ALLOW_MODEL_CONTROL=1` (off by default), a
 
 Chat apps (LibreChat and friends) can use the same gateway for plain chat. The gateway lists Claude models in `/v1/models` and streams Claude replies, but chat apps have no tools on your files, so use `harness code` for file work.
 
-## Running the node agent as a service (macOS and Linux)
+## Running the node agent as a service
 
 A device appears in the pool while its node agent runs, so it should start by itself. The agent reads `.env` in the repo root (see `.env.example`: `GATEWAY_URL`, `HARNESS_API_KEY`, and optionally `PROJECT_ROOTS`, `ALLOWED_TOOLS`, `CLAUDE_ENABLED`). `deploy/run-agent.sh` starts it for a service manager and tightens `.env` to owner-only.
 
@@ -151,7 +151,16 @@ launchctl bootstrap "gui/$(id -u)" ~/Library/LaunchAgents/com.harness.agent.plis
 tail -f ~/Library/Logs/harness-agent.log
 ```
 
-Both assume the repo is at `~/personal/harness`; edit the path if it is elsewhere. These files have not yet been run on a Mac or Linux machine, so check `harness nodes` after starting one.
+**Windows (scheduled task, starts at logon)**
+
+```powershell
+powershell -File deploy\windows\install-agent-task.ps1
+Start-ScheduledTask -TaskName "harness agent"
+```
+
+The log is `%LOCALAPPDATA%\harness-agent.log`. Remove it with `Unregister-ScheduledTask -TaskName "harness agent" -Confirm:$false`.
+
+The Mac and Linux files assume the repo is at `~/personal/harness`; edit the path if it is elsewhere. None of these have been run on their target machine yet (the Windows script only syntax-checked), so check `harness nodes` after starting one.
 
 ## Model names
 
