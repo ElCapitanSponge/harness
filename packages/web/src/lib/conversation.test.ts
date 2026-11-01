@@ -64,6 +64,24 @@ describe("a conversation built from events", () => {
   });
 });
 
+describe("replies from different models in one conversation", () => {
+  it("keeps the model and device each reply came from, including after the live text is replaced by the stored one", () => {
+    const state = run([
+      { type: "user", text: "one" },
+      { type: "text", text: "from qwen", model: "qwen", device: "anakin" },
+      { type: "done", stopped: false },
+      { type: "user", text: "two" },
+      { type: "text-delta", text: "from " },
+      { type: "text", text: "from claude", model: "claude", device: "bastila" },
+      { type: "done", stopped: false },
+    ]);
+    const replies = state.items.flatMap((i) => {
+      return i.kind === "assistant" ? [`${i.model ?? ""}@${i.device ?? ""}:${i.text}`] : [];
+    });
+    expect(replies).toEqual(["qwen@anakin:from qwen", "claude@bastila:from claude"]);
+  });
+});
+
 describe("compaction", () => {
   it("shows a marker in the conversation, counted as a stored event, and does not end the turn", () => {
     const state = run([{ type: "user", text: "q" }, { type: "compacted", messages: 6, tokensBefore: 9000, tokensAfter: 1200, manual: false }]);

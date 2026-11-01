@@ -32,6 +32,15 @@ export const Reply: Story = {
   }),
 };
 
+export const ReplyFromAnotherDevice: Story = {
+  args: item({ kind: "assistant", id: 20, streaming: false, text: "Answered by a different model on a different machine.", model: "gemma-3-12b", device: "bastila" }),
+  play: async ({ canvasElement }) => {
+    // Each reply says which model wrote it and where it ran, so a conversation that moves between them stays readable.
+    await expect(within(canvasElement).getByText("gemma-3-12b")).toBeVisible();
+    await expect(within(canvasElement).getByText("on bastila")).toBeVisible();
+  },
+};
+
 export const ReplyWithADiff: Story = {
   args: item({ kind: "assistant", id: 3, streaming: false, text: "Here is the change:\n\n```diff\n--- a/sum.js\n+++ b/sum.js\n@@ -1,3 +1,3 @@\n-const total = a - b;\n+const total = a + b;\n```" }),
 };

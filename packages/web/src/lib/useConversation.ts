@@ -69,13 +69,13 @@ export const useConversation = (id: string) => {
 
   const state = useSelector(store);
 
-  const send = async (text: string): Promise<void> => {
+  const send = async (text: string, model?: string): Promise<void> => {
     // Busy at once, so the button changes before the first event comes back.
     store.setState((s) => {
       return markBusy(s);
     });
     try {
-      await api<unknown>(`/sessions/${id}/messages`, { method: "POST", body: { text } });
+      await api<unknown>(`/sessions/${id}/messages`, { method: "POST", body: { text, ...(model ? { model } : {}) } });
     } catch (err) {
       store.setState((s) => {
         return applyEvent(s, { type: "error", message: err instanceof Error ? err.message : "Could not send." });

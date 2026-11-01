@@ -1,8 +1,9 @@
 import { Code2, MessageSquare, RotateCcw } from "lucide-react";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router";
 import { Composer } from "@/components/Composer";
 import { ContextMeter } from "@/components/ContextMeter";
+import { ModelPicker } from "@/components/ModelPicker";
 import { ConversationActions } from "@/components/ConversationActions";
 import { Message, StatusLine } from "@/components/Messages";
 import { Button } from "@/components/ui/button";
@@ -17,6 +18,8 @@ const Conversation = ({ id }: { id: string }) => {
   const info = sessions.data?.find((s) => {
     return s.id === id;
   });
+  // The model for the next message; until one is picked it is the one the conversation is on.
+  const [picked, setPicked] = useState("");
   const scroller = useRef<HTMLDivElement>(null);
   const stuck = useRef(true);
   const last = state.items.at(-1);
@@ -92,13 +95,17 @@ const Conversation = ({ id }: { id: string }) => {
       </div>
 
       {offline ? <p className="mx-auto w-full max-w-3xl px-4 pb-2 text-[13px] text-muted-foreground">The device {info.device} is offline, so this conversation is read-only until it reconnects.</p> : null}
+      <div className="mx-auto flex w-full max-w-3xl items-center gap-2 px-4 pb-1.5 text-xs text-muted-foreground">
+        <span>Next message goes to</span>
+        <ModelPicker className="h-7 w-auto max-w-64 text-xs" value={picked || model} excludeClaude={info?.kind === "code"} disabled={state.busy || !info} onChange={setPicked} />
+      </div>
       <Composer
         draftKey={id}
         busy={state.busy}
         disabled={!info || offline}
         onSend={(text) => {
           stuck.current = true;
-          void send(text);
+          void send(text, picked || undefined);
         }}
         onStop={() => {
           void cancel();

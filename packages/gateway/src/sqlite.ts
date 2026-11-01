@@ -85,7 +85,7 @@ export const sqliteStore = (db: DatabaseSync): SessionStore & { loadAll(): Store
   const upsert = db.prepare(
     `INSERT INTO conversations (id, kind, title, model, device, root, created, updated, history)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-     ON CONFLICT (id) DO UPDATE SET title = excluded.title, updated = excluded.updated, history = excluded.history`,
+     ON CONFLICT (id) DO UPDATE SET title = excluded.title, model = excluded.model, updated = excluded.updated, history = excluded.history`,
   );
   const count = db.prepare("SELECT COUNT(*) AS n FROM events WHERE conversation_id = ?");
   const append = db.prepare("INSERT INTO events (conversation_id, seq, data) VALUES (?, ?, ?)");

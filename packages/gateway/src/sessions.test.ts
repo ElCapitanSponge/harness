@@ -114,7 +114,7 @@ describe("Session turns", () => {
     expect(s.events).toEqual<SessionEvent[]>([
       { type: "user", text: "what is in a.txt?" },
       { type: "tool", summary: "read a.txt" },
-      { type: "text", text: "It says contents." },
+      { type: "text", text: "It says contents.", model: "qwen" },
       { type: "done", stopped: false },
     ]);
     expect(s.busy).toBe(false);
