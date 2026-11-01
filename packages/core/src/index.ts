@@ -179,6 +179,7 @@ export type SessionEvent
     | { type: "tool"; summary: string }
     | { type: "approval"; id: string; tool: string; summary: string }
     | { type: "approval-resolved"; id: string; approved: boolean }
+    | { type: "compacted"; messages: number; tokensBefore: number; tokensAfter: number; manual: boolean }
     | { type: "done"; stopped: boolean; declined?: boolean }
     | { type: "cancelled" }
     | { type: "error"; message: string };
@@ -187,7 +188,7 @@ export type SessionEvent
 // responsive. The stored "thinking" and "text" events carry the same words once the model has finished.
 // Where a request is, from being sent to the first word: finding a device, freeing memory and loading a model on it,
 // waiting for it to answer, then its thinking and writing. Live only, like the deltas.
-export type StageName = "routing" | "freeing" | "loading" | "waiting" | "thinking" | "writing";
+export type StageName = "routing" | "freeing" | "loading" | "waiting" | "thinking" | "writing" | "compacting";
 
 export type LiveSessionEvent
   = | { type: "thinking-delta"; text: string }
@@ -256,7 +257,9 @@ export interface UsageSummary {
 
 // One conversation's use of models, and how full the context was after the latest call.
 export interface ConversationUsage {
-  last?: { model: string; device: string; promptTokens: number; completionTokens: number; contextLength?: number; estimated: boolean };
+  // The fraction of the context at which a conversation compacts itself (0.8 is 80 percent), or 0 when that is off.
+  compactAt?: number;
+  last?: { time: number; model: string; device: string; promptTokens: number; completionTokens: number; contextLength?: number; estimated: boolean };
   byModel: ModelUsage[];
 }
 

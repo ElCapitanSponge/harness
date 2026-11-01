@@ -66,6 +66,20 @@ export const useUsage = (days: number) => {
   });
 };
 
+// Summarises a conversation's older turns now. The meter and the sessions are refreshed after it.
+export const useCompactConversation = (id: string) => {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: () => {
+      return api<{ ok: true; messages: number; tokensBefore: number; tokensAfter: number }>(`/sessions/${id}/compact`, { method: "POST", body: {} });
+    },
+    onSuccess: () => {
+      void client.invalidateQueries({ queryKey: ["usage"] });
+      void client.invalidateQueries({ queryKey: ["sessions"] });
+    },
+  });
+};
+
 export const useDeviceSettings = (nodeId: string) => {
   return useQuery({
     queryKey: ["settings", nodeId],

@@ -41,8 +41,11 @@ const loader = new ModelLoader({
   unloadOthers: process.env.HARNESS_KEEP_LOADED !== "1",
   defaultContext: Number(process.env.HARNESS_DEFAULT_CONTEXT ?? 32_768),
 });
+// Compact a conversation when its context is this percent full before a message (0 turns it off).
+const compactPercent = Number(process.env.HARNESS_COMPACT_AT ?? "80");
 const sessions = new Sessions({
   ledger,
+  compactAt: Number.isFinite(compactPercent) && compactPercent > 0 && compactPercent < 100 ? compactPercent / 100 : 0,
   registry,
   relay,
   complete: createCompleter({ registry, relay, loader, claude }),

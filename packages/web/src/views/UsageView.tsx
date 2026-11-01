@@ -6,7 +6,7 @@ import { tooltip } from "@tanstack/charts/tooltip";
 import { Chart } from "@tanstack/charts/react";
 import { useMemo, useState } from "react";
 import { ClaudePlan } from "@/components/ClaudeMeter";
-import { compact } from "@/components/ContextMeter";
+import { compact } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { useClaudeStatus, useUsage } from "@/lib/queries";
 import type { ModelUsage, UsageSummary } from "@/lib/types";

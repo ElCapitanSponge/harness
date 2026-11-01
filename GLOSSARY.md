@@ -74,6 +74,10 @@ _Avoid_: status, phase
 The record of every model call the gateway makes: the conversation, device and model, the tokens in and out, the time taken and the model's context window. It feeds the context meter and the usage page.
 _Avoid_: log, metrics
 
+**Compaction**:
+Replacing a conversation's older turns, in what is sent to the model, with a short summary the model writes, so the conversation can go on. The system prompt and the latest turns are kept, and what the person sees does not change.
+_Avoid_: truncation, trimming
+
 **Context meter**:
 How many tokens a conversation holds against the window of the model that last answered. A number marked ~ is an estimate.
 

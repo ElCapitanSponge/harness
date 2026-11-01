@@ -151,10 +151,29 @@ export const createApp = ({ registry, apiKey, relay, sessions, ledger, claude = 
 
   app.get("/sessions/:id/usage", (c) => {
     const id = c.req.param("id");
-    if (!sessions.get(id)) {
+    const session = sessions.get(id);
+    if (!session) {
       return c.json({ error: { message: "no such conversation" } }, 404);
     }
-    return c.json(ledger?.forConversation(id) ?? { byModel: [] });
+    const usage = { ...(ledger?.forConversation(id) ?? { byModel: [] }), compactAt: sessions.compactAt };
+    // After a compaction the history is smaller than the last call saw, so show that until the next reply says exactly.
+    if (usage.last && session.compaction && session.compaction.time >= usage.last.time) {
+      return c.json({ ...usage, last: { ...usage.last, promptTokens: session.compaction.tokensAfter, completionTokens: 0, estimated: true } });
+    }
+    return c.json(usage);
+  });
+
+  // Summarises the older turns now, to free context. The conversation shown stays whole; only what the model is sent shrinks.
+  app.post("/sessions/:id/compact", async (c) => {
+    const session = sessions.get(c.req.param("id"));
+    if (!session) {
+      return c.json({ error: { message: "no such conversation" } }, 404);
+    }
+    const outcome = await session.compact();
+    if (!outcome.ok) {
+      return c.json({ error: { message: outcome.reason } }, outcome.reason.includes("busy") ? 409 : 422);
+    }
+    return c.json(outcome);
   });
 
   // Coding sessions: the model loop runs here, tool calls run on the chosen device.
