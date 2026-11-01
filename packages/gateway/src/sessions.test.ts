@@ -496,7 +496,7 @@ describe("Session and the project's skills", () => {
     script({ role: "assistant", content: "ok" });
     const s = withContext({
       instructions: [{ source: "AGENTS.md", text: "Use pnpm." }],
-      skills: [{ name: "tdd", description: "Test first.", modelInvocable: true, source: "user" }, { name: "quiet", description: "Hidden.", modelInvocable: false, source: "user" }],
+      skills: [{ name: "tdd", description: "Test first.", length: 100, modelInvocable: true, source: "user" }, { name: "quiet", description: "Hidden.", length: 100, modelInvocable: false, source: "user" }],
       skipped: [],
     });
     s.send("go");
@@ -519,7 +519,7 @@ describe("Session and the project's skills", () => {
 
   it("does not offer the skill tool when no skill may be started, or when the device cannot say", async () => {
     script({ role: "assistant", content: "ok" });
-    const none = withContext({ instructions: [], skills: [{ name: "quiet", description: "Hidden.", modelInvocable: false, source: "user" }], skipped: [] });
+    const none = withContext({ instructions: [], skills: [{ name: "quiet", description: "Hidden.", length: 100, modelInvocable: false, source: "user" }], skipped: [] });
     none.send("go");
     await until(() => {
       return types(none).includes("done");
@@ -534,5 +534,55 @@ describe("Session and the project's skills", () => {
       return types(old).includes("done");
     });
     expect(toolNames()).not.toContain("skill");
+  });
+});
+
+describe("Session and a skill the person starts", () => {
+  const withSkill = (startSkill: (name: string, args: string) => Promise<string>): Session => {
+    sessions = new Sessions({ registry, relay, complete, startSkill: async (_d, _r, _s, name, args) => {
+      return startSkill(name, args);
+    } });
+    return create();
+  };
+
+  it("puts the skill's instructions in the conversation after what was typed, and records a skill event", async () => {
+    let lastMessage = "";
+    complete.mockImplementation(async (_model, messages) => {
+      lastMessage = textOf(messages.at(-1)?.content);
+      return { role: "assistant", content: "ok" };
+    });
+    const s = withSkill(async (name, args) => {
+      return `[${name}] ${args}`;
+    });
+    s.send("/tdd the parser", undefined, undefined, { name: "tdd", arguments: "the parser" });
+    await until(() => {
+      return types(s).includes("done");
+    });
+    expect(types(s)).toEqual(["user", "skill", "text", "done"]);
+    expect(s.events[1]).toEqual({ type: "skill", name: "tdd", arguments: "the parser", text: "[tdd] the parser" });
+    expect(lastMessage).toContain("/tdd the parser");
+    expect(lastMessage).toContain("[tdd] the parser");
+  });
+
+  it("ends the turn with the reason, keeping nothing, if the skill cannot be loaded", async () => {
+    const s = withSkill(async () => {
+      throw new Error("there is no skill named \"nope\"");
+    });
+    s.send("/nope", undefined, undefined, { name: "nope" });
+    await until(() => {
+      return types(s).includes("error");
+    });
+    expect(complete).not.toHaveBeenCalled();
+    expect(s.busy).toBe(false);
+  });
+
+  it("is refused in a chat, which has no device to load it from", () => {
+    sessions = new Sessions({ registry, relay, complete, startSkill: async () => {
+      return "x";
+    } });
+    const chat = sessions.create({ model: "qwen" });
+    expect(() => {
+      chat.send("/tdd", undefined, undefined, { name: "tdd" });
+    }).toThrow("coding session");
   });
 });

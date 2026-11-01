@@ -430,3 +430,20 @@ describe("catalogue and loading on demand", () => {
     expect(loaderEnsure).not.toHaveBeenCalled();
   });
 });
+
+describe("skills", () => {
+  it("lists the skills and instruction files each device finds in each folder, without the instruction text", async () => {
+    registry.upsert(beat({ roots: ["proj"] }));
+    relay.callTool.mockResolvedValue({ ok: true, output: JSON.stringify({ instructions: [{ source: "AGENTS.md", text: "Use pnpm." }], skills: [{ name: "tdd", description: "Test first.", length: 900, modelInvocable: true, source: "user" }], skipped: [{ path: "x/SKILL.md", reason: "no front matter" }] }) });
+    const res = await build().request("/skills");
+    expect(await res.json()).toEqual([{ device: "pc", root: "proj", skills: [expect.objectContaining({ name: "tdd", length: 900 }) as unknown], skipped: [{ path: "x/SKILL.md", reason: "no front matter" }], instructions: [{ source: "AGENTS.md", length: 9 }] }]);
+    expect(relay.callTool).toHaveBeenCalledWith("pc", "proj", "project_context", {}, expect.anything());
+  });
+
+  it("narrows to one folder, and lists a device that cannot answer with a note instead of failing", async () => {
+    registry.upsert(beat({ roots: ["proj"] }));
+    relay.callTool.mockResolvedValue({ ok: false, output: "tool \"project_context\" is not allowed on this device" });
+    expect(await (await build().request("/skills?device=pc&root=proj")).json()).toEqual([expect.objectContaining({ device: "pc", root: "proj", skills: [], note: expect.stringContaining("not allowed") as string }) as unknown]);
+    expect(await (await build().request("/skills?device=other")).json()).toEqual([]);
+  });
+});

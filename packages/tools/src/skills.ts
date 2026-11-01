@@ -13,6 +13,8 @@ export interface SkillSummary {
   description: string;
   // What to type after the name, such as "[issue number]".
   hint?: string;
+  // How long the SKILL.md is, in characters.
+  length: number;
   // False when the person starts it and the model does not (`disable-model-invocation: true`).
   modelInvocable: boolean;
   // "user" for the person's own folders, or the project root's name.
@@ -142,7 +144,7 @@ const scan = async (dir: string, source: string, found: Map<string, FoundSkill>,
     }
     const hint = asText(parsed.data["argument-hint"]);
     // A later folder (the project's) replaces an earlier one (the person's) of the same name.
-    found.set(name, { name, description, ...(hint ? { hint } : {}), modelInvocable: parsed.data["disable-model-invocation"] !== true, source, folder });
+    found.set(name, { name, description, ...(hint ? { hint } : {}), length: text.length, modelInvocable: parsed.data["disable-model-invocation"] !== true, source, folder });
   }
 };
 
@@ -224,7 +226,7 @@ export const projectContext = async (root: string, home: string = os.homedir()):
   return {
     instructions,
     skills: skills.map((s) => {
-      return { name: s.name, description: s.description, ...(s.hint ? { hint: s.hint } : {}), modelInvocable: s.modelInvocable, source: s.source };
+      return { name: s.name, description: s.description, ...(s.hint ? { hint: s.hint } : {}), length: s.length, modelInvocable: s.modelInvocable, source: s.source };
     }),
     skipped,
   };
@@ -252,6 +254,23 @@ export const contextPrompt = (context: ProjectContext): string => {
 
 const homeOf = (ctx: ToolContext): string => {
   return ctx.home ?? os.homedir();
+};
+
+// The skill's instructions with the arguments filled in, or with `file`, a file from inside its folder.
+const loadSkill = async (skill: FoundSkill, a: Record<string, unknown>): Promise<string> => {
+  const name = skill.name;
+  if (typeof a.file === "string" && a.file !== "") {
+    // Only inside the skill's own folder, however the path is written (or linked).
+    const file = await resolveInside(skill.folder, a.file).catch(() => {
+      throw new Error(`"${a.file as string}" is not inside the folder of the skill "${name}"`);
+    });
+    return truncate(await readSmall(file, MAX_FILE_BYTES));
+  }
+  const parsed = parseFrontMatter(await readSmall(path.join(skill.folder, "SKILL.md"), MAX_SKILL_BYTES));
+  const given = typeof a.arguments === "string" ? a.arguments.trim() : "";
+  const body = (parsed?.body ?? "").trim();
+  const filled = body.includes("$ARGUMENTS") ? body.replaceAll("$ARGUMENTS", given) : given ? `${body}\n\nARGUMENTS: ${given}` : body;
+  return truncate(`Skill "${name}" (folder: ${skill.folder}; read its other files with the skill tool's file argument)\n\n${filled}`);
 };
 
 const skillTool: ToolSpec = {
@@ -289,18 +308,29 @@ const skillTool: ToolSpec = {
     if (!skill.modelInvocable) {
       throw new Error(`the skill "${name}" is started by the person, not by you`);
     }
-    if (typeof a.file === "string" && a.file !== "") {
-      // Only inside the skill's own folder, however the path is written (or linked).
-      const file = await resolveInside(skill.folder, a.file).catch(() => {
-        throw new Error(`"${a.file as string}" is not inside the folder of the skill "${name}"`);
-      });
-      return truncate(await readSmall(file, MAX_FILE_BYTES));
+    return loadSkill(skill, a);
+  },
+};
+
+// Not offered to the model: the person started this skill (with / in the page), so one the model may not start can run too.
+const startSkillTool: ToolSpec = {
+  def: { type: "function", function: { name: "start_skill", description: "A skill the person started.", parameters: { type: "object", properties: { name: { type: "string" }, arguments: { type: "string" } }, required: ["name"] } } },
+  needsApproval: false,
+  group: "device",
+  level: "read",
+  hidden: true,
+  describe: (a) => {
+    return `start skill ${show(a.name)}`;
+  },
+  async run(a, ctx) {
+    const name = str(a, "name");
+    const skill = (await discoverSkills(ctx.cwd, homeOf(ctx))).skills.find((s) => {
+      return s.name === name;
+    });
+    if (!skill) {
+      throw new Error(`there is no skill named "${name}"`);
     }
-    const parsed = parseFrontMatter(await readSmall(path.join(skill.folder, "SKILL.md"), MAX_SKILL_BYTES));
-    const given = typeof a.arguments === "string" ? a.arguments.trim() : "";
-    const body = (parsed?.body ?? "").trim();
-    const filled = body.includes("$ARGUMENTS") ? body.replaceAll("$ARGUMENTS", given) : given ? `${body}\n\nARGUMENTS: ${given}` : body;
-    return truncate(`Skill "${name}" (folder: ${skill.folder}; read its other files with the skill tool's file argument)\n\n${filled}`);
+    return loadSkill(skill, { name, arguments: a.arguments });
   },
 };
 
@@ -319,4 +349,4 @@ const projectContextTool: ToolSpec = {
   },
 };
 
-export const skillTools: ToolSpec[] = [skillTool, projectContextTool];
+export const skillTools: ToolSpec[] = [skillTool, startSkillTool, projectContextTool];

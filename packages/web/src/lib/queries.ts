@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "./api";
-import type { Catalogue, ClaudeStatus, ConversationUsage, NodeRecord, SessionInfo, SettingsReport, UsageSummary } from "./types";
+import type { Catalogue, ClaudeStatus, ConversationUsage, NodeRecord, SessionInfo, SettingsReport, SkillsFolder, UsageSummary } from "./types";
 
 // Every model on every device, and whether Claude is reachable. Refreshed so a device that connects shows up.
 export const useCatalogue = () => {
@@ -21,6 +21,18 @@ export const useClaudeStatus = () => {
       return api<ClaudeStatus>("/claude/usage");
     },
     refetchInterval: 30_000,
+  });
+};
+
+// The skills each device finds in each project folder, or in one folder.
+export const useSkills = (folder?: { device: string; root: string }) => {
+  const query = folder ? `?device=${encodeURIComponent(folder.device)}&root=${encodeURIComponent(folder.root)}` : "";
+  return useQuery({
+    queryKey: ["skills", folder?.device ?? "", folder?.root ?? ""],
+    queryFn: () => {
+      return api<SkillsFolder[]>(`/skills${query}`);
+    },
+    staleTime: 30_000,
   });
 };
 

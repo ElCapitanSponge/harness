@@ -56,6 +56,13 @@ const sessions = new Sessions({
     const result = await relay.callTool(device, root, "project_context", {}, { session });
     return result.ok ? JSON.parse(result.output) as ProjectContext : undefined;
   },
+  startSkill: async (device, root, session, name, args) => {
+    const result = await relay.callTool(device, root, "start_skill", { name, arguments: args }, { session });
+    if (!result.ok) {
+      throw new Error(result.output);
+    }
+    return result.output;
+  },
   // Auto mode: models to prefer or avoid (names, best first), and devices it must never choose.
   autoPrefs: {
     prefer: parseList(process.env.HARNESS_AUTO_PREFER),

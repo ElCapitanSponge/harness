@@ -7,7 +7,8 @@ import { EffortPicker } from "@/components/EffortPicker";
 import { ModelPicker } from "@/components/ModelPicker";
 import { Select } from "@/components/ui/fields";
 import { api } from "@/lib/api";
-import { useCreateConversation, useNodes } from "@/lib/queries";
+import { useCreateConversation, useNodes, useSkills } from "@/lib/queries";
+import { parseSlash } from "@/lib/skills";
 import { cn } from "@/lib/utils";
 
 type Mode = "chat" | "code";
@@ -34,6 +35,8 @@ export const NewConversation = () => {
   const roots = chosenDevice?.roots ?? [];
   const chosenRoot = roots.includes(root) ? root : (roots[0] ?? "");
   const selected = model || "auto";
+  const found = useSkills(mode === "code" && chosenDevice && chosenRoot ? { device: chosenDevice.nodeId, root: chosenRoot } : undefined);
+  const skills = mode === "code" ? found.data?.[0]?.skills : undefined;
   const ready = selected !== "" && (mode === "chat" || (chosenDevice !== undefined && chosenRoot !== ""));
 
   const start = async (text: string): Promise<void> => {
@@ -41,7 +44,7 @@ export const NewConversation = () => {
     setSending(true);
     try {
       const info = await create.mutateAsync({ model: selected, ...(mode === "code" ? { device: chosenDevice?.nodeId, root: chosenRoot } : {}) });
-      await api<unknown>(`/sessions/${info.id}/messages`, { method: "POST", body: { text, ...(effortLevels(selected).length > 0 && effort ? { effort } : {}) } });
+      await api<unknown>(`/sessions/${info.id}/messages`, { method: "POST", body: { text, ...(parseSlash(text, skills ?? []) ? { skill: parseSlash(text, skills ?? []) } : {}), ...(effortLevels(selected).length > 0 && effort ? { effort } : {}) } });
       await navigate(`/c/${info.id}`);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not start.");
@@ -106,7 +109,7 @@ export const NewConversation = () => {
         {error ? <p className="text-destructive" role="alert">{error}</p> : null}
       </div>
 
-      <Composer draftKey="new" busy={sending} disabled={!ready} placeholder={mode === "code" ? "Describe what to do in this folder" : "Message"} onSend={(text) => {
+      <Composer draftKey="new" busy={sending} disabled={!ready} skills={skills} placeholder={mode === "code" ? "Describe what to do in this folder" : "Message"} onSend={(text) => {
         void start(text);
       }}
       />

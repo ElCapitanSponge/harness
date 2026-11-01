@@ -119,3 +119,56 @@ describe("Composer markdown", () => {
     expect(boxOf()).toHaveValue("**bold** and `code`");
   });
 });
+
+describe("Composer slash menu", () => {
+  const skills = [
+    { name: "tdd", description: "Test-driven development.", hint: "[what]", length: 100, modelInvocable: true, source: "user" },
+    { name: "triage", description: "Sort the issues.", length: 100, modelInvocable: false, source: "user" },
+  ];
+
+  it("lists the skills when a message starts with /, filters as it is typed, and completes the name with the keyboard", async () => {
+    const onSend = vi.fn();
+    render(<Composer draftKey="s" busy={false} skills={skills} onSend={onSend} />);
+    const box = screen.getByLabelText("Message");
+    await userEvent.type(box, "/");
+    const list = screen.getByRole("listbox", { name: "Skills" });
+    expect(within(list).getAllByRole("option")).toHaveLength(2);
+    expect(within(list).getByText("[what]")).toBeInTheDocument();
+
+    await userEvent.type(box, "tr");
+    expect(within(list).getAllByRole("option")).toHaveLength(1);
+    await userEvent.type(box, "{Enter}");
+    // Enter completed the name instead of sending.
+    expect(onSend).not.toHaveBeenCalled();
+    expect(box).toHaveValue("/triage ");
+    expect(screen.queryByRole("listbox")).not.toBeInTheDocument();
+
+    await userEvent.type(box, "now{Enter}");
+    expect(onSend).toHaveBeenCalledWith("/triage now");
+  });
+
+  it("moves with the arrows, picks with a click, and closes with Escape", async () => {
+    render(<Composer draftKey="s" busy={false} skills={skills} onSend={vi.fn()} />);
+    const box = screen.getByLabelText("Message");
+    await userEvent.type(box, "/{ArrowDown}");
+    expect(screen.getAllByRole("option")[1]).toHaveAttribute("aria-selected", "true");
+    await userEvent.type(box, "{Escape}");
+    expect(screen.queryByRole("listbox")).not.toBeInTheDocument();
+
+    await userEvent.clear(box);
+    await userEvent.type(box, "/");
+    await userEvent.click(screen.getByRole("option", { name: /tdd/ }));
+    expect(box).toHaveValue("/tdd ");
+  });
+
+  it("shows nothing without skills, or when the slash is not at the start", async () => {
+    const first = render(<Composer draftKey="s" busy={false} onSend={vi.fn()} />);
+    await userEvent.type(screen.getByLabelText("Message"), "/");
+    expect(screen.queryByRole("listbox")).not.toBeInTheDocument();
+    first.unmount();
+    localStorage.clear();
+    render(<Composer draftKey="t" busy={false} skills={skills} onSend={vi.fn()} />);
+    await userEvent.type(screen.getByLabelText("Message"), "see /");
+    expect(screen.queryByRole("listbox")).not.toBeInTheDocument();
+  });
+});

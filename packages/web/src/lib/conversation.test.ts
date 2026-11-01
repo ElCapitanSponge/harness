@@ -115,3 +115,11 @@ describe("progress before the first word", () => {
     expect(failed.items.at(-1)).toMatchObject({ tone: "error", text: "no device" });
   });
 });
+
+describe("a skill the person started", () => {
+  it("shows as its own item after what the person typed", () => {
+    const state = run([{ type: "user", text: "/tdd parser" }, { type: "skill", name: "tdd", arguments: "parser", text: "Write the test." }, { type: "text", text: "ok" }, { type: "done", stopped: false }]);
+    expect(kinds(state)).toEqual(["user", "skill", "assistant"]);
+    expect(state.items[1]).toMatchObject({ kind: "skill", name: "tdd", arguments: "parser", text: "Write the test." });
+  });
+});
