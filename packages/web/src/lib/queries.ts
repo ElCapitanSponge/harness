@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "./api";
-import type { Catalogue, ClaudeStatus, ConversationUsage, NodeRecord, SessionInfo, SettingsReport, SkillsFolder, UsageSummary } from "./types";
+import type { Catalogue, ClaudeStatus, ConversationUsage, NodeRecord, BackgroundTask, SessionInfo, SettingsReport, SkillsFolder, UsageSummary } from "./types";
 
 // Every model on every device, and whether Claude is reachable. Refreshed so a device that connects shows up.
 export const useCatalogue = () => {
@@ -33,6 +33,18 @@ export const useSkills = (folder?: { device: string; root: string }) => {
       return api<SkillsFolder[]>(`/skills${query}`);
     },
     staleTime: 30_000,
+  });
+};
+
+// The commands a coding session has running in the background, while the panel is open.
+export const useSessionTasks = (id: string, enabled: boolean) => {
+  return useQuery({
+    queryKey: ["tasks", id],
+    queryFn: () => {
+      return api<BackgroundTask[]>(`/sessions/${id}/tasks`);
+    },
+    enabled,
+    refetchInterval: 3000,
   });
 };
 

@@ -1,8 +1,9 @@
-import { ArrowLeft, Check, CircleDot, FilePlus2, FileText, ListChecks, Circle, X } from "lucide-react";
+import { ArrowLeft, Check, CircleDot, FilePlus2, FileText, ListChecks, Circle, Terminal, X } from "lucide-react";
 import { useState } from "react";
 import type { PlanStep } from "@harness/core";
 import { Button } from "@/components/ui/button";
 import type { ChangedFile } from "@/lib/conversation";
+import type { BackgroundTask } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 const STATUS: Record<PlanStep["status"], { icon: typeof Check; label: string }> = {
@@ -66,6 +67,25 @@ const FileDetail = ({ file, onBack }: { file: ChangedFile; onBack: () => void })
   );
 };
 
+const Tasks = ({ tasks }: { tasks: BackgroundTask[] }) => {
+  return (
+    <section aria-label="Background tasks" className="grid gap-1">
+      <h3 className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground"><Terminal className="size-4" /> Running in the background</h3>
+      <ul className="grid gap-1">
+        {tasks.map((t) => {
+          return (
+            <li key={t.id} className="flex items-center gap-2 text-[13px]">
+              <span className={cn("size-2 shrink-0 rounded-full", t.status === "running" ? "bg-success" : "bg-muted-foreground")} aria-hidden />
+              <span className="min-w-0 flex-1 break-all font-mono text-xs">{t.command}</span>
+              <span className="shrink-0 text-xs text-muted-foreground">{t.status === "running" ? "running" : t.status === "stopped" ? "stopped" : `exited${t.code === undefined || t.code === null ? "" : ` (${String(t.code)})`}`}</span>
+            </li>
+          );
+        })}
+      </ul>
+    </section>
+  );
+};
+
 const Counts = ({ file }: { file: ChangedFile }) => {
   return (
     <span className="shrink-0 font-mono text-xs">
@@ -76,7 +96,7 @@ const Counts = ({ file }: { file: ChangedFile }) => {
 
 // What the session has done, beside the conversation: the model's plan and the files it changed or created, newest first. A file
 // opens to its diff. At phone width it is a drawer over the conversation.
-export const SidePanel = ({ changes, plan, onClose }: { changes: ChangedFile[]; plan: PlanStep[]; onClose: () => void }) => {
+export const SidePanel = ({ changes, plan, tasks = [], onClose }: { changes: ChangedFile[]; plan: PlanStep[]; tasks?: BackgroundTask[]; onClose: () => void }) => {
   const [openPath, setOpenPath] = useState<string | undefined>();
   const open = changes.find((f) => {
     return f.path === openPath;
@@ -99,6 +119,7 @@ export const SidePanel = ({ changes, plan, onClose }: { changes: ChangedFile[]; 
           : (
               <>
                 {plan.length > 0 ? <Plan steps={plan} /> : null}
+                {tasks.length > 0 ? <Tasks tasks={tasks} /> : null}
                 <section aria-label="Changed files" className="grid gap-1">
                   <h3 className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground"><FileText className="size-4" /> Files</h3>
                   {changes.length === 0 ? <p className="text-[13px] text-muted-foreground">No file has been changed yet.</p> : null}

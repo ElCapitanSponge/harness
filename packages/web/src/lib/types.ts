@@ -41,6 +41,15 @@ export interface ParsedImport {
   split: boolean;
 }
 
+// A command a coding session started in the background on its device.
+export interface BackgroundTask {
+  id: string;
+  command: string;
+  status: "running" | "exited" | "stopped";
+  code?: number | null;
+  startedAt: number;
+}
+
 export type CatalogueState = "loaded" | "loads-on-use" | "cannot-load" | "busy";
 
 export interface CatalogueEntry {

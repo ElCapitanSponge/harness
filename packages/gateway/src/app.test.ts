@@ -486,3 +486,30 @@ describe("importing and exporting conversations", () => {
     expect((await post(build(), "/sessions/import", { turns: [] })).status).toBe(400);
   });
 });
+
+describe("background tasks of a session", () => {
+  it("lists what the device says the session has running, nothing for a chat, and stops them when the session is deleted", async () => {
+    registry.upsert(beat({ roots: ["proj"], allowedTools: ["read_file"] }));
+    const app = build();
+    const code = await (await app.request("/sessions", json({ model: "qwen", device: "pc", root: "proj" }))).json() as { id: string };
+    relay.callTool.mockResolvedValue({ ok: true, output: JSON.stringify([{ id: "t1", command: "pnpm dev", status: "running", startedAt: 1 }]) });
+    expect(await (await app.request(`/sessions/${code.id}/tasks`)).json()).toEqual([{ id: "t1", command: "pnpm dev", status: "running", startedAt: 1 }]);
+    expect(relay.callTool).toHaveBeenCalledWith("pc", "proj", "tasks_list", {}, expect.objectContaining({ session: code.id }));
+
+    const chat = await (await app.request("/sessions", json({ model: "qwen" }))).json() as { id: string };
+    expect(await (await app.request(`/sessions/${chat.id}/tasks`)).json()).toEqual([]);
+    expect((await app.request("/sessions/nope/tasks")).status).toBe(404);
+
+    relay.callTool.mockClear();
+    expect((await app.request(`/sessions/${code.id}`, { method: "DELETE" })).status).toBe(200);
+    expect(relay.callTool).toHaveBeenCalledWith("pc", "proj", "tasks_stop_all", {}, expect.objectContaining({ session: code.id }));
+  });
+
+  it("answers with no tasks when the device cannot be reached", async () => {
+    registry.upsert(beat({ roots: ["proj"], allowedTools: ["read_file"] }));
+    const app = build();
+    const code = await (await app.request("/sessions", json({ model: "qwen", device: "pc", root: "proj" }))).json() as { id: string };
+    relay.callTool.mockRejectedValue(new Error("not connected"));
+    expect(await (await app.request(`/sessions/${code.id}/tasks`)).json()).toEqual([]);
+  });
+});

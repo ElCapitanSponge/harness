@@ -45,3 +45,18 @@ describe("Side panel", () => {
     expect(onClose).toHaveBeenCalled();
   });
 });
+
+describe("Side panel background tasks", () => {
+  it("lists the commands running in the background with their state", () => {
+    render(<SidePanel changes={[]} plan={[]} tasks={[{ id: "t1", command: "pnpm dev", status: "running", startedAt: 1 }, { id: "t2", command: "pnpm build", status: "exited", code: 2, startedAt: 2 }, { id: "t3", command: "node x", status: "stopped", startedAt: 3 }]} onClose={vi.fn()} />);
+    const list = within(screen.getByRole("region", { name: "Background tasks" })).getAllByRole("listitem");
+    expect(list.map((li) => {
+      return li.textContent;
+    })).toEqual(["pnpm devrunning", "pnpm buildexited (2)", "node xstopped"]);
+  });
+
+  it("has no tasks section when there are none", () => {
+    render(<SidePanel changes={[]} plan={[]} onClose={vi.fn()} />);
+    expect(screen.queryByRole("region", { name: "Background tasks" })).not.toBeInTheDocument();
+  });
+});

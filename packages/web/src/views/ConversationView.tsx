@@ -12,7 +12,7 @@ import { SidePanel } from "@/components/SidePanel";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/fields";
 import { useConversation } from "@/lib/useConversation";
-import { useSessions, useSkills } from "@/lib/queries";
+import { useSessions, useSessionTasks, useSkills } from "@/lib/queries";
 import { parseSlash } from "@/lib/skills";
 
 const Conversation = ({ id }: { id: string }) => {
@@ -29,6 +29,7 @@ const Conversation = ({ id }: { id: string }) => {
   const folder = useSkills(info?.kind === "code" ? { device: info.device, root: info.root } : undefined);
   const skills = info?.kind === "code" ? folder.data?.[0]?.skills : undefined;
   const [panel, setPanel] = useState(false);
+  const tasks = useSessionTasks(id, panel && info?.kind === "code");
   const scroller = useRef<HTMLDivElement>(null);
   const stuck = useRef(true);
   const last = state.items.at(-1);
@@ -141,7 +142,7 @@ const Conversation = ({ id }: { id: string }) => {
       </div>
       {panel && info?.kind === "code"
         ? (
-            <SidePanel changes={state.changes} plan={state.plan} onClose={() => {
+            <SidePanel changes={state.changes} plan={state.plan} tasks={tasks.data} onClose={() => {
               setPanel(false);
             }}
             />

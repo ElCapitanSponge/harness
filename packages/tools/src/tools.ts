@@ -5,6 +5,8 @@ import { fileChange } from "./diff.js";
 import { num, resolveInside, show, str, truncate, type ToolLevel, type ToolSpec } from "./helpers.js";
 import { runShell } from "./shell.js";
 import { skillTools } from "./skills.js";
+import { startTask } from "./tasks.js";
+import { taskTools } from "./task-tools.js";
 import { webFetch } from "./web-fetch.js";
 
 export { resolveInside, truncate, type ToolContext, type ToolSpec } from "./helpers.js";
@@ -246,24 +248,28 @@ const runCommand: ToolSpec = {
     type: "function",
     function: {
       name: "run_command",
-      description: "Run a command in this device's own shell (PowerShell on Windows, bash or zsh on macOS and Linux) in the working directory, and return its output and exit code. Use it for anything the other tools do not cover: build, test, install packages, move or delete files, git, curl, and any other program installed here. Times out after 120 seconds.",
-      parameters: { type: "object", properties: { command: { type: "string", description: "The command line, in the syntax of the shell named in the instructions" } }, required: ["command"] },
+      description: "Run a command in this device's own shell (PowerShell on Windows, bash or zsh on macOS and Linux) in the working directory, and return its output and exit code. Use it for anything the other tools do not cover: build, test, install packages, move or delete files, git, curl, and any other program installed here. Times out after 120 seconds, unless background is true: then it keeps running and you get a task id straight away (read it with task_output, stop it with task_stop), for a dev server or a long build.",
+      parameters: { type: "object", properties: { command: { type: "string", description: "The command line, in the syntax of the shell named in the instructions" }, background: { type: "boolean", description: "Keep it running in the background and return a task id" } }, required: ["command"] },
     },
   },
   needsApproval: true,
   group: "device",
   level: "change",
   describe: (a) => {
-    return `run: ${show(a.command)}`;
+    return `${a.background === true ? "run in the background" : "run"}: ${show(a.command)}`;
   },
   async run(a, ctx) {
+    if (a.background === true) {
+      const task = startTask(ctx.session ?? "local", str(a, "command"), ctx.cwd);
+      return `started task ${task.id} in the background: ${task.command}\nRead its output with task_output and stop it with task_stop.`;
+    }
     const result = await runShell(str(a, "command"), ctx.cwd);
     const note = result.timedOut ? "\n[timed out after 120 seconds]" : "";
     return `exit code ${String(result.code)}\n${truncate(result.output.trim() || "(no output)")}${note}`;
   },
 };
 
-export const tools: ToolSpec[] = [readFile, listDir, grep, writeFile, editFile, runCommand, webFetch, ...devTools, ...skillTools];
+export const tools: ToolSpec[] = [readFile, listDir, grep, writeFile, editFile, runCommand, webFetch, ...devTools, ...skillTools, ...taskTools];
 
 // The names of the tools a device offers: each group is off, read-only, or able to change things.
 export const toolNamesFor = (device: ToolLevel | "off", remote: ToolLevel | "off"): string[] => {
