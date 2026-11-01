@@ -89,7 +89,7 @@ describe("a chat", () => {
     expect(chat.info().deviceConnected).toBe(true);
   });
 
-  it("may use a Claude model, which a coding session may not", () => {
+  it("may use a Claude model, in a chat or a coding session", () => {
     const { sessions, registry } = setup();
     expect(() => {
       return sessions.create({ model: "claude:sonnet" });
@@ -97,7 +97,7 @@ describe("a chat", () => {
     registry.upsert({ nodeId: "pc", kind: "local", busy: false, models: [], roots: ["proj"], allowedTools: ["read_file"] } satisfies Heartbeat);
     expect(() => {
       return sessions.create({ model: "claude:sonnet", device: "pc", root: "proj" });
-    }).toThrow("Claude models cannot drive a coding session");
+    }).not.toThrow();
   });
 
   it("refuses a device without a root and a root without a device", () => {

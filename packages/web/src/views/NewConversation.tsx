@@ -2,6 +2,8 @@ import { Code2, MessageSquare } from "lucide-react";
 import { useState } from "react";
 import { useNavigate } from "react-router";
 import { Composer } from "@/components/Composer";
+import { effortLevels, type Effort } from "@harness/core/effort";
+import { EffortPicker } from "@/components/EffortPicker";
 import { ModelPicker, useModels } from "@/components/ModelPicker";
 import { Select } from "@/components/ui/fields";
 import { api } from "@/lib/api";
@@ -21,7 +23,8 @@ export const NewConversation = () => {
   const [root, setRoot] = useState("");
   const [error, setError] = useState("");
   const [sending, setSending] = useState(false);
-  const { firstUsable } = useModels(mode === "code");
+  const [effort, setEffort] = useState<Effort | undefined>(undefined);
+  const { firstUsable } = useModels();
 
   const devices = (nodes.data ?? []).filter((n) => {
     return (n.roots?.length ?? 0) > 0;
@@ -32,15 +35,14 @@ export const NewConversation = () => {
   const roots = chosenDevice?.roots ?? [];
   const chosenRoot = roots.includes(root) ? root : (roots[0] ?? "");
   const selected = model || firstUsable;
-  const claude = selected.startsWith("claude");
-  const ready = selected !== "" && (mode === "chat" || (chosenDevice !== undefined && chosenRoot !== "" && !claude));
+  const ready = selected !== "" && (mode === "chat" || (chosenDevice !== undefined && chosenRoot !== ""));
 
   const start = async (text: string): Promise<void> => {
     setError("");
     setSending(true);
     try {
       const info = await create.mutateAsync({ model: selected, ...(mode === "code" ? { device: chosenDevice?.nodeId, root: chosenRoot } : {}) });
-      await api<unknown>(`/sessions/${info.id}/messages`, { method: "POST", body: { text } });
+      await api<unknown>(`/sessions/${info.id}/messages`, { method: "POST", body: { text, ...(effortLevels(selected).length > 0 && effort ? { effort } : {}) } });
       await navigate(`/c/${info.id}`);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not start.");
@@ -75,7 +77,8 @@ export const NewConversation = () => {
         </div>
 
         <div className="grid w-full max-w-xl gap-2 sm:grid-cols-2">
-          <ModelPicker value={selected} onChange={setModel} excludeClaude={mode === "code"} className={mode === "chat" ? "sm:col-span-2" : ""} />
+          <ModelPicker value={selected} onChange={setModel} className={mode === "chat" ? "sm:col-span-2" : ""} />
+          <EffortPicker className="sm:col-span-2" model={selected} value={effort} onChange={setEffort} />
           {mode === "code"
             ? (
                 <>

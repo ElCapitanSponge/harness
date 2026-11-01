@@ -13,6 +13,7 @@
     "types": ["vite/client"],
     "paths": {
       "@harness/core": ["../core/src/index.ts"],
+      "@harness/core/effort": ["../core/src/effort.ts"],
       "@/*": ["./src/*"]
     }
   },

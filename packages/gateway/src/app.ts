@@ -207,7 +207,7 @@ export const createApp = ({ registry, apiKey, relay, sessions, ledger, claude = 
       return c.json({ error: flattenError(parsed.error) }, 400);
     }
     try {
-      session.send(parsed.data.text, parsed.data.model);
+      session.send(parsed.data.text, parsed.data.model, parsed.data.effort);
     } catch (err) {
       return c.json({ error: { message: (err as Error).message } }, 409);
     }
@@ -343,19 +343,13 @@ export const createApp = ({ registry, apiKey, relay, sessions, ledger, claude = 
     const req = parsed.data;
 
     if (isClaudeModel(req.model)) {
-      if (req.tools?.length) {
-        return c.json(
-          { error: { message: "Claude models do not take client-side tools through the gateway; run `harness code -m claude:<alias>` to use Claude Code locally" } },
-          400,
-        );
-      }
       if (!registry.live().some((n) => {
         return n.claude;
       })) {
         return c.json({ error: { message: "no connected device is logged in to Claude. Turn Claude on for a device where `claude` is logged in (Devices page, or CLAUDE_ENABLED=1)" } }, 503);
       }
       try {
-        const { result, device } = await askClaude({ registry, relay, state: claude }, req.model, req.messages, JSON.stringify(req));
+        const { result, device } = await askClaude({ registry, relay, state: claude }, req.model, req.messages, { body: JSON.stringify(req) });
         if (req.stream) {
           return new Response(toSse(result), { headers: { "content-type": "text/event-stream", "x-harness-node": device } });
         }

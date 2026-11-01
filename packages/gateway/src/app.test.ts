@@ -337,12 +337,15 @@ describe("chat: Claude routing", () => {
     expect(text).toContain("data: [DONE]");
   });
 
-  it("refuses client-side tools with a pointer to harness code", async () => {
-    const tools = [{ type: "function", function: { name: "t" } }];
+  it("passes the tools on, and returns the tool calls Claude asks for in the standard form", async () => {
+    const tools = [{ type: "function", function: { name: "read_file" } }];
+    relay.callClaude.mockResolvedValue({ ok: true, output: JSON.stringify({ text: "", model: "claude", toolCalls: [{ id: "call_1", type: "function", function: { name: "read_file", arguments: "{}" } }] }) });
     const res = await build().request("/v1/chat/completions", json(chat({ model: "claude", tools })));
-    expect(res.status).toBe(400);
-    expect(JSON.stringify(await res.json())).toContain("harness code");
-    expect(relay.callClaude).not.toHaveBeenCalled();
+    expect(res.status).toBe(200);
+    expect(JSON.parse(relay.callClaude.mock.calls[0]?.[1] as string)).toMatchObject({ tools });
+    const body = (await res.json()) as { choices: { finish_reason: string; message: { tool_calls: { id: string }[] } }[] };
+    expect(body.choices[0]?.finish_reason).toBe("tool_calls");
+    expect(body.choices[0]?.message.tool_calls[0]?.id).toBe("call_1");
   });
 
   it("returns 502 with the reason when Claude fails on the device", async () => {

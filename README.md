@@ -118,7 +118,7 @@ harness code -d anakin -r proj "why does the build fail?"
 harness tool anakin proj read_file '{"path":"package.json"}'   # run one tool, for debugging
 ```
 
-Changes ask `[y/N/a]` here too (`-y` approves everything for the session; unanswered approvals count as no after five minutes). Claude models cannot drive these sessions yet.
+Changes ask `[y/N/a]` here too (`-y` approves everything for the session; unanswered approvals count as no after five minutes). Claude models can drive them through the gateway (see [docs/claude.md](docs/claude.md)); `harness code -m claude` here launches Claude Code locally instead.
 
 ### Loading models on another device
 

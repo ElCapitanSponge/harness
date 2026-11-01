@@ -88,19 +88,18 @@ describe("changing the model inside one conversation", () => {
     })).toEqual(["gemma", "gemma", "qwen"]);
   });
 
-  it("lets a coding session change between local models, but not to Claude, and keeps the old model on a refusal", async () => {
+  it("lets a coding session change between local models and Claude, with the same tools offered to each", async () => {
     const { seen, complete } = modelFake();
     const sessions = new Sessions({ registry: pool(), relay: { callTool: vi.fn() }, complete });
     const code = sessions.create({ model: "qwen", device: "anakin", root: "proj" });
     await say(code, "look", "tiny");
     expect(code.model).toBe("tiny");
-    expect(() => {
-      code.send("now with Claude", "claude");
-    }).toThrow("Claude models cannot drive a coding session");
-    expect(code.model).toBe("tiny");
-    expect(code.busy).toBe(false);
-    await say(code, "go on");
-    expect(seen.at(-1)?.model).toBe("tiny");
+    await say(code, "now with Claude", "claude");
+    expect(code.model).toBe("claude");
+    await say(code, "and back", "qwen");
+    expect(seen.map((s) => {
+      return s.model;
+    })).toEqual(["tiny", "claude", "qwen"]);
   });
 
   it("says in words, before calling the model, when the conversation cannot fit the one chosen", async () => {
@@ -178,8 +177,8 @@ describe("the message route with a model", () => {
     });
 
     const code = sessions.create({ model: "qwen", device: "anakin", root: "proj" });
-    const refused = await app.request(`/sessions/${code.id}/messages`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ text: "hi", model: "claude" }) });
-    expect(refused.status).toBe(409);
-    expect(((await refused.json()) as { error: { message: string } }).error.message).toContain("cannot drive a coding session");
+    const toClaude = await app.request(`/sessions/${code.id}/messages`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ text: "hi", model: "claude" }) });
+    expect(toClaude.status).toBe(202);
+    expect(((await toClaude.json()) as { model: string }).model).toBe("claude");
   });
 });

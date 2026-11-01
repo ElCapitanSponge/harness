@@ -3,6 +3,7 @@ import { expect, fn, userEvent, within } from "storybook/test";
 import type { Seed } from "../../.storybook/preview";
 import type { Catalogue, ConversationUsage, SessionInfo } from "@/lib/types";
 import { ContextMeter } from "./ContextMeter";
+import { EffortPicker } from "./EffortPicker";
 import { ConversationActions } from "./ConversationActions";
 import { ModelPicker } from "./ModelPicker";
 
@@ -38,14 +39,39 @@ export const Models: StoryObj = {
   },
 };
 
-export const ModelsForCoding: StoryObj = {
+export const ClaudeIsAChoiceForCodingToo: StoryObj = {
   parameters: seed([[["catalogue"], catalogue]]),
   render: () => {
-    return <div className="max-w-sm"><ModelPicker value="" onChange={fn()} excludeClaude /></div>;
+    return <div className="max-w-sm"><ModelPicker value="claude:sonnet" onChange={fn()} /></div>;
   },
   play: async ({ canvasElement }) => {
-    // A coding session cannot use Claude, so its models are listed but cannot be picked.
-    await expect(within(canvasElement).getByRole("option", { name: "claude:sonnet" })).toBeDisabled();
+    // Claude is listed in every kind of conversation, coding included, and can be picked.
+    await expect(within(canvasElement).getByRole("option", { name: "claude:sonnet" })).toBeEnabled();
+  },
+};
+
+export const EffortForModelsThatTakeIt: StoryObj = {
+  render: () => {
+    return (
+      <div className="grid max-w-sm gap-2">
+        <EffortPicker model="claude:sonnet" value="high" onChange={fn()} />
+        <EffortPicker model="google/gpt-oss-20b" value={undefined} onChange={fn()} />
+        <EffortPicker model="qwen3-coder-30b" value={undefined} onChange={fn()} />
+      </div>
+    );
+  },
+  play: async ({ canvasElement }) => {
+    const pickers = within(canvasElement).getAllByRole("combobox", { name: "Effort" });
+    // Claude has five levels, gpt-oss three, and a model that cannot be told shows no control at all.
+    await expect(pickers).toHaveLength(2);
+    const [claude, gptOss] = pickers;
+    if (!claude || !gptOss) {
+      throw new Error("expected two effort pickers");
+    }
+    await expect(within(claude).getAllByRole("option")).toHaveLength(6);
+    await expect(within(gptOss).getAllByRole("option")).toHaveLength(4);
+    await expect(claude).toHaveValue("high");
+    await expect(gptOss).toHaveValue("default");
   },
 };
 

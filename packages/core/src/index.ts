@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { EFFORTS } from "./effort.js";
+import { EFFORTS, type Effort } from "./effort.js";
 
 export { EFFORTS, effortFor, effortLevels, type Effort } from "./effort.js";
 
@@ -297,6 +297,8 @@ export interface SessionInfo {
   title: string;
   // Whether the device is connected now. A session whose device is away can be read but not continued.
   deviceConnected: boolean;
+  // How hard the model is asked to think, when one has been chosen (and the model can be told).
+  effort?: Effort;
 }
 
 // Loading or unloading a model on a device.
