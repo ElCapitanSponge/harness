@@ -44,6 +44,10 @@ _Avoid_: Claude API, Claude proxy
 The gateway loading or unloading a model on a device's own model server. Each device decides whether to allow it, and refuses while busy.
 _Avoid_: remote management, orchestration
 
+**Device settings**:
+What a device lets the gateway do: its project roots, allowed tools, model control, Claude and game programs. The device keeps them in a local file, an environment variable on the device overrides and locks one, and the page can change the rest only if the device was started with `REMOTE_CONFIG=1`.
+_Avoid_: remote config (as a noun), profile
+
 ## Coding sessions
 
 **Coding session**:

@@ -3,6 +3,7 @@ import { WebSocket } from "ws";
 import type { ChatServer } from "./chat.js";
 import type { ClaudeServer } from "./claude.js";
 import type { ModelServer } from "./models.js";
+import type { SettingsServer } from "./settingsserver.js";
 import type { ToolServer } from "./toolserver.js";
 
 export const tunnelUrl = (gatewayUrl: string): string => {
@@ -20,6 +21,7 @@ interface TunnelOptions {
   tools?: ToolServer;
   claude?: ClaudeServer;
   models?: ModelServer;
+  settings?: SettingsServer;
   intervalMs?: number;
   minRetryMs?: number;
   maxRetryMs?: number;
@@ -78,7 +80,9 @@ export const connectTunnel = (opts: TunnelOptions): { close(): void } => {
           socket.send(JSON.stringify(msg));
         }
       };
-      if (parsed.data.type === "tool") {
+      if (parsed.data.type === "settings") {
+        void opts.settings?.handle(parsed.data, send);
+      } else if (parsed.data.type === "tool") {
         void opts.tools?.handle(parsed.data, send);
       } else if (parsed.data.type === "claude") {
         void opts.claude?.handle(parsed.data, send);

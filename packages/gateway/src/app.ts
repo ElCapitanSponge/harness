@@ -14,7 +14,7 @@ import { WEB_PAGE } from "./web.js";
 export interface AppDeps {
   registry: Registry;
   apiKey?: string;
-  relay: Pick<Relay, "request" | "callTool" | "callClaude" | "callModel">;
+  relay: Pick<Relay, "request" | "callTool" | "callClaude" | "callModel" | "callSettings">;
   sessions: Sessions;
   loader: Pick<ModelLoader, "ensure">;
 }
@@ -96,6 +96,39 @@ export const createApp = ({ registry, apiKey, relay, sessions, loader }: AppDeps
   };
   app.post("/devices/:nodeId/models/load", modelControl("load"));
   app.post("/devices/:nodeId/models/unload", modelControl("unload"));
+
+  // A device's effective settings, and changes to them. The device checks it was started to accept changes.
+  const deviceSettings = (op: "get" | "set") => {
+    return async (c: Context) => {
+      const nodeId = c.req.param("nodeId") ?? "";
+      if (!registry.live().some((n) => {
+        return n.nodeId === nodeId;
+      })) {
+        return c.json({ error: { message: `device "${nodeId}" is not connected` } }, 404);
+      }
+      let patch: Record<string, unknown> | undefined;
+      if (op === "set") {
+        const body: unknown = await c.req.json().catch(() => {
+          return undefined;
+        });
+        if (typeof body !== "object" || body === null || Array.isArray(body)) {
+          return c.json({ error: { message: "send an object of settings to change" } }, 400);
+        }
+        patch = body as Record<string, unknown>;
+      }
+      try {
+        const result = await relay.callSettings(nodeId, op, patch);
+        if (!result.ok) {
+          return c.json({ error: { message: result.output } }, 422);
+        }
+        return c.json(JSON.parse(result.output));
+      } catch (err) {
+        return c.json({ error: { message: `device ${nodeId} failed: ${(err as Error).message}` } }, 502);
+      }
+    };
+  };
+  app.get("/devices/:nodeId/settings", deviceSettings("get"));
+  app.put("/devices/:nodeId/settings", deviceSettings("set"));
 
   // Coding sessions: the model loop runs here, tool calls run on the chosen device.
   app.get("/sessions", (c) => {

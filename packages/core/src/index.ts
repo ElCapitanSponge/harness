@@ -83,6 +83,8 @@ export const Heartbeat = z.object({
   claude: z.boolean().optional(),
   // True if this device lets the gateway load and unload models in its LM Studio.
   modelControl: z.boolean().optional(),
+  // True if this device accepts settings changes from the gateway (started with REMOTE_CONFIG=1).
+  remoteConfig: z.boolean().optional(),
   platform: z.string().optional(),
 });
 export type Heartbeat = z.infer<typeof Heartbeat>;
@@ -117,6 +119,8 @@ export const RelayRequest = z.discriminatedUnion("type", [
     model: z.string().optional(),
     contextLength: z.number().optional(),
   }),
+  // Read or change this device's settings. `settings` is a partial DeviceSettings for `set`.
+  z.object({ type: z.literal("settings"), id: z.string(), op: z.enum(["get", "set"]), settings: z.record(z.string(), z.unknown()).optional() }),
   z.object({
     type: z.literal("tool"),
     id: z.string(),
@@ -127,6 +131,27 @@ export const RelayRequest = z.discriminatedUnion("type", [
   }),
 ]);
 export type RelayRequest = z.infer<typeof RelayRequest>;
+
+// What a device lets the gateway change. Each can also be fixed by an environment variable on the device.
+export const DeviceSettings = z.object({
+  projectRoots: z.record(z.string().min(1), z.string().min(1)),
+  allowedTools: z.array(z.string().min(1)),
+  modelControl: z.boolean(),
+  claude: z.boolean(),
+  gameProcesses: z.array(z.string().min(1)),
+});
+export type DeviceSettings = z.infer<typeof DeviceSettings>;
+export const SETTING_KEYS = ["projectRoots", "allowedTools", "modelControl", "claude", "gameProcesses"] as const;
+export type SettingKey = (typeof SETTING_KEYS)[number];
+
+// A device's answer about its settings: what is in effect, where each value came from, which are fixed by an
+// environment variable, and whether it accepts changes at all.
+export interface SettingsReport {
+  settings: DeviceSettings;
+  sources: Record<SettingKey, "default" | "file" | "env">;
+  locked: SettingKey[];
+  remoteConfig: boolean;
+}
 
 // Body of a request to run one tool on a device, and the device's answer.
 export const DeviceToolRequest = z.object({ root: z.string(), name: z.string(), args: z.record(z.string(), z.unknown()).default({}) });
