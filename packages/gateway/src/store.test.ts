@@ -143,6 +143,22 @@ describe("sessions that survive a restart", () => {
     expect(back.busy).toBe(false);
   });
 
+  it("does not write a session back after it was deleted mid-turn", async () => {
+    const registry = new Registry();
+    registry.upsert(beat());
+    let release!: (m: ChatMessage) => void;
+    const sessions = boot(registry, [], () => new Promise((resolve) => (release = resolve)));
+    const s = sessions.create({ model: "qwen", device: "pc", root: "proj" });
+    await until(async () => (await loadStored(dir)).length === 1);
+    s.send("hi");
+
+    expect(await sessions.delete(s.id)).toBe(true);
+    release({ role: "assistant", content: "late" });
+    await until(() => !s.busy);
+    await new Promise((r) => setTimeout(r, 100));
+    expect(await loadStored(dir)).toEqual([]);
+  });
+
   it("deletes a session from memory and from disk", async () => {
     const registry = new Registry();
     registry.upsert(beat());

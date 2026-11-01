@@ -64,6 +64,7 @@ export class Relay {
   request(nodeId: string, body: string, signal?: AbortSignal): Promise<Response> {
     const sender = this.senders.get(nodeId);
     if (!sender) return Promise.reject(new Error("not connected"));
+    if (signal?.aborted) return Promise.reject(new Error("cancelled"));
     const id = randomUUID();
     const encoder = new TextEncoder();
 

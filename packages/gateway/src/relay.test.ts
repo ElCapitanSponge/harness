@@ -154,6 +154,13 @@ describe("Relay", () => {
     expect(sent.at(-1)).toEqual({ type: "cancel", id });
   });
 
+  it("does not send a request whose signal is already cancelled", async () => {
+    const abort = new AbortController();
+    abort.abort();
+    await expect(relay.request("pc", "{}", abort.signal)).rejects.toThrow("cancelled");
+    expect(sent).toEqual([]);
+  });
+
   it("ignores replies for unknown ids and replies from a different device", async () => {
     relay.attach("laptop", { send: () => undefined });
     const pending = relay.request("pc", "{}");
