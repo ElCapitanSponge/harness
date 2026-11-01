@@ -10,7 +10,7 @@ import { createIdleUnloader } from "./idle.js";
 import { createModelServer } from "./models.js";
 import { detectPrograms } from "./programs.js";
 import { createSettings } from "./settings.js";
-import { tools as toolSpecs } from "@harness/tools";
+import { shellName, tools as toolSpecs } from "@harness/tools";
 import { createSettingsServer } from "./settingsserver.js";
 import { createToolServer } from "./toolserver.js";
 import { connectTunnel } from "./tunnel.js";
@@ -73,6 +73,7 @@ const collect = async (): Promise<Heartbeat> => {
     allowedTools: tools.allowedNames(),
     readOnlyRoots: tools.readOnlyNames(),
     platform: process.platform,
+    shell: shellName(),
     claude: current.claude,
     modelControl: current.modelControl,
     remoteConfig: config.remoteConfig,

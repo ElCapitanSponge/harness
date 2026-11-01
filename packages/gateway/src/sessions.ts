@@ -612,10 +612,12 @@ export class Sessions {
     let prompt = CHAT_PROMPT;
     if (device !== "") {
       this.resolve(device, root);
-      const platform = this.opts.registry.live().find((n) => {
+      const node = this.opts.registry.live().find((n) => {
         return n.nodeId === device;
-      })?.platform;
-      prompt = systemPrompt(root, platform);
+      });
+      const platform = node?.platform;
+      const shell = node?.shell;
+      prompt = systemPrompt(root, platform, shell);
       if (this.opts.registry.live().find((n) => {
         return n.nodeId === device;
       })?.readOnlyRoots?.includes(root)) {

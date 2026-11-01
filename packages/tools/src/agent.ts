@@ -1,4 +1,5 @@
 import { textOf, type ChatMessage, type StageName, type Tool, type ToolCall } from "@harness/core";
+import { shellAdvice } from "./shell.js";
 import { tools as allTools, type ToolContext, type ToolSpec } from "./tools.js";
 
 export type Approver = (tool: string, summary: string) => Promise<boolean>;
@@ -42,10 +43,12 @@ export interface AgentDeps {
   maxSteps?: number;
 }
 
-export const systemPrompt = (cwd: string, platform: string = process.platform): string => {
+export const systemPrompt = (cwd: string, platform: string = process.platform, shell?: string): string => {
   return [
     `You are a coding assistant working in the directory ${cwd} on ${platform}.`,
     "Use the tools to look at and change files in that directory. All paths are relative to it.",
+    shellAdvice(platform, shell),
+    "When no dedicated tool does what you need, do it with a command: building, testing, installing packages, moving or deleting files, git, and any program installed on the machine.",
     "Read a file before editing it, make the smallest change that does the job, and run the project's tests or build when you can.",
     "When you have finished, reply briefly with what you did.",
   ].join("\n");

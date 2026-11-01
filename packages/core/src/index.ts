@@ -93,6 +93,8 @@ export const Heartbeat = z.object({
   // Names of the roots above that can only be read, so a coding session is not offered tools that change them.
   readOnlyRoots: z.array(z.string()).optional(),
   platform: z.string().optional(),
+  // The shell the device runs commands in (PowerShell, cmd, bash, zsh or sh), so a model is told which syntax to write.
+  shell: z.string().optional(),
 });
 export type Heartbeat = z.infer<typeof Heartbeat>;
 

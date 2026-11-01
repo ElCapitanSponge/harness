@@ -1,8 +1,8 @@
-import { spawn } from "node:child_process";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { devTools } from "./dev-tools.js";
-import { MAX_OUTPUT, num, resolveInside, show, str, truncate, type ToolLevel, type ToolSpec } from "./helpers.js";
+import { num, resolveInside, show, str, truncate, type ToolLevel, type ToolSpec } from "./helpers.js";
+import { runShell } from "./shell.js";
 import { webFetch } from "./web-fetch.js";
 
 export { resolveInside, truncate, type ToolContext, type ToolSpec } from "./helpers.js";
@@ -230,8 +230,8 @@ const runCommand: ToolSpec = {
     type: "function",
     function: {
       name: "run_command",
-      description: "Run a shell command in the working directory and return its combined output and exit code. Times out after 120 seconds.",
-      parameters: { type: "object", properties: { command: { type: "string" } }, required: ["command"] },
+      description: "Run a command in this device's own shell (PowerShell on Windows, bash or zsh on macOS and Linux) in the working directory, and return its output and exit code. Use it for anything the other tools do not cover: build, test, install packages, move or delete files, git, curl, and any other program installed here. Times out after 120 seconds.",
+      parameters: { type: "object", properties: { command: { type: "string", description: "The command line, in the syntax of the shell named in the instructions" } }, required: ["command"] },
     },
   },
   needsApproval: true,
@@ -240,32 +240,10 @@ const runCommand: ToolSpec = {
   describe: (a) => {
     return `run: ${show(a.command)}`;
   },
-  run(a, ctx) {
-    const command = str(a, "command");
-    return new Promise((resolve) => {
-      const child = spawn(command, { shell: true, cwd: ctx.cwd });
-      let out = "";
-      const add = (d: Buffer) => {
-        out += d.toString();
-        if (out.length > MAX_OUTPUT * 4) {
-          out = out.slice(-MAX_OUTPUT * 2);
-        }
-      };
-      child.stdout.on("data", add);
-      child.stderr.on("data", add);
-      const timer = setTimeout(() => {
-        child.kill();
-        out += "\n[timed out after 120 seconds]";
-      }, 120_000);
-      child.on("error", (err) => {
-        clearTimeout(timer);
-        resolve(`failed to start: ${err.message}`);
-      });
-      child.on("close", (code) => {
-        clearTimeout(timer);
-        resolve(`exit code ${code}\n${truncate(out.trim() || "(no output)")}`);
-      });
-    });
+  async run(a, ctx) {
+    const result = await runShell(str(a, "command"), ctx.cwd);
+    const note = result.timedOut ? "\n[timed out after 120 seconds]" : "";
+    return `exit code ${String(result.code)}\n${truncate(result.output.trim() || "(no output)")}${note}`;
   },
 };
 
