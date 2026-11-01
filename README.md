@@ -184,7 +184,7 @@ If no idle node matches, the gateway returns `503`.
 | `HARNESS_DATA_DIR` | gateway | `~/.harness/gateway`. Where coding sessions are saved (`/data` in the container, so mount a volume there) |
 | `GATEWAY_URL` | node agent, CLI | `http://localhost:8787` |
 | `INFERENCE_URL` | node agent | `http://localhost:1234` (LM Studio) |
-| `NODE_ID` | node agent | machine hostname |
+| `NODE_ID` | node agent | machine hostname. Must be unique: two devices with the same id keep replacing each other's connection |
 | `GAME_PROCESSES` | node agent | comma-separated executable names; a match marks the node busy |
 | `ALLOW_MODEL_CONTROL` | node agent | unset. Set to `1` to let the gateway load and unload models in this device's LM Studio (refused while the device is busy) |
 | `PROJECT_ROOTS` | node agent | unset (no tools exposed). `name=path` entries for folders coding sessions may use |
