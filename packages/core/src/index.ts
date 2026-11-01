@@ -1,7 +1,10 @@
 import { z } from "zod";
 
+// Validation errors in the shape the API returns: { formErrors, fieldErrors }. Re-exported so other packages need no direct zod dependency.
+export const flattenError = z.flattenError;
+
 // OpenAI-style message content: a string, null (assistant turns that only call tools), or text parts.
-export const ContentPart = z.object({ type: z.string(), text: z.string().optional() }).passthrough();
+export const ContentPart = z.looseObject({ type: z.string(), text: z.string().optional() });
 export const MessageContent = z.union([z.string(), z.array(ContentPart), z.null()]);
 
 export const ToolCall = z.object({
@@ -11,15 +14,13 @@ export const ToolCall = z.object({
 });
 export type ToolCall = z.infer<typeof ToolCall>;
 
-export const ChatMessage = z
-  .object({
-    role: z.enum(["system", "user", "assistant", "tool"]),
-    content: MessageContent.optional(),
-    tool_calls: z.array(ToolCall).optional(),
-    tool_call_id: z.string().optional(),
-    name: z.string().optional(),
-  })
-  .passthrough();
+export const ChatMessage = z.looseObject({
+  role: z.enum(["system", "user", "assistant", "tool"]),
+  content: MessageContent.optional(),
+  tool_calls: z.array(ToolCall).optional(),
+  tool_call_id: z.string().optional(),
+  name: z.string().optional(),
+});
 export type ChatMessage = z.infer<typeof ChatMessage>;
 
 export const Tool = z.object({
@@ -33,17 +34,15 @@ export const Tool = z.object({
 export type Tool = z.infer<typeof Tool>;
 
 // Unknown fields pass through to the model server untouched.
-export const ChatRequest = z
-  .object({
-    model: z.string(),
-    messages: z.array(ChatMessage).min(1),
-    temperature: z.number().optional(),
-    max_tokens: z.number().int().positive().optional(),
-    stream: z.boolean().optional(),
-    tools: z.array(Tool).optional(),
-    tool_choice: z.unknown().optional(),
-  })
-  .passthrough();
+export const ChatRequest = z.looseObject({
+  model: z.string(),
+  messages: z.array(ChatMessage).min(1),
+  temperature: z.number().optional(),
+  max_tokens: z.number().int().positive().optional(),
+  stream: z.boolean().optional(),
+  tools: z.array(Tool).optional(),
+  tool_choice: z.unknown().optional(),
+});
 export type ChatRequest = z.infer<typeof ChatRequest>;
 
 export function textOf(content: ChatMessage["content"]): string {
