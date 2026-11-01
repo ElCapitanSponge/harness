@@ -198,6 +198,16 @@ The owner relies heavily on Matt Pocock's skills and wants them to work in the h
 - **Honest limits for small local models.** Skills are written for large models. A 9B model may follow a short skill well and a long, multi-step one badly, and loading a long skill uses a large share of a small context window. The interface shows how much of the context a skill used (F), and the skills page notes which skills are long.
 - **Sub-agents** are child conversations with their own context and a chosen subset of tools, run on any device and model in the pool, shown nested under their parent. This also lets a small main model hand a long task to a bigger one.
 
+### O. Storage
+
+The gateway keeps what it must remember (conversations, the usage ledger, device settings, and later the skills library) in **SQLite on its data volume**, which on TrueNAS is a folder on the storage pool, so it survives restarts and image updates. The owner has confirmed this is available. Today sessions are loose JSON files; they are imported into the database once and then retired.
+
+- **Which SQLite.** Node's built-in `node:sqlite` (checked on Node 22.16: SQLite 3.49, write-ahead logging and strict tables work). It is marked experimental, so it prints a warning at start and its interface could change; the alternative, `better-sqlite3`, needs a native build in the image and on every developer machine. The decision is recorded in [ADR 0007](../adr/0007-sqlite-on-the-data-volume.md).
+- **What it gives.** One file to back up (copy it while the gateway is stopped, or use SQLite's own backup), queries for the conversation list, search and the usage totals, and safe writes without the queueing the JSON files needed.
+- **Events are append-only.** A conversation is a sequence of events that are only ever added, each with an increasing number. That is already how the interface follows a conversation (resume from event N).
+
+**Future work: local first.** Because events are append-only and numbered, a client could keep its own copy of the conversations it has seen (in the browser, or in the desktop app, #49) and ask the gateway only for events after the last one it holds. That gives instant start-up, reading while offline, and drafts that survive anything. Writing while offline, and merging if two devices write to one conversation, is the harder half and is not planned. The shape of the tables should not rule it out: stable ids that clients can make, a per-conversation event number, and no deleting history in place.
+
 ### I. Documentation
 
 Reorganise `docs/` so it reads well on GitHub, can be copied into the GitHub wiki, and can feed an Astro site later (Starlight). Every page has front matter (`title`, `description`, `sidebar.order`) and uses relative links with no GitHub-only features.
@@ -242,23 +252,31 @@ I documentation: structure first, then a page with every feature
 #28 to #31 (panels, plan, tasks, images) land inside D's layout
 ```
 
-| Letter | Ticket |
+On 2026-11-01 the tickets were consolidated from 27 open to 15, because a long list hides what to do next. The work is in two milestones: **Daily driver** (what it takes to use the harness every day at home) and **Later**.
+
+| Daily driver | Ticket | Covers |
+|---|---|---|
+| A | #34 Model catalogue and on-demand loading | built (PR #57) |
+| B | #35 Edit node settings from the web page | |
+| C | #36 Conversations that survive refresh | stored in SQLite (section 4.O) |
+| D | #37 Application shell | sidebar, header, thread, model picker, composer (was #37 and #38) |
+| E | #39 Immediate progress feedback | |
+| F | #40 Context and usage | per-model context, usage totals, Claude plan and local fallback (was #26, #27 and #40) |
+| G | #41 Work on the files of the device you browse from | |
+| side panel | #28 Session side panel | changed files, plan, background tasks, images (was #28 to #31) |
+| I | #43 Documentation | structure, guides, reference and link check (was #43, #44 and #14) |
+| N | #53 Skills | discovery, slash menu, sub-agents, asking questions (was #53 to #55) |
+| Standards | done | strict lint (#46), TypeScript 7 (PR #47) |
+
+| Later | Ticket |
 |---|---|
-| A | #34 Model catalogue and on-demand loading |
-| B | #35 Edit node settings from the web page |
-| C | #36 Conversations that survive refresh |
-| D | #37 Front-end package and application shell, #38 Model picker and composer |
-| E | #39 Immediate progress feedback |
-| F | #40 Context and usage panels (with #26 and #27) |
-| G | #41 Work on the files of the device you browse from |
-| H | not planned (#42 closed) |
 | J | #48 Users and sign-in for the family |
 | K | #49 The desktop app |
 | L | #50 Permission modes and approval cards |
 | M | #51 Multi-model modes |
-| N | #53 Skills and project instructions, #54 Skills in the interface, #55 Sub-agents and asking questions |
-| I | #43 Documentation structure, #44 Reference documentation and link check |
-| Standards | #46 Strict ESLint for the whole repository (comes before the shell, #37) |
+| H | not planned (#42 closed) |
+
+Closed as done: #1, #2, #7 and #15 (the gateway is deployed and in use).
 
 The epic is #33.
 
