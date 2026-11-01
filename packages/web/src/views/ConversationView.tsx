@@ -1,0 +1,94 @@
+import { Code2, MessageSquare } from "lucide-react";
+import { useEffect, useRef } from "react";
+import { useNavigate, useParams } from "react-router";
+import { Composer } from "@/components/Composer";
+import { ConversationActions } from "@/components/ConversationActions";
+import { Message, Waiting } from "@/components/Messages";
+import { Badge } from "@/components/ui/fields";
+import { useConversation } from "@/lib/useConversation";
+import { useSessions } from "@/lib/queries";
+
+const Conversation = ({ id }: { id: string }) => {
+  const navigate = useNavigate();
+  const sessions = useSessions();
+  const { state, send, cancel, answer } = useConversation(id);
+  const info = sessions.data?.find((s) => {
+    return s.id === id;
+  });
+  const scroller = useRef<HTMLDivElement>(null);
+  const stuck = useRef(true);
+  const last = state.items.at(-1);
+  const model = info?.model ?? "";
+
+  // Keep the newest words in view, unless the reader has scrolled up to read.
+  useEffect(() => {
+    const el = scroller.current;
+    if (el && stuck.current) {
+      el.scrollTop = el.scrollHeight;
+    }
+  }, [state.items, state.busy]);
+
+  const waiting = state.busy && (last === undefined || last.kind === "user" || last.kind === "tool");
+  const offline = info?.kind === "code" && !info.deviceConnected;
+
+  return (
+    <div className="flex min-h-0 flex-1 flex-col">
+      <header className="flex items-center gap-2 border-b bg-card px-4 py-2">
+        {info?.kind === "code" ? <Code2 className="size-4 text-muted-foreground" /> : <MessageSquare className="size-4 text-muted-foreground" />}
+        <h1 className="min-w-0 flex-1 truncate text-base font-semibold">{info ? (info.title || "New conversation") : "Conversation"}</h1>
+        {info ? <Badge tone="brand">{info.model}</Badge> : null}
+        {info?.kind === "code" ? <Badge tone={info.deviceConnected ? "neutral" : "warning"}>{info.device}:{info.root}{info.deviceConnected ? "" : " offline"}</Badge> : null}
+        {info
+          ? (
+              <ConversationActions info={info} onDeleted={() => {
+                void navigate("/");
+              }}
+              />
+            )
+          : null}
+      </header>
+
+      <div
+        ref={scroller}
+        className="flex-1 overflow-y-auto"
+        onScroll={(ev) => {
+          const el = ev.currentTarget;
+          stuck.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
+        }}
+      >
+        <div className="mx-auto grid max-w-3xl gap-4 px-4 py-6">
+          {state.items.map((item) => {
+            return (
+              <Message key={item.id} item={item} model={model} onAnswer={(approvalId, approve, always) => {
+                void answer(approvalId, approve, always);
+              }}
+              />
+            );
+          })}
+          {waiting ? <Waiting model={model || "the model"} /> : null}
+          {sessions.isSuccess && !info ? <p className="text-center text-muted-foreground">This conversation no longer exists.</p> : null}
+        </div>
+      </div>
+
+      {offline ? <p className="mx-auto w-full max-w-3xl px-4 pb-2 text-[13px] text-muted-foreground">The device {info.device} is offline, so this conversation is read-only until it reconnects.</p> : null}
+      <Composer
+        draftKey={id}
+        busy={state.busy}
+        disabled={!info || offline}
+        onSend={(text) => {
+          stuck.current = true;
+          void send(text);
+        }}
+        onStop={() => {
+          void cancel();
+        }}
+      />
+    </div>
+  );
+};
+
+// Keyed by id so moving between conversations starts each with its own state and draft.
+export const ConversationView = () => {
+  const { id } = useParams();
+  return id ? <Conversation key={id} id={id} /> : null;
+};

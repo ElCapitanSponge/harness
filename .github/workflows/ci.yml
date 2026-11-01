@@ -47,6 +47,7 @@ jobs:
           done
           status() { curl -s -o /dev/null -w '%{http_code}' "$@"; }
           [ "$(status http://127.0.0.1:8787/)" = 200 ] || { docker logs gw; exit 1; }
+          curl -fsS http://127.0.0.1:8787/ | grep -q '/assets/' || { echo "the image does not serve the built web app"; exit 1; }
           [ "$(status http://127.0.0.1:8787/v1/models)" = 401 ] || { echo "models answered without a key"; exit 1; }
           [ "$(status -H 'authorization: Bearer ci-key' http://127.0.0.1:8787/v1/models)" = 200 ] || { echo "models rejected the right key"; exit 1; }
           [ "$(status -H 'Connection: Upgrade' -H 'Upgrade: websocket' -H 'Sec-WebSocket-Version: 13' -H 'Sec-WebSocket-Key: x3JJHMbDL1EzLkh9GBhXDw==' http://127.0.0.1:8787/tunnel)" = 401 ] || { echo "tunnel accepted a connection without a key"; exit 1; }

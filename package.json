@@ -7,14 +7,16 @@
     "node": ">=22"
   },
   "scripts": {
-    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p packages/web/tsconfig.json",
     "lint": "oxlint && eslint .",
     "test": "vitest run",
     "test:watch": "vitest",
     "harness": "tsx --env-file-if-exists=.env packages/cli/src/bin.ts",
     "bench": "tsx scripts/bench.ts",
     "gateway": "pnpm --filter @harness/gateway start",
-    "agent": "pnpm --filter @harness/node-agent start"
+    "agent": "pnpm --filter @harness/node-agent start",
+    "web": "pnpm --filter @harness/web dev",
+    "build:web": "pnpm --filter @harness/web build"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
@@ -23,6 +25,7 @@
     "@types/ws": "^8.18.2",
     "@typescript/native": "npm:typescript@^7.0.2",
     "eslint": "^10.14.0",
+    "eslint-plugin-react-hooks": "^7.1.1",
     "globals": "^17.13.0",
     "jiti": "^2.7.0",
     "oxlint": "^1.90.0",

@@ -2,6 +2,7 @@ import js from "@eslint/js";
 import stylistic from "@stylistic/eslint-plugin";
 import globals from "globals";
 import { defineConfig } from "eslint/config";
+import reactHooks from "eslint-plugin-react-hooks";
 import tseslint from "typescript-eslint";
 
 // Strict by design: every rule is an error or off, never a warning. The standards are in docs/specs/web-experience-v2.md (section 8).
@@ -49,6 +50,20 @@ export default defineConfig(
 
       // Formatting is checked by ESLint Stylistic, not a separate formatter, and long lines are the author's call.
       "@stylistic/max-len": "off",
+    },
+  },
+
+  {
+    // The web app: browser code, with the React rules (hooks and the React Compiler's checks) as errors.
+    files: ["packages/web/**/*.{ts,tsx}"],
+    extends: [reactHooks.configs.flat["recommended-latest"]],
+    languageOptions: { globals: globals.browser },
+    rules: {
+      // JSX reads better with short elements on one line; these rules would split every label and icon button.
+      "@stylistic/jsx-one-expression-per-line": "off",
+      "@stylistic/jsx-first-prop-new-line": "off",
+      "@stylistic/jsx-max-props-per-line": "off",
+      "@stylistic/multiline-ternary": "off",
     },
   },
 
