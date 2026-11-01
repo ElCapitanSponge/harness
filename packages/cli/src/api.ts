@@ -1,4 +1,4 @@
-import { authHeaders, textOf, type ChatMessage, type DeviceToolResult, type NodeRecord, type SessionEvent, type SessionInfo, type Tool } from "@harness/core";
+import { authHeaders, sseData, textOf, type ChatMessage, type DeviceToolResult, type NodeRecord, type SessionEvent, type SessionInfo, type Tool } from "@harness/core";
 
 export interface Completion {
   message: ChatMessage;
@@ -12,24 +12,7 @@ export interface ChatReply {
   node: string;
 }
 
-// Yields the `data:` payload of each server-sent event in a response body.
-export async function* sseData(body: ReadableStream<Uint8Array>): AsyncGenerator<string> {
-  const decoder = new TextDecoder();
-  let buffer = "";
-  for await (const chunk of body as unknown as AsyncIterable<Uint8Array>) {
-    buffer += decoder.decode(chunk, { stream: true });
-    const frames = buffer.split(/\r?\n\r?\n/);
-    buffer = frames.pop() ?? "";
-    for (const frame of frames) {
-      const data = frame
-        .split(/\r?\n/)
-        .filter((line) => line.startsWith("data:"))
-        .map((line) => line.slice(5).trim())
-        .join(String.fromCharCode(10));
-      if (data) yield data;
-    }
-  }
-}
+export { sseData };
 
 export class Gateway {
   constructor(

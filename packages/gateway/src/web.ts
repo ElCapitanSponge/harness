@@ -100,6 +100,8 @@ export const WEB_PAGE = String.raw`<!doctype html>
   var session = null;
   var follower = null;
   var cards = {};
+  // The model call in progress in a coding session: its thinking block and the reply being written.
+  var live = { thought: null, body: null, reply: "" };
   var nodes = [];
 
   try { key = sessionStorage.getItem("harness-key") || ""; } catch (e) {}
@@ -114,6 +116,41 @@ export const WEB_PAGE = String.raw`<!doctype html>
     $("send").hidden = !signedIn;
     if (signedIn) $("input").focus(); else $("key").focus();
   }
+
+  // A collapsible block for a model's reasoning. While it is still thinking the title counts the seconds, so a long
+  // silence reads as work in progress. Pass keepStatic for reasoning that already happened (a reopened session).
+  function makeThought(parent, before, keepStatic) {
+    var details = document.createElement("details");
+    details.className = "thought";
+    details.open = !keepStatic;
+    var title = document.createElement("summary");
+    var text = document.createElement("div");
+    details.appendChild(title);
+    details.appendChild(text);
+    parent.insertBefore(details, before || null);
+    var started = Date.now();
+    var timer = null;
+    var finished = Boolean(keepStatic);
+    function label() {
+      var seconds = Math.max(0, Math.round((Date.now() - started) / 1000));
+      title.textContent = finished ? (keepStatic ? "Thinking" : "Thought for " + seconds + "s") : "Thinking... " + seconds + "s";
+    }
+    label();
+    if (!finished) timer = setInterval(label, 1000);
+    return {
+      add: function (piece) { text.textContent += piece; },
+      set: function (full) { text.textContent = full; },
+      finish: function () {
+        if (finished) return;
+        finished = true;
+        clearInterval(timer);
+        label();
+        details.open = false;
+      }
+    };
+  }
+
+  async function addMessagePlaceholder() {}
 
   function addMessage(role, text, cls) {
     var box = document.createElement("div");
@@ -346,10 +383,31 @@ export const WEB_PAGE = String.raw`<!doctype html>
     cards[event.id] = { card: card, summary: summary };
   }
 
+  function endLive() {
+    if (live.thought) live.thought.finish();
+    live = { thought: null, body: null, reply: "" };
+  }
+
   function render(event) {
     if (event.type === "user") addMessage("you", event.text, "user");
-    else if (event.type === "text") addMessage(session.model, event.text);
-    else if (event.type === "tool") note("> " + event.summary, "tool");
+    else if (event.type === "thinking-delta") {
+      if (!live.thought) live.thought = makeThought($("log"), null, false);
+      live.thought.add(event.text);
+    } else if (event.type === "text-delta") {
+      if (live.thought) live.thought.finish();
+      if (!live.body) live.body = addMessage(session.model, "");
+      live.reply += event.text;
+      live.body.textContent = live.reply;
+    } else if (event.type === "thinking") {
+      // The finished reasoning. If it streamed in live, keep that block; if the session was reopened, show it collapsed.
+      if (live.thought) live.thought.set(event.text);
+      else makeThought($("log"), null, true).set(event.text);
+    } else if (event.type === "text") {
+      if (live.body) live.body.textContent = event.text;
+      else addMessage(session.model, event.text);
+      endLive();
+    }
+    else if (event.type === "tool") { endLive(); note("> " + event.summary, "tool"); }
     else if (event.type === "approval") approvalCard(event);
     else if (event.type === "approval-resolved") {
       var c = cards[event.id];
@@ -358,13 +416,16 @@ export const WEB_PAGE = String.raw`<!doctype html>
         c.summary.textContent += event.approved ? "  (allowed)" : "  (declined)";
       }
     } else if (event.type === "done") {
+      endLive();
       setBusy(false);
       if (event.declined) note("Declined. Nothing was changed. Tell me what to do instead.");
       else if (event.stopped) note("Stopped at the step limit. Say continue to go on.");
     } else if (event.type === "cancelled") {
+      endLive();
       setBusy(false);
       note("Cancelled.");
     } else if (event.type === "error") {
+      endLive();
       setBusy(false);
       note(event.message, "msg error");
     }
@@ -387,7 +448,7 @@ export const WEB_PAGE = String.raw`<!doctype html>
         await eachEvent(res, function (payload) {
           var event;
           try { event = JSON.parse(payload); } catch (e) { return; }
-          s.cursor++;
+          if (!/-delta$/.test(event.type)) s.cursor++;
           render(event);
         });
       } catch (err) {
@@ -486,27 +547,17 @@ export const WEB_PAGE = String.raw`<!doctype html>
       if (res.status === 401) throw new Error("The key was rejected. Sign out and enter it again.");
       if (!res.ok) throw new Error(await errorText(res));
       var thought = null;
-      var thoughtText = "";
       await readStream(res, function (piece) {
-        if (thought && !reply) thought.open = false;
+        if (thought) thought.finish();
         reply += piece;
         body.textContent = reply;
         $("log").scrollTop = $("log").scrollHeight;
       }, function (piece) {
-        if (!thought) {
-          thought = document.createElement("details");
-          thought.className = "thought";
-          thought.open = true;
-          var title = document.createElement("summary");
-          title.textContent = "Thinking";
-          thought.appendChild(title);
-          thought.appendChild(document.createElement("div"));
-          body.parentNode.insertBefore(thought, body);
-        }
-        thoughtText += piece;
-        thought.lastChild.textContent = thoughtText;
+        if (!thought) thought = makeThought(body.parentNode, body, false);
+        thought.add(piece);
         $("log").scrollTop = $("log").scrollHeight;
       });
+      if (thought) thought.finish();
       if (reply) history.push({ role: "assistant", content: reply });
       else body.textContent = "(empty reply)";
     } catch (err) {

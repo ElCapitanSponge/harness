@@ -1,5 +1,5 @@
 #!/usr/bin/env tsx
-import type { ChatMessage, SessionEvent } from "@harness/core";
+import { isLiveEvent, type ChatMessage, type SessionEvent } from "@harness/core";
 import readline from "node:readline/promises";
 import { runTurn, systemPrompt, type Approver } from "@harness/tools";
 import { Gateway } from "./api.js";
@@ -88,6 +88,7 @@ async function codeRemote(model: string, prompt: string, yes: boolean, device: s
     try {
       await gateway.sendMessage(session.id, text);
       for await (const event of gateway.sessionEvents(session.id, cursor, abort.signal)) {
+        if (isLiveEvent(event)) continue;
         cursor++;
         if (event.type === "text") console.log(event.text);
         else if (event.type === "tool") console.error(`  > ${event.summary}`);

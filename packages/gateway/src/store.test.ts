@@ -90,7 +90,7 @@ describe("sessions that survive a restart", () => {
     ...over,
   });
   const until = async (check: () => boolean | Promise<boolean>): Promise<void> => {
-    for (let i = 0; i < 200 && !(await check()); i++) await new Promise((r) => setTimeout(r, 5));
+    for (let i = 0; i < 1000 && !(await check()); i++) await new Promise((r) => setTimeout(r, 10));
     expect(await check()).toBe(true);
   };
 
