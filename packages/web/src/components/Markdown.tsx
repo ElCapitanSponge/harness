@@ -36,7 +36,7 @@ const CodeBlock = ({ children }: ComponentProps<"pre">) => {
           {copied ? "Copied" : "Copy"}
         </Button>
       </div>
-      <pre ref={ref} className="overflow-x-auto p-3 font-mono text-[13px] leading-5">{children}</pre>
+      <pre ref={ref} className="overflow-hidden whitespace-pre-wrap p-3 font-mono text-[13px] leading-5 [overflow-wrap:anywhere]">{children}</pre>
     </div>
   );
 };
