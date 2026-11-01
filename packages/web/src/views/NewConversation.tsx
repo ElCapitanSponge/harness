@@ -4,7 +4,7 @@ import { useNavigate } from "react-router";
 import { Composer } from "@/components/Composer";
 import { effortLevels, type Effort } from "@harness/core/effort";
 import { EffortPicker } from "@/components/EffortPicker";
-import { ModelPicker, useModels } from "@/components/ModelPicker";
+import { ModelPicker } from "@/components/ModelPicker";
 import { Select } from "@/components/ui/fields";
 import { api } from "@/lib/api";
 import { useCreateConversation, useNodes } from "@/lib/queries";
@@ -24,7 +24,6 @@ export const NewConversation = () => {
   const [error, setError] = useState("");
   const [sending, setSending] = useState(false);
   const [effort, setEffort] = useState<Effort | undefined>(undefined);
-  const { firstUsable } = useModels();
 
   const devices = (nodes.data ?? []).filter((n) => {
     return (n.roots?.length ?? 0) > 0;
@@ -34,7 +33,7 @@ export const NewConversation = () => {
   }) ?? devices[0];
   const roots = chosenDevice?.roots ?? [];
   const chosenRoot = roots.includes(root) ? root : (roots[0] ?? "");
-  const selected = model || firstUsable;
+  const selected = model || "auto";
   const ready = selected !== "" && (mode === "chat" || (chosenDevice !== undefined && chosenRoot !== ""));
 
   const start = async (text: string): Promise<void> => {

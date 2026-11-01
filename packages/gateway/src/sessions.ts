@@ -1,10 +1,11 @@
 import { randomUUID } from "node:crypto";
-import { effortFor, sseData, textOf, type ChatMessage, type Effort, type LiveSessionEvent, type SessionEvent, type SessionInfo, type Tool, type ToolCall } from "@harness/core";
+import { effortFor, sseData, textOf, type ChatMessage, type Effort, type NodeRecord, type LiveSessionEvent, type SessionEvent, type SessionInfo, type Tool, type ToolCall } from "@harness/core";
 import { runTurn, systemPrompt, tools as allTools, type StreamHooks, type ToolSpec } from "@harness/tools";
 import type { Registry } from "./registry.js";
 import type { Relay } from "./relay.js";
 import type { ModelLoader } from "./loader.js";
 import { isClaudeModel } from "./router.js";
+import { chooseModel, type AutoChoice, type AutoPrefs } from "./auto.js";
 import { ClaudeState, askClaude } from "./claude.js";
 import { SUMMARY_PROMPT, compacted, historyTokens, planCompaction, transcriptOf } from "./compaction.js";
 import { estimateTokens, type UsageLedger } from "./ledger.js";
@@ -215,6 +216,8 @@ interface SessionDeps {
   contextLength?(model: string): number | undefined;
   // Every model call is recorded here, for the usage page and the context meter.
   ledger?: UsageLedger;
+  // What Auto mode needs to choose: the devices, Claude's state, and the owner's preferences.
+  pool?(): { nodes: NodeRecord[]; claude: { available: boolean; device?: string; limitedUntil?: number }; prefs: AutoPrefs };
   // Compact when the context is this fraction full (0.8 is 80 percent). Zero or absent turns automatic compaction off.
   compactAt?: number;
 }
@@ -242,6 +245,8 @@ export class Session {
   compaction: { time: number; tokensAfter: number } | undefined;
   // Which model on which device made the latest call, to label the reply that follows.
   private lastRoute: { model: string; device: string } | undefined;
+  // With the model set to "auto": what was chosen for the turn, kept so the next turn can stay on it.
+  private chosen: AutoChoice | undefined;
   // The call whose size last made automatic compaction fail, so one failure does not repeat on every message.
   private compactFailedFor = 0;
 
@@ -262,8 +267,14 @@ export class Session {
     this.events = init.events ?? [];
   }
 
+  // What was picked: a model, or "auto".
   get model(): string {
     return this.current;
+  }
+
+  // The model that actually answers: the one picked, or with Auto the one chosen for this turn.
+  private get active(): string {
+    return this.current === "auto" ? (this.chosen?.model ?? this.current) : this.current;
   }
 
   // A chat has no device and no tools; a code conversation has both.
@@ -289,6 +300,7 @@ export class Session {
       title: this.title,
       deviceConnected: this.kind === "chat" || this.deps.connected(this.device),
       effort: this.effort,
+      chosen: this.current === "auto" && this.chosen ? { model: this.chosen.model, device: this.chosen.device, reason: this.chosen.reason } : undefined,
     };
   }
 
@@ -334,6 +346,8 @@ export class Session {
     }
     if (model !== undefined && model !== this.current) {
       this.current = model;
+      // Picking a model takes Auto off, and picking Auto starts its choice afresh.
+      this.chosen = undefined;
     }
     // "default" puts the model back to its own setting.
     if (effort !== undefined) {
@@ -415,7 +429,7 @@ export class Session {
     const window = this.deps.ledger?.forConversation(this.id).last?.contextLength;
     try {
       const reply = await this.deps.complete(
-        this.model,
+        this.active,
         [{ role: "system", content: SUMMARY_PROMPT }, { role: "user", content: transcriptOf(plan.older, window ? window * 2 : 48_000) }],
         [],
         abort.signal,
@@ -448,25 +462,58 @@ export class Session {
     const at = this.deps.compactAt ?? 0;
     const last = this.deps.ledger?.forConversation(this.id).last;
     // The window of the model that is about to answer, which may not be the one that answered last.
-    const window = this.deps.contextLength?.(this.model) ?? last?.contextLength;
+    const window = this.deps.contextLength?.(this.active) ?? last?.contextLength;
     if (at <= 0 || !last || !window || last.time <= this.compactFailedFor || (this.compaction && this.compaction.time >= last.time)) {
       return undefined;
     }
     // After a change of model the last call's size says nothing about the new window, so the history is measured instead.
-    const used = last.model === this.model ? last.promptTokens + last.completionTokens : historyTokens(this.history);
+    const used = last.model === this.active ? last.promptTokens + last.completionTokens : historyTokens(this.history);
     return used / window >= at ? last.time : undefined;
   }
 
   // Says so before the call, in words, when the conversation cannot fit the model that is about to answer.
   private checkFits(): void {
-    const window = this.deps.contextLength?.(this.model);
+    const window = this.deps.contextLength?.(this.active);
     const used = historyTokens(this.history);
     if (window !== undefined && used > window * 0.95) {
-      throw new Error(`This conversation is about ${String(used)} tokens, more than ${this.model} can hold (${String(window)}). Compact it, or pick a model with a larger window.`);
+      throw new Error(`This conversation is about ${String(used)} tokens, more than ${this.active} can hold (${String(window)}). Compact it, or pick a model with a larger window.`);
     }
   }
 
+  // With the model set to "auto", chooses the model for this turn from the conversation and the pool. If none can be used the turn
+  // ends at once with the reasons, and the message is not kept in the history.
+  private decide(): void {
+    if (this.current !== "auto") {
+      return;
+    }
+    const pool = this.deps.pool?.();
+    if (!pool) {
+      throw new Error("Auto mode is not set up on this gateway; pick a model");
+    }
+    const result = chooseModel({
+      tokens: historyTokens(this.history),
+      needsTools: this.kind === "code",
+      current: this.chosen?.model ?? this.lastRoute?.model,
+      ...pool,
+    });
+    if ("none" in result) {
+      throw new Error(result.none);
+    }
+    this.chosen = result.chosen;
+    this.emitLive({ type: "stage", stage: "routing", detail: result.chosen.reason });
+  }
+
   private async run(abort: AbortController, specs: ToolSpec[]): Promise<void> {
+    try {
+      this.decide();
+    } catch (err) {
+      this.history.pop();
+      this.emit({ type: "error", message: err instanceof Error ? err.message : String(err) });
+      this.abort = undefined;
+      this.updated = Date.now();
+      this.deps.persist?.(this);
+      return;
+    }
     // A failure to summarise does not stop the turn; it is tried again after the next model call, not on every message.
     const due = this.compactionDue();
     if (due !== undefined) {
@@ -485,7 +532,7 @@ export class Session {
           if (abort.signal.aborted) {
             throw new Error("cancelled");
           }
-          return this.deps.complete(this.model, messages, tools, abort.signal, {
+          return this.deps.complete(this.active, messages, tools, abort.signal, {
             thinking: (piece) => {
               this.emitLive({ type: "thinking-delta", text: piece });
             },
@@ -513,7 +560,7 @@ export class Session {
           this.emit({ type: "thinking", text: text.length > MAX_STORED_THOUGHT ? text.slice(0, MAX_STORED_THOUGHT) + "... (shortened)" : text });
         },
         onText: (text) => {
-          this.emit({ type: "text", text, model: this.lastRoute?.model ?? this.model, device: this.lastRoute?.device });
+          this.emit({ type: "text", text, model: this.lastRoute?.model ?? this.active, device: this.lastRoute?.device, ...(this.current === "auto" && this.chosen ? { reason: this.chosen.reason } : {}) });
         },
         onTool: (summary) => {
           this.emit({ type: "tool", summary });
@@ -544,13 +591,25 @@ export class Sessions {
   private deps: SessionDeps;
 
   constructor(
-    private opts: { registry: Registry; relay: Pick<Relay, "callTool">; complete: Complete; store?: SessionStore; stored?: StoredSession[]; ledger?: UsageLedger; compactAt?: number },
+    private opts: { registry: Registry; relay: Pick<Relay, "callTool">; complete: Complete; store?: SessionStore; stored?: StoredSession[]; ledger?: UsageLedger; compactAt?: number; claude?: ClaudeState; autoPrefs?: AutoPrefs },
   ) {
     this.deps = {
       relay: opts.relay,
       complete: opts.complete,
       ledger: opts.ledger,
       compactAt: opts.compactAt,
+      pool: () => {
+        const nodes = opts.registry.live();
+        const device = nodes.find((n) => {
+          return n.claude;
+        });
+        const limitedUntil = device ? opts.claude?.limitedUntil() : undefined;
+        return {
+          nodes,
+          claude: { available: device !== undefined && limitedUntil === undefined, device: device?.nodeId, limitedUntil },
+          prefs: opts.autoPrefs ?? { prefer: [], avoid: [], keepFree: [] },
+        };
+      },
       resolve: (device, root) => {
         return this.resolve(device, root);
       },

@@ -11,3 +11,15 @@ The model is chosen for each message, not once for the conversation. Next to the
 Through the API, `POST /sessions/:id/messages` takes `{ "text": "...", "model": "gemma-3-12b" }`; leave `model` out to stay on the current one.
 
 Not a council: one model answers each message. Orchestrating several models on one request is not planned.
+
+## Auto
+
+**Auto (Torii chooses)** is the first option in the model picker and what a new conversation starts on. Instead of you picking, the gateway chooses the model for each message from simple rules and says why under the reply ("Auto: qwen3-coder-30b: loaded on anakin, fits 3k tokens"). The rules are in [ADR 0010](adr/0010-auto-mode-chooses-by-rules-and-explains-itself.md); in short:
+
+- It only considers models that can hold the conversation plus a reply, and for a coding session only windows of 8,000 tokens or more.
+- It stays on the model that answered last while that still fits.
+- Otherwise it takes a local model on a connected, not busy device, one that is already loaded before one that has to be loaded, and a larger window for coding. It never loads a model on a busy device or one without model control.
+- It uses Claude when no local model has room or is ready, when the conversation is past 75 percent of the best local window, or when you put Claude first. It never uses Claude while it is limited.
+- If nothing can be used, the message is not sent and the reason is shown.
+
+Picking a model yourself takes Auto off for that message; picking Auto again turns it back on. Settings on the gateway, each a comma-separated list: `HARNESS_AUTO_PREFER` (names, best first; a name matches any model id containing it, and `claude` ranks Claude), `HARNESS_AUTO_AVOID`, and `HARNESS_AUTO_KEEP_FREE` (device names Auto never chooses).

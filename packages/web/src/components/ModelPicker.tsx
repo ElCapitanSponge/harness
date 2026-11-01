@@ -27,26 +27,27 @@ export const useModels = () => {
 };
 
 export const ModelPicker = ({ value, onChange, disabled, className }: { value: string; onChange: (id: string) => void; disabled?: boolean; className?: string }) => {
-  const { catalogue, firstUsable } = useModels();
+  const { catalogue } = useModels();
   const data = catalogue.data;
   const groups = new Map<string, CatalogueEntry[]>();
   for (const m of data?.models ?? []) {
     groups.set(m.device, [...(groups.get(m.device) ?? []), m]);
   }
   const empty = !data || (data.models.length === 0 && !data.claude.available);
-  const selected = value || firstUsable;
+  const selected = value || "auto";
 
   return (
     <Select
       aria-label="Model"
       className={className}
-      disabled={(disabled ?? false) || empty}
+      disabled={disabled ?? false}
       value={selected}
       onChange={(ev) => {
         onChange(ev.target.value);
       }}
     >
-      {empty ? <option value="">{catalogue.isPending ? "Loading models..." : "No models: connect a device"}</option> : null}
+      <option value="auto">Auto (Torii chooses)</option>
+      {empty ? <option value="" disabled>{catalogue.isPending ? "Loading models..." : "No models: connect a device"}</option> : null}
       {[...groups.entries()].map(([device, models]) => {
         return (
           <optgroup key={device} label={device}>

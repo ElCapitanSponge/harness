@@ -8,6 +8,10 @@ Pools local language models on the owner's devices, and Claude, behind one endpo
 The name of the whole system. The repository and packages are still called harness. The system is: the gateway, the node agents, the CLI and the web page.
 _Avoid_: platform, framework
 
+**Auto**:
+The model choice where Torii, not the person, picks the model for each message by fixed rules, and shows the reason with the reply. See ADR 0010.
+_Avoid_: smart routing, router
+
 **Gateway**:
 The single always-on service that every client talks to. It knows which devices are connected, routes each request, and serves the web page.
 _Avoid_: server, hub, proxy

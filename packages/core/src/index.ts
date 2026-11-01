@@ -196,7 +196,7 @@ export const SessionRename = z.object({ title: z.string().trim().min(1).max(120)
 // What happens in a coding session, in order. Sent to clients as server-sent events.
 export type SessionEvent
   = | { type: "user"; text: string }
-    | { type: "text"; text: string; model?: string; device?: string }
+    | { type: "text"; text: string; model?: string; device?: string; reason?: string }
     | { type: "thinking"; text: string }
     | { type: "tool"; summary: string }
     | { type: "approval"; id: string; tool: string; summary: string }
@@ -301,6 +301,8 @@ export interface SessionInfo {
   deviceConnected: boolean;
   // How hard the model is asked to think, when one has been chosen (and the model can be told).
   effort?: Effort;
+  // With the model set to "auto": what was chosen for the latest turn, and why.
+  chosen?: { model: string; device: string; reason: string };
 }
 
 // Loading or unloading a model on a device.
