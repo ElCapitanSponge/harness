@@ -5,6 +5,7 @@ import type { ClaudeResult } from "./claude.js";
 import { toOpenAIResponse, toSse } from "./claude.js";
 import type { Registry } from "./registry.js";
 import { CLAUDE_MODEL_IDS, isClaudeModel, pickRoute } from "./router.js";
+import { WEB_PAGE } from "./web.js";
 
 export interface AppDeps {
   registry: Registry;
@@ -15,6 +16,16 @@ export interface AppDeps {
 
 export function createApp({ registry, apiKey, claude, fetchImpl = fetch }: AppDeps): Hono {
   const app = new Hono();
+
+  // The page holds no secrets and must load before a key can be typed, so it is registered ahead of the auth middleware.
+  app.get("/", (c) =>
+    c.html(WEB_PAGE, 200, {
+      "cache-control": "no-store",
+      "x-content-type-options": "nosniff",
+      "referrer-policy": "no-referrer",
+      "content-security-policy": "default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; connect-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'",
+    }),
+  );
 
   if (apiKey) app.use("*", bearerAuth(apiKey));
 

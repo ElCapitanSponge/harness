@@ -46,6 +46,21 @@ describe("auth", () => {
   });
 });
 
+describe("web page", () => {
+  it("is served without a key so the key can be typed into it, while the API stays protected", async () => {
+    const app = build("k");
+    const res = await app.request("/");
+    expect(res.status).toBe(200);
+    expect(res.headers.get("content-type")).toContain("text/html");
+    expect(res.headers.get("content-security-policy")).toContain("connect-src 'self'");
+    expect(res.headers.get("cache-control")).toBe("no-store");
+    const html = await res.text();
+    expect(html).toContain("Harness");
+    expect(html).not.toContain("Bearer k");
+    expect((await app.request("/v1/models")).status).toBe(401);
+  });
+});
+
 describe("heartbeat and nodes", () => {
   it("registers a node that then shows up in /nodes", async () => {
     const app = build();
