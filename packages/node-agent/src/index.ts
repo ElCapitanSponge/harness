@@ -30,12 +30,12 @@ const settings = await createSettings({
   audit,
   installed,
   onChange: (next) => {
-    tools.configure({ roots: next.projectRoots, allowed: next.allowedTools });
+    tools.configure({ roots: next.projectRoots, allowed: settings.tools(), readOnly: next.readOnlyRoots });
   },
 });
 const now = settings.current();
 
-const tools = createToolServer({ roots: now.projectRoots, allowed: now.allowedTools, audit, installed });
+const tools = createToolServer({ roots: now.projectRoots, allowed: settings.tools(), readOnly: now.readOnlyRoots, audit, installed });
 
 // Models nobody has used for a while are unloaded, so the graphics card is free for whatever else this machine is doing.
 const idle = createIdleUnloader({
@@ -71,6 +71,7 @@ const collect = async (): Promise<Heartbeat> => {
     models,
     roots: tools.rootNames(),
     allowedTools: tools.allowedNames(),
+    readOnlyRoots: tools.readOnlyNames(),
     platform: process.platform,
     claude: current.claude,
     modelControl: current.modelControl,

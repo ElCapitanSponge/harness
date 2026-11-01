@@ -8,9 +8,16 @@ export interface ToolContext {
   cwd: string;
 }
 
+// Where a tool acts. "device" tools work on this machine's files and programs; "remote" tools reach out of it, to the web or GitHub.
+export type ToolGroup = "device" | "remote";
+// Whether a tool only reads or can change things. A group allowed at "read" gets its reading tools; at "change" it gets those too.
+export type ToolLevel = "read" | "change";
+
 export interface ToolSpec {
   def: Tool;
   needsApproval: boolean;
+  group: ToolGroup;
+  level: ToolLevel;
   // A program on the device the tool needs, such as gh. A tool whose program is missing is not offered to the model.
   requires?: string;
   describe(args: Args): string;

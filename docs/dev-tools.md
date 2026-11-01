@@ -1,6 +1,6 @@
 # Web and developer tools for coding sessions
 
-A device can let a coding session fetch web pages and use the developer programs a person reaches for. Every one is **off until you turn it on** for that device, on the Devices page, and every call is written to the device's own audit log. A tool whose program is not installed on the device is marked "not installed", cannot be switched on, and is never offered to the model.
+A device can let a coding session fetch web pages and use the developer programs a person reaches for. The tools come in two groups on the Devices page, each **Off, Read-only or Can change**: *tools on this device* (files, `git_read`, `git_write`, `jq`, `fzf_filter`) and *tools that reach out* (`web_fetch`, `gh_read`, `gh_write`). Reading on the device is on by default; reaching out is off until you choose it, and every call is written to the device's own audit log. A tool whose program is not installed on the device is marked "not installed", cannot be switched on, and is never offered to the model.
 
 | Tool | What it does | Asks first? |
 | --- | --- | --- |

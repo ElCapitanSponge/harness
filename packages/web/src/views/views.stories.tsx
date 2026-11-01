@@ -13,17 +13,18 @@ const node = (over: Partial<NodeRecord> & { nodeId: string }): NodeRecord => {
 
 const report = (over: Partial<SettingsReport> = {}): SettingsReport => {
   return {
-    settings: { projectRoots: { personal: "C:\\Users\\andre\\personal" }, allowedTools: ["read_file", "list_dir", "grep"], modelControl: true, claude: true, gameProcesses: ["RocketLeague.exe"], idleUnloadMinutes: 20 },
-    sources: { projectRoots: "file", allowedTools: "default", modelControl: "file", claude: "file", gameProcesses: "default", idleUnloadMinutes: "default" },
+    settings: { projectRoots: { personal: "C:\\Users\\andre\\personal", work: "C:\\Users\\andre\\work" }, readOnlyRoots: ["work"], onDeviceTools: "read", remoteTools: "off", modelControl: true, claude: true, gameProcesses: ["RocketLeague.exe"], idleUnloadMinutes: 20 },
+    sources: { projectRoots: "file", readOnlyRoots: "file", onDeviceTools: "default", remoteTools: "default", modelControl: "file", claude: "file", gameProcesses: "default", idleUnloadMinutes: "default" },
     locked: [],
     remoteConfig: true,
     tools: [
-      { name: "read_file", installed: true, asksFirst: false },
-      { name: "write_file", installed: true, asksFirst: true },
-      { name: "web_fetch", installed: true, asksFirst: true },
-      { name: "git_read", installed: true, asksFirst: false },
-      { name: "git_write", installed: true, asksFirst: true },
-      { name: "gh_read", installed: false, asksFirst: false },
+      { name: "read_file", group: "device", level: "read", installed: true, asksFirst: false },
+      { name: "write_file", group: "device", level: "change", installed: true, asksFirst: true },
+      { name: "git_read", group: "device", level: "read", installed: true, asksFirst: false },
+      { name: "git_write", group: "device", level: "change", installed: true, asksFirst: true },
+      { name: "web_fetch", group: "remote", level: "read", installed: true, asksFirst: true },
+      { name: "gh_read", group: "remote", level: "read", installed: false, asksFirst: false },
+      { name: "gh_write", group: "remote", level: "change", installed: false, asksFirst: true },
     ],
     ...over,
   };
@@ -42,14 +43,37 @@ export const DeviceThatAcceptsChanges: StoryObj = {
     const canvas = within(canvasElement);
     await expect(await canvas.findByText("This device accepts settings changes from here.")).toBeVisible();
     await expect(canvas.getByRole("button", { name: "Save settings" })).toBeEnabled();
-    await expect(canvas.getByRole("checkbox", { name: /^read_file/ })).toBeChecked();
-    await expect(canvas.getByRole("checkbox", { name: /^write_file/ })).not.toBeChecked();
-    // A tool that changes things says it asks first, and one whose program is missing says so and cannot be switched on.
+
+    // Two groups of tools, each off, read-only or able to change things.
+    const onDevice = canvas.getByRole("radiogroup", { name: "Tools on this device" });
+    const remote = canvas.getByRole("radiogroup", { name: "Tools that reach out" });
+    await expect(within(onDevice).getByRole("radio", { name: "Read-only" })).toHaveAttribute("aria-checked", "true");
+    await expect(within(remote).getByRole("radio", { name: "Off" })).toHaveAttribute("aria-checked", "true");
+
+    // A tool that changes things says it asks first, and one whose program is missing says so.
     await expect(canvas.getAllByText("asks first").length).toBeGreaterThan(0);
-    await expect(canvas.getByText("not installed")).toBeVisible();
-    await expect(canvas.getByRole("checkbox", { name: /gh_read/ })).toBeDisabled();
-    await userEvent.click(canvas.getByRole("checkbox", { name: /^write_file/ }));
-    await expect(canvas.getByRole("checkbox", { name: /^write_file/ })).toBeChecked();
+    await expect(canvas.getAllByText("not installed").length).toBeGreaterThan(0);
+    await userEvent.click(within(onDevice).getByRole("radio", { name: "Can change" }));
+    await expect(within(onDevice).getByRole("radio", { name: "Can change" })).toHaveAttribute("aria-checked", "true");
+  },
+};
+
+export const FolderThatCanOnlyBeRead: StoryObj = {
+  parameters: seed([[["nodes"], [node({ nodeId: "anakin" })]], [["settings", "anakin"], report()]]),
+  render: () => {
+    return <DevicesView />;
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    // One folder is marked read-only and the other is not, and either can be switched.
+    const work = await canvas.findByRole("switch", { name: "work is read-only" });
+    const personal = canvas.getByRole("switch", { name: "personal is read-only" });
+    await expect(work).toBeChecked();
+    await expect(personal).not.toBeChecked();
+    await userEvent.click(personal);
+    await expect(personal).toBeChecked();
+    await userEvent.click(work);
+    await expect(work).not.toBeChecked();
   },
 };
 
@@ -62,19 +86,22 @@ export const ReadOnlyDevice: StoryObj = {
     const canvas = within(canvasElement);
     await expect(await canvas.findByText(/Read-only: start its agent with REMOTE_CONFIG=1/)).toBeVisible();
     await expect(canvas.queryByRole("button", { name: "Save settings" })).toBeNull();
-    await expect(canvas.getByRole("checkbox", { name: /^read_file/ })).toBeDisabled();
+    await expect(within(canvas.getByRole("radiogroup", { name: "Tools on this device" })).getByRole("radio", { name: "Can change" })).toBeDisabled();
+    await expect(canvas.getByRole("switch", { name: "work is read-only" })).toBeDisabled();
   },
 };
 
 export const SettingFixedByTheEnvironment: StoryObj = {
-  parameters: seed([[["nodes"], [node({ nodeId: "anakin" })]], [["settings", "anakin"], report({ locked: ["claude"], sources: { projectRoots: "file", allowedTools: "default", modelControl: "file", claude: "env", gameProcesses: "default", idleUnloadMinutes: "default" } })]]),
+  parameters: seed([[["nodes"], [node({ nodeId: "anakin" })]], [["settings", "anakin"], report({ locked: ["claude", "remoteTools"], sources: { projectRoots: "file", readOnlyRoots: "file", onDeviceTools: "default", remoteTools: "env", modelControl: "file", claude: "env", gameProcesses: "default", idleUnloadMinutes: "default" } })]]),
   render: () => {
     return <DevicesView />;
   },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     await expect(await canvas.findByText(/fixed by CLAUDE_ENABLED/)).toBeVisible();
+    await expect(canvas.getByText(/fixed by ALLOW_REMOTE_TOOLS/)).toBeVisible();
     await expect(canvas.getByRole("switch", { name: "Claude" })).toBeDisabled();
+    await expect(within(canvas.getByRole("radiogroup", { name: "Tools that reach out" })).getByRole("radio", { name: "Read-only" })).toBeDisabled();
     await expect(canvas.getByRole("switch", { name: "Model control" })).toBeEnabled();
   },
 };

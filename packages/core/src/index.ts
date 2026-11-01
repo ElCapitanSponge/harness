@@ -85,6 +85,8 @@ export const Heartbeat = z.object({
   modelControl: z.boolean().optional(),
   // True if this device accepts settings changes from the gateway (started with REMOTE_CONFIG=1).
   remoteConfig: z.boolean().optional(),
+  // Names of the roots above that can only be read, so a coding session is not offered tools that change them.
+  readOnlyRoots: z.array(z.string()).optional(),
   platform: z.string().optional(),
 });
 export type Heartbeat = z.infer<typeof Heartbeat>;
@@ -133,9 +135,17 @@ export const RelayRequest = z.discriminatedUnion("type", [
 export type RelayRequest = z.infer<typeof RelayRequest>;
 
 // What a device lets the gateway change. Each can also be fixed by an environment variable on the device.
+export const ToolAccess = z.enum(["off", "read", "change"]);
+export type ToolAccess = z.infer<typeof ToolAccess>;
+
 export const DeviceSettings = z.object({
   projectRoots: z.record(z.string().min(1), z.string().min(1)),
-  allowedTools: z.array(z.string().min(1)),
+  // Names of project roots that can only be read: nothing in them can be written, changed or deleted by a session.
+  readOnlyRoots: z.array(z.string().min(1)),
+  // What coding sessions may use. "On this device" tools work on its files and programs (reading files, git, jq), "reaching out"
+  // tools go beyond it (the web, GitHub). Each is off, read-only, or able to change things.
+  onDeviceTools: ToolAccess,
+  remoteTools: ToolAccess,
   modelControl: z.boolean(),
   claude: z.boolean(),
   gameProcesses: z.array(z.string().min(1)),
@@ -143,7 +153,7 @@ export const DeviceSettings = z.object({
   idleUnloadMinutes: z.number().int().min(0).max(1440),
 });
 export type DeviceSettings = z.infer<typeof DeviceSettings>;
-export const SETTING_KEYS = ["projectRoots", "allowedTools", "modelControl", "claude", "gameProcesses", "idleUnloadMinutes"] as const;
+export const SETTING_KEYS = ["projectRoots", "readOnlyRoots", "onDeviceTools", "remoteTools", "modelControl", "claude", "gameProcesses", "idleUnloadMinutes"] as const;
 export type SettingKey = (typeof SETTING_KEYS)[number];
 
 // A device's answer about its settings: what is in effect, where each value came from, which are fixed by an
@@ -154,7 +164,7 @@ export interface SettingsReport {
   locked: SettingKey[];
   remoteConfig: boolean;
   // Every tool this device knows: whether the program it needs is installed, and whether it asks before it runs. Absent from an older agent.
-  tools?: { name: string; installed: boolean; asksFirst: boolean }[];
+  tools?: { name: string; group: "device" | "remote"; level: "read" | "change"; installed: boolean; asksFirst: boolean }[];
 }
 
 // Body of a request to run one tool on a device, and the device's answer.

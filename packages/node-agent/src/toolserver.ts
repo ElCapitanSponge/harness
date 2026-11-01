@@ -26,7 +26,7 @@ export const parseRoots = (value: string | undefined): Record<string, string> =>
 
 // Runs the tools the gateway asks for, only inside the project roots this device chose to expose and only the
 // tools in `allowed`. Anything else is refused here, whatever the gateway sends.
-export const createToolServer = (opts: { roots: Record<string, string>; allowed: string[]; audit?: (entry: AuditEntry) => void; installed?: (program: string) => boolean }) => {
+export const createToolServer = (opts: { roots: Record<string, string>; allowed: string[]; readOnly?: string[]; audit?: (entry: AuditEntry) => void; installed?: (program: string) => boolean }) => {
   // A tool whose program is not on this device is neither offered nor run.
   const usable = (name: string): boolean => {
     const program = findTool(name)?.requires;
@@ -34,12 +34,20 @@ export const createToolServer = (opts: { roots: Record<string, string>; allowed:
   };
   let roots = opts.roots;
   let allowed = new Set(opts.allowed);
+  // Roots that can only be read: a tool that could change anything there is refused, whatever the gateway sends.
+  let readOnly = new Set(opts.readOnly ?? []);
 
   return {
     // Replaces what this device exposes, for a settings change that applies without a restart.
-    configure(next: { roots: Record<string, string>; allowed: string[] }): void {
+    configure(next: { roots: Record<string, string>; allowed: string[]; readOnly?: string[] }): void {
       roots = next.roots;
       allowed = new Set(next.allowed);
+      readOnly = new Set(next.readOnly ?? []);
+    },
+    readOnlyNames: (): string[] => {
+      return [...readOnly].filter((name) => {
+        return Object.hasOwn(roots, name);
+      });
     },
     rootNames: (): string[] => {
       return Object.keys(roots);
@@ -72,6 +80,12 @@ export const createToolServer = (opts: { roots: Record<string, string>; allowed:
       }
       if (!tool || !allowed.has(msg.name)) {
         finish(false, `tool "${msg.name}" is not allowed on this device`, "refused", summary);
+        return;
+      }
+      // Running a command, writing, editing or committing could change a folder that must stay as it is, and a command cannot be
+      // fenced in, so none of them runs there.
+      if (readOnly.has(msg.root) && tool.group === "device" && tool.level === "change") {
+        finish(false, `project root "${msg.root}" is read-only on this device, so ${msg.name} is not allowed there`, "refused", summary);
         return;
       }
       if (!usable(msg.name)) {

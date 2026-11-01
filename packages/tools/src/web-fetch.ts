@@ -163,6 +163,8 @@ export const webFetch: ToolSpec = {
   },
   // A page address can carry information out (a query string with file contents in it), so each fetch is shown first.
   needsApproval: true,
+  group: "remote",
+  level: "read",
   describe: (a) => {
     return `fetch ${show(a.url)}`;
   },

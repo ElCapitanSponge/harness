@@ -42,18 +42,24 @@ describe("device settings", () => {
   it("start from safe defaults and say so", async () => {
     const { settings } = await make();
     const report = settings.report();
-    expect(report.settings).toMatchObject({ projectRoots: {}, allowedTools: ["read_file", "list_dir", "grep"], modelControl: false, claude: false });
-    expect(Object.values(report.sources)).toEqual(["default", "default", "default", "default", "default", "default"]);
+    // Reading on the device is on; reaching out, and changing anything, is off until chosen.
+    expect(report.settings).toMatchObject({ projectRoots: {}, readOnlyRoots: [], onDeviceTools: "read", remoteTools: "off", modelControl: false, claude: false, idleUnloadMinutes: 20 });
+    expect(Object.values(report.sources).every((s) => {
+      return s === "default";
+    })).toBe(true);
     expect(report.locked).toEqual([]);
+    expect(settings.tools()).toEqual(expect.arrayContaining(["read_file", "list_dir", "grep", "git_read", "jq", "fzf_filter"]));
+    expect(settings.tools()).not.toEqual(expect.arrayContaining(["write_file"]));
+    expect(settings.tools()).not.toEqual(expect.arrayContaining(["web_fetch"]));
   });
 
   it("apply live, are saved, and are read back at the next start", async () => {
     const { settings, audit, changes } = await make();
-    const result = await settings.apply({ allowedTools: ["read_file", "write_file"], modelControl: true, projectRoots: { proj: dir } });
+    const result = await settings.apply({ onDeviceTools: "change", modelControl: true, projectRoots: { proj: dir } });
     expect(result.ok).toBe(true);
-    expect(settings.current()).toMatchObject({ allowedTools: ["read_file", "write_file"], modelControl: true, projectRoots: { proj: dir } });
+    expect(settings.current()).toMatchObject({ onDeviceTools: "change", modelControl: true, projectRoots: { proj: dir } });
     expect(changes).toHaveLength(1);
-    expect(audit).toMatchObject([{ tool: "settings", outcome: "ok", summary: "changed allowedTools, modelControl, projectRoots" }]);
+    expect(audit).toMatchObject([{ tool: "settings", outcome: "ok", summary: "changed onDeviceTools, modelControl, projectRoots" }]);
 
     const restarted = (await make()).settings.report();
     expect(restarted.settings.modelControl).toBe(true);
@@ -62,9 +68,9 @@ describe("device settings", () => {
   });
 
   it("let an environment variable win and lock the setting", async () => {
-    const { settings, audit } = await make({ env: { ALLOW_MODEL_CONTROL: "0", ALLOWED_TOOLS: "grep" } });
-    expect(settings.current()).toMatchObject({ modelControl: false, allowedTools: ["grep"] });
-    expect(settings.report().locked).toEqual(["allowedTools", "modelControl"]);
+    const { settings, audit } = await make({ env: { ALLOW_MODEL_CONTROL: "0", ALLOW_REMOTE_TOOLS: "read" } });
+    expect(settings.current()).toMatchObject({ modelControl: false, remoteTools: "read" });
+    expect(settings.report().locked).toEqual(["remoteTools", "modelControl"]);
     expect(settings.report().sources.modelControl).toBe("env");
 
     const result = await settings.apply({ modelControl: true });
@@ -87,12 +93,12 @@ describe("device settings", () => {
     const { settings } = await make();
     expect(await settings.apply({ nope: 1 })).toEqual({ ok: false, error: "unknown setting \"nope\"" });
     expect(await settings.apply({ modelControl: "yes" })).toMatchObject({ ok: false, error: expect.stringContaining("modelControl is not valid") as string });
-    expect(await settings.apply({ allowedTools: ["read_file", "format_disk"] })).toEqual({ ok: false, error: "unknown tool: format_disk" });
+    expect(await settings.apply({ onDeviceTools: "everything" })).toMatchObject({ ok: false, error: expect.stringContaining("onDeviceTools is not valid") as string });
     expect(await settings.apply({ projectRoots: { gone: path.join(dir, "missing") } })).toMatchObject({ ok: false, error: expect.stringContaining("\"gone\" is not a folder") as string });
     expect(await settings.apply([])).toEqual({ ok: false, error: "settings must be an object" });
 
     // One good part and one bad part: neither is applied.
-    expect(await settings.apply({ claude: true, allowedTools: ["bad"] })).toMatchObject({ ok: false });
+    expect(await settings.apply({ claude: true, remoteTools: "sometimes" })).toMatchObject({ ok: false });
     expect(settings.current().claude).toBe(false);
   });
 
@@ -102,6 +108,68 @@ describe("device settings", () => {
     await fs.writeFile(file, JSON.stringify({ claude: "maybe", modelControl: true }));
     const { settings } = await make();
     expect(settings.current()).toMatchObject({ claude: false, modelControl: true });
+  });
+});
+
+describe("the two groups of tools", () => {
+  it("give a group its reading tools at read-only and its changing tools too at can-change", async () => {
+    const { settings } = await make();
+    await settings.apply({ onDeviceTools: "change", remoteTools: "read" });
+    const names = settings.tools();
+    expect(names).toEqual(expect.arrayContaining(["read_file", "write_file", "edit_file", "run_command", "git_read", "git_write", "web_fetch", "gh_read"]));
+    expect(names).not.toContain("gh_write");
+
+    await settings.apply({ onDeviceTools: "off", remoteTools: "change" });
+    expect(settings.tools().sort()).toEqual(["gh_read", "gh_write", "web_fetch"]);
+
+    await settings.apply({ remoteTools: "off" });
+    expect(settings.tools()).toEqual([]);
+  });
+
+  it("lists every tool with its group, level and whether it asks first, for the page", async () => {
+    const { settings } = await make();
+    const byName = Object.fromEntries((settings.report().tools ?? []).map((t) => {
+      return [t.name, t];
+    }));
+    expect(byName.read_file).toMatchObject({ group: "device", level: "read", asksFirst: false });
+    expect(byName.git_write).toMatchObject({ group: "device", level: "change", asksFirst: true });
+    expect(byName.web_fetch).toMatchObject({ group: "remote", level: "read", asksFirst: true });
+    expect(byName.gh_write).toMatchObject({ group: "remote", level: "change", asksFirst: true });
+  });
+
+  it("turn the old list from an earlier version into the levels it amounts to, in the file and in the environment", async () => {
+    await fs.writeFile(file, JSON.stringify({ allowedTools: ["read_file", "write_file", "web_fetch"] }));
+    const saved = await make();
+    expect(saved.settings.current()).toMatchObject({ onDeviceTools: "change", remoteTools: "read" });
+
+    const fromEnv = await make({ env: { ALLOWED_TOOLS: "read_file,list_dir,grep" } });
+    expect(fromEnv.settings.current()).toMatchObject({ onDeviceTools: "read", remoteTools: "off" });
+    // The list decides exactly which tools there are, and both groups are locked by it.
+    expect(fromEnv.settings.tools()).toEqual(["read_file", "list_dir", "grep"]);
+    expect(fromEnv.settings.report().locked).toEqual(expect.arrayContaining(["onDeviceTools", "remoteTools"]));
+    expect(await fromEnv.settings.apply({ onDeviceTools: "change" })).toEqual({ ok: false, error: "onDeviceTools is fixed by the ALLOWED_TOOLS environment variable on this device" });
+  });
+
+  it("still take a list of tool names in a change, as the old page and scripts send it", async () => {
+    const { settings } = await make();
+    await settings.apply({ allowedTools: ["read_file", "run_command"] });
+    expect(settings.current()).toMatchObject({ onDeviceTools: "change", remoteTools: "off" });
+  });
+});
+
+describe("folders that can only be read", () => {
+  it("are saved as names, reported, and unset again", async () => {
+    const { settings } = await make();
+    await settings.apply({ projectRoots: { a: dir, b: dir }, readOnlyRoots: ["a"] });
+    expect(settings.current().readOnlyRoots).toEqual(["a"]);
+    await settings.apply({ readOnlyRoots: [] });
+    expect(settings.current().readOnlyRoots).toEqual([]);
+  });
+
+  it("can be fixed by READ_ONLY_ROOTS", async () => {
+    const { settings } = await make({ env: { READ_ONLY_ROOTS: "a, b" } });
+    expect(settings.current().readOnlyRoots).toEqual(["a", "b"]);
+    expect(await settings.apply({ readOnlyRoots: [] })).toMatchObject({ ok: false, error: expect.stringContaining("READ_ONLY_ROOTS") as string });
   });
 });
 
