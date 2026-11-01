@@ -5,6 +5,7 @@ import type { Registry } from "./registry.js";
 import type { Relay } from "./relay.js";
 import type { ModelLoader } from "./loader.js";
 import { isClaudeModel } from "./router.js";
+import { estimateTokens, type UsageLedger } from "./ledger.js";
 import { resolveRoute } from "./routing.js";
 
 export type { SessionEvent, SessionInfo };
@@ -31,6 +32,9 @@ export interface SessionStore {
 
 // Answers one model call for a coding session by routing it through the pool, like any other chat request. It asks for a
 // stream so the caller can show the model's thinking and answer as they arrive, and returns the finished message.
+// The window assumed for Claude models, which the Claude program does not report.
+const CLAUDE_CONTEXT = 200_000;
+
 export const createCompleter = (deps: { registry: Registry; relay: Pick<Relay, "request" | "callClaude">; loader: Pick<ModelLoader, "ensure"> }): Complete => {
   return async (model, messages, tools, signal, hooks) => {
     // Claude answers through a device that is logged in to it, in one piece.
@@ -42,6 +46,7 @@ export const createCompleter = (deps: { registry: Registry; relay: Pick<Relay, "
         throw new Error("no connected device is logged in to Claude");
       }
       hooks?.stage?.("waiting", `Claude through ${device.nodeId}`);
+      const claudeStarted = Date.now();
       const reply = await deps.relay.callClaude(device.nodeId, JSON.stringify({ model, messages }));
       if (!reply.ok) {
         throw new Error(reply.output);
@@ -49,6 +54,8 @@ export const createCompleter = (deps: { registry: Registry; relay: Pick<Relay, "
       const text = (JSON.parse(reply.output) as { text: string }).text;
       hooks?.stage?.("writing");
       hooks?.text?.(text);
+      // The Claude program reports no token counts through the gateway, so these are estimates against a 200k window.
+      hooks?.usage?.({ model, device: device.nodeId, promptTokens: estimateTokens(JSON.stringify(messages)), completionTokens: estimateTokens(text), durationMs: Date.now() - claudeStarted, contextLength: CLAUDE_CONTEXT, estimated: true });
       return { role: "assistant", content: text };
     }
     hooks?.stage?.("routing", model);
@@ -56,13 +63,29 @@ export const createCompleter = (deps: { registry: Registry; relay: Pick<Relay, "
       hooks?.stage?.(step.type, step.model);
     });
     hooks?.stage?.("waiting", `${route.model} on ${route.node.nodeId}`);
-    const res = await deps.relay.request(route.node.nodeId, JSON.stringify({ model: route.model, messages, tools: tools.length > 0 ? tools : undefined, stream: true }), signal);
+    const started = Date.now();
+    const res = await deps.relay.request(route.node.nodeId, JSON.stringify({ model: route.model, messages, tools: tools.length > 0 ? tools : undefined, stream: true, stream_options: { include_usage: true } }), signal);
+    const contextLength = route.node.models.find((m) => {
+      return m.id === route.model;
+    })?.contextLength;
+    const report = (message: ChatMessage, reported?: { prompt_tokens?: number; completion_tokens?: number }): void => {
+      const estimated = reported?.prompt_tokens === undefined || reported.completion_tokens === undefined;
+      hooks?.usage?.({
+        model: route.model,
+        device: route.node.nodeId,
+        promptTokens: reported?.prompt_tokens ?? estimateTokens(JSON.stringify(messages)),
+        completionTokens: reported?.completion_tokens ?? estimateTokens(JSON.stringify(message)),
+        durationMs: Date.now() - started,
+        contextLength,
+        estimated,
+      });
+    };
 
     if (!res.ok || !(res.headers.get("content-type") ?? "").includes("text/event-stream")) {
       // An error, or a server that answered in one piece anyway.
       const body = (await res.json().catch(() => {
         return undefined;
-      })) as { error?: { message?: string }; choices?: { message?: ChatMessage }[] } | undefined;
+      })) as { error?: { message?: string }; choices?: { message?: ChatMessage }[]; usage?: { prompt_tokens?: number; completion_tokens?: number } } | undefined;
       if (!res.ok) {
         throw new Error(body?.error?.message ?? `node ${route.node.nodeId} returned ${res.status}`);
       }
@@ -70,9 +93,15 @@ export const createCompleter = (deps: { registry: Registry; relay: Pick<Relay, "
       if (!message) {
         throw new Error("the model returned no message");
       }
+      report(message, body.usage);
       return message;
     }
-    return assembleStream(res, hooks);
+    let reported: { prompt_tokens?: number; completion_tokens?: number } | undefined;
+    const message = await assembleStream(res, hooks, (usage) => {
+      reported = usage;
+    });
+    report(message, reported);
+    return message;
   };
 };
 
@@ -84,7 +113,7 @@ interface StreamDelta {
 }
 
 // Reads a chat completion stream, reporting text and reasoning as they arrive, and builds the finished message.
-export const assembleStream = async (res: Response, hooks?: StreamHooks): Promise<ChatMessage> => {
+export const assembleStream = async (res: Response, hooks?: StreamHooks, onUsage?: (usage: { prompt_tokens?: number; completion_tokens?: number }) => void): Promise<ChatMessage> => {
   let content = "";
   let reasoning = "";
   const calls: { id: string; name: string; args: string }[] = [];
@@ -93,7 +122,7 @@ export const assembleStream = async (res: Response, hooks?: StreamHooks): Promis
     if (data === "[DONE]") {
       break;
     }
-    let chunk: { error?: { message?: string }; choices?: { delta?: StreamDelta }[] };
+    let chunk: { error?: { message?: string }; choices?: { delta?: StreamDelta }[]; usage?: { prompt_tokens?: number; completion_tokens?: number } | null };
     try {
       chunk = JSON.parse(data) as typeof chunk;
     } catch {
@@ -101,6 +130,10 @@ export const assembleStream = async (res: Response, hooks?: StreamHooks): Promis
     }
     if (chunk.error) {
       throw new Error(chunk.error.message ?? "the model stream failed");
+    }
+    // The server's own count arrives in the last chunk when asked for.
+    if (chunk.usage) {
+      onUsage?.(chunk.usage);
     }
     const delta = chunk.choices?.[0]?.delta;
     if (!delta) {
@@ -169,6 +202,8 @@ interface SessionDeps {
   connected(device: string): boolean;
   // Called when a turn ends, with the session in a consistent state.
   persist?(session: Session): void;
+  // Every model call is recorded here, for the usage page and the context meter.
+  ledger?: UsageLedger;
 }
 
 export class Session {
@@ -338,6 +373,9 @@ export class Session {
             stage: (stage, detail) => {
               this.emitLive({ type: "stage", stage, detail });
             },
+            usage: (usage) => {
+              this.deps.ledger?.record({ time: Date.now(), conversationId: this.id, ...usage });
+            },
           });
         },
         run: async (name, args) => {
@@ -378,11 +416,12 @@ export class Sessions {
   private deps: SessionDeps;
 
   constructor(
-    private opts: { registry: Registry; relay: Pick<Relay, "callTool">; complete: Complete; store?: SessionStore; stored?: StoredSession[] },
+    private opts: { registry: Registry; relay: Pick<Relay, "callTool">; complete: Complete; store?: SessionStore; stored?: StoredSession[]; ledger?: UsageLedger },
   ) {
     this.deps = {
       relay: opts.relay,
       complete: opts.complete,
+      ledger: opts.ledger,
       resolve: (device, root) => {
         return this.resolve(device, root);
       },

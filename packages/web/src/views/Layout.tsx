@@ -1,5 +1,5 @@
 import { useSelector } from "@tanstack/react-store";
-import { Code2, Menu as MenuIcon, MessageSquare, Monitor, Moon, PanelLeftClose, Plus, Sun, SunMoon, LogOut } from "lucide-react";
+import { BarChart3, Code2, Menu as MenuIcon, MessageSquare, Monitor, Moon, PanelLeftClose, Plus, Sun, SunMoon, LogOut } from "lucide-react";
 import { useState } from "react";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router";
 import { ConversationActions } from "@/components/ConversationActions";
@@ -110,6 +110,15 @@ const Sidebar = ({ onNavigate }: { onNavigate: () => void }) => {
           }}
         >
           <Monitor className="size-4" /> Devices
+        </NavLink>
+        <NavLink
+          to="/manage/usage"
+          onClick={onNavigate}
+          className={({ isActive }) => {
+            return cn("flex items-center gap-2 rounded-md px-2 py-1.5 hover:bg-muted", isActive && "bg-accent font-semibold text-accent-foreground");
+          }}
+        >
+          <BarChart3 className="size-4" /> Usage
         </NavLink>
         <div className="flex items-center justify-between px-1">
           <div className="flex" role="group" aria-label="Theme">

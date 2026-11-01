@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "./api";
-import type { Catalogue, NodeRecord, SessionInfo, SettingsReport } from "./types";
+import type { Catalogue, ConversationUsage, NodeRecord, SessionInfo, SettingsReport, UsageSummary } from "./types";
 
 // Every model on every device, and whether Claude is reachable. Refreshed so a device that connects shows up.
 export const useCatalogue = () => {
@@ -30,6 +30,28 @@ export const useSessions = () => {
       return api<SessionInfo[]>("/sessions");
     },
     refetchInterval: 10_000,
+  });
+};
+
+// How full a conversation's context is and what each model has used in it. Refreshed when a turn ends.
+export const useConversationUsage = (id: string) => {
+  return useQuery({
+    queryKey: ["usage", "conversation", id],
+    queryFn: () => {
+      return api<ConversationUsage>(`/sessions/${id}/usage`);
+    },
+  });
+};
+
+// Totals over the last `days` days, with days starting at this browser's midnight.
+export const useUsage = (days: number) => {
+  const offset = -new Date().getTimezoneOffset();
+  return useQuery({
+    queryKey: ["usage", "summary", days, offset],
+    queryFn: () => {
+      return api<UsageSummary>(`/usage?days=${String(days)}&offset=${String(offset)}`);
+    },
+    refetchInterval: 30_000,
   });
 };
 

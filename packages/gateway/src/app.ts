@@ -8,6 +8,7 @@ import type { Relay } from "./relay.js";
 import type { ModelLoader } from "./loader.js";
 import { CLAUDE_MODEL_IDS, catalogue, isClaudeModel } from "./router.js";
 import { RouteError, resolveRoute } from "./routing.js";
+import type { UsageLedger } from "./ledger.js";
 import type { Sessions } from "./sessions.js";
 import { WEB_PAGE } from "./web.js";
 
@@ -16,12 +17,14 @@ export interface AppDeps {
   apiKey?: string;
   relay: Pick<Relay, "request" | "callTool" | "callClaude" | "callModel" | "callSettings">;
   sessions: Sessions;
+  // Every model call, for the usage routes. Without it the routes report nothing.
+  ledger?: UsageLedger;
   loader: Pick<ModelLoader, "ensure">;
   // Mounts the built web app. Without it the page is the single-file one in web.ts.
   mountWeb?: (app: Hono) => void;
 }
 
-export const createApp = ({ registry, apiKey, relay, sessions, loader, mountWeb }: AppDeps): Hono => {
+export const createApp = ({ registry, apiKey, relay, sessions, ledger, loader, mountWeb }: AppDeps): Hono => {
   const app = new Hono();
 
   // The page holds no secrets and must load before a key can be typed, so it is registered ahead of the auth middleware.
@@ -134,6 +137,22 @@ export const createApp = ({ registry, apiKey, relay, sessions, loader, mountWeb 
   };
   app.get("/devices/:nodeId/settings", deviceSettings("get"));
   app.put("/devices/:nodeId/settings", deviceSettings("set"));
+
+  // What the models have used. `days` counts local days ending today; `offset` is the caller's minutes ahead of UTC, so days
+  // start at the caller's midnight.
+  app.get("/usage", (c) => {
+    const days = Math.min(Math.max(Math.trunc(Number(c.req.query("days") ?? "7")) || 7, 1), 366);
+    const offset = Math.trunc(Number(c.req.query("offset") ?? "0")) || 0;
+    return c.json(ledger?.summary(days, Date.now(), offset) ?? { days, since: 0, calls: 0, promptTokens: 0, completionTokens: 0, byModel: [], byDevice: [], byDay: [] });
+  });
+
+  app.get("/sessions/:id/usage", (c) => {
+    const id = c.req.param("id");
+    if (!sessions.get(id)) {
+      return c.json({ error: { message: "no such conversation" } }, 404);
+    }
+    return c.json(ledger?.forConversation(id) ?? { byModel: [] });
+  });
 
   // Coding sessions: the model loop runs here, tool calls run on the chosen device.
   app.get("/sessions", (c) => {

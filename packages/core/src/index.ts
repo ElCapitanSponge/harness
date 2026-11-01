@@ -198,6 +198,35 @@ export const isLiveEvent = (event: { type: string }): event is LiveSessionEvent 
   return event.type.endsWith("-delta") || event.type === "stage";
 };
 
+// What one model has used, over some span of calls. `estimated` is true if any of the counts were estimated, not reported by the model server.
+export interface ModelUsage {
+  model: string;
+  device: string;
+  calls: number;
+  promptTokens: number;
+  completionTokens: number;
+  estimated: boolean;
+}
+
+// Usage over the last `days` days, from the ledger of every model call.
+export interface UsageSummary {
+  days: number;
+  since: number;
+  calls: number;
+  promptTokens: number;
+  completionTokens: number;
+  byModel: ModelUsage[];
+  byDevice: { device: string; calls: number; promptTokens: number; completionTokens: number }[];
+  // Tokens (prompt plus completion) per day and model, for the chart. `day` is YYYY-MM-DD in the caller's time zone.
+  byDay: { day: string; model: string; tokens: number }[];
+}
+
+// One conversation's use of models, and how full the context was after the latest call.
+export interface ConversationUsage {
+  last?: { model: string; device: string; promptTokens: number; completionTokens: number; contextLength?: number; estimated: boolean };
+  byModel: ModelUsage[];
+}
+
 export interface SessionInfo {
   id: string;
   model: string;

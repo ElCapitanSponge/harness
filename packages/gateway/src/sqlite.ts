@@ -24,6 +24,20 @@ const MIGRATIONS: string[] = [
      data TEXT NOT NULL,
      PRIMARY KEY (conversation_id, seq)
    ) STRICT, WITHOUT ROWID;`,
+  `CREATE TABLE usage (
+     id INTEGER PRIMARY KEY AUTOINCREMENT,
+     time INTEGER NOT NULL,
+     conversation_id TEXT NOT NULL,
+     device TEXT NOT NULL,
+     model TEXT NOT NULL,
+     prompt_tokens INTEGER NOT NULL,
+     completion_tokens INTEGER NOT NULL,
+     duration_ms INTEGER NOT NULL,
+     estimated INTEGER NOT NULL,
+     context_length INTEGER
+   ) STRICT;
+   CREATE INDEX usage_time ON usage (time);
+   CREATE INDEX usage_conversation ON usage (conversation_id, id);`,
 ];
 
 // Opens (creating if need be) the gateway's database on its data volume, in write-ahead mode so reads never wait for a write,

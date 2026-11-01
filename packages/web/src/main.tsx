@@ -37,6 +37,10 @@ const router = createBrowserRouter([
       { index: true, element: <NewConversation /> },
       { path: "c/:id", element: <ConversationView /> },
       { path: "manage/devices", element: <DevicesView /> },
+      // The chart library is only fetched when the page is opened.
+      { path: "manage/usage", lazy: async () => {
+        return { Component: (await import("@/views/UsageView")).UsageView };
+      } },
       { path: "*", element: <Navigate to="/" replace /> },
     ],
   },
