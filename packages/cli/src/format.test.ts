@@ -64,8 +64,8 @@ describe("formatSessions and formatSettings", () => {
 
   it("shows each setting with its source and whether changes are accepted", () => {
     const report = {
-      settings: { projectRoots: {}, allowedTools: ["grep"], modelControl: false, claude: true, gameProcesses: [] },
-      sources: { projectRoots: "default", allowedTools: "file", modelControl: "default", claude: "env", gameProcesses: "default" },
+      settings: { projectRoots: {}, allowedTools: ["grep"], modelControl: false, claude: true, gameProcesses: [], idleUnloadMinutes: 20 },
+      sources: { projectRoots: "default", allowedTools: "file", modelControl: "default", claude: "env", gameProcesses: "default", idleUnloadMinutes: "default" },
       locked: ["claude"],
       remoteConfig: false,
     } satisfies SettingsReport;

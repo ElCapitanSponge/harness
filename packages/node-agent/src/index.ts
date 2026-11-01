@@ -1,10 +1,12 @@
 import type { Heartbeat } from "@harness/core";
 import { detectBusy } from "./busy.js";
 import { config } from "./config.js";
+import { lms } from "@harness/lmstudio";
 import { listModels } from "./lmstudio.js";
 import { createAuditLog } from "./audit.js";
 import { createChatServer } from "./chat.js";
 import { createClaudeServer } from "./claude.js";
+import { createIdleUnloader } from "./idle.js";
 import { createModelServer } from "./models.js";
 import { detectPrograms } from "./programs.js";
 import { createSettings } from "./settings.js";
@@ -34,6 +36,23 @@ const settings = await createSettings({
 const now = settings.current();
 
 const tools = createToolServer({ roots: now.projectRoots, allowed: now.allowedTools, audit, installed });
+
+// Models nobody has used for a while are unloaded, so the graphics card is free for whatever else this machine is doing.
+const idle = createIdleUnloader({
+  minutes: () => {
+    return settings.current().idleUnloadMinutes;
+  },
+  enabled: () => {
+    return settings.current().modelControl;
+  },
+  unload: (model) => {
+    return lms.unload(model);
+  },
+  audit,
+});
+setInterval(() => {
+  void idle.check();
+}, 60_000).unref();
 
 const collect = async (): Promise<Heartbeat> => {
   const current = settings.current();
@@ -73,6 +92,14 @@ connectTunnel({
     isBusy: async () => {
       return (await detectBusy(settings.current().gameProcesses)).busy;
     },
+    onLoaded: (model) => {
+      idle.touch(model);
+    },
+    onUnloaded: (model) => {
+      if (model) {
+        idle.forget(model);
+      }
+    },
   }),
   claude: createClaudeServer({
     bin: config.claudeBin,
@@ -80,5 +107,5 @@ connectTunnel({
       return settings.current().claude;
     },
   }),
-  chat: createChatServer({ inferenceUrl: config.inferenceUrl }),
+  chat: createChatServer({ inferenceUrl: config.inferenceUrl, activity: idle }),
 });

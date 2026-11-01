@@ -11,7 +11,7 @@ import type { NodeRecord, SettingKey, SettingsReport } from "@/lib/types";
 const FALLBACK_TOOLS = ["read_file", "list_dir", "grep", "write_file", "edit_file", "run_command"].map((name) => {
   return { name, installed: true, asksFirst: ["write_file", "edit_file", "run_command"].includes(name) };
 });
-const SETTING_ENV: Record<SettingKey, string> = { projectRoots: "PROJECT_ROOTS", allowedTools: "ALLOWED_TOOLS", modelControl: "ALLOW_MODEL_CONTROL", claude: "CLAUDE_ENABLED", gameProcesses: "GAME_PROCESSES" };
+const SETTING_ENV: Record<SettingKey, string> = { projectRoots: "PROJECT_ROOTS", allowedTools: "ALLOWED_TOOLS", modelControl: "ALLOW_MODEL_CONTROL", claude: "CLAUDE_ENABLED", gameProcesses: "GAME_PROCESSES", idleUnloadMinutes: "IDLE_UNLOAD_MINUTES" };
 
 const Field = ({ name, label, report, children }: { name: SettingKey; label: string; report: SettingsReport; children: React.ReactNode }) => {
   const locked = report.locked.includes(name);
@@ -51,6 +51,7 @@ const SettingsForm = ({ node, report }: { node: NodeRecord; report: SettingsRepo
   const [modelControl, setModelControl] = useState(report.settings.modelControl);
   const [claude, setClaude] = useState(report.settings.claude);
   const [games, setGames] = useState(report.settings.gameProcesses.join(", "));
+  const [idle, setIdle] = useState(String(report.settings.idleUnloadMinutes));
   const off = (name: SettingKey): boolean => {
     return !report.remoteConfig || report.locked.includes(name);
   };
@@ -61,6 +62,7 @@ const SettingsForm = ({ node, report }: { node: NodeRecord; report: SettingsRepo
       allowedTools: tools,
       modelControl,
       claude,
+      idleUnloadMinutes: Math.max(0, Math.floor(Number(idle) || 0)),
       gameProcesses: games.split(",").map((s) => {
         return s.trim();
       }).filter(Boolean),
@@ -103,6 +105,13 @@ const SettingsForm = ({ node, report }: { node: NodeRecord; report: SettingsRepo
       </Field>
       <Field name="claude" label="Answer Claude requests with this device's claude login" report={report}>
         <Switch disabled={off("claude")} checked={claude} aria-label="Claude" onCheckedChange={setClaude} />
+      </Field>
+      <Field name="idleUnloadMinutes" label="Unload a model nobody has used for (minutes, 0 never)" report={report}>
+        <Input type="number" min={0} max={1440} className="w-28" disabled={off("idleUnloadMinutes")} value={idle} aria-label="Minutes before an unused model is unloaded" onChange={(ev) => {
+          setIdle(ev.target.value);
+        }}
+        />
+        <p className="text-xs text-muted-foreground">Frees the graphics card for other things. Only models Torii used are unloaded, and only if model control is on. The next message loads it again.</p>
       </Field>
       <Field name="gameProcesses" label="Game programs that make the device busy" report={report}>
         <Input disabled={off("gameProcesses")} value={games} aria-label="Game programs, comma separated" onChange={(ev) => {

@@ -139,9 +139,11 @@ export const DeviceSettings = z.object({
   modelControl: z.boolean(),
   claude: z.boolean(),
   gameProcesses: z.array(z.string().min(1)),
+  // Unload a model nobody has used for this many minutes, to free the graphics card. Zero never unloads.
+  idleUnloadMinutes: z.number().int().min(0).max(1440),
 });
 export type DeviceSettings = z.infer<typeof DeviceSettings>;
-export const SETTING_KEYS = ["projectRoots", "allowedTools", "modelControl", "claude", "gameProcesses"] as const;
+export const SETTING_KEYS = ["projectRoots", "allowedTools", "modelControl", "claude", "gameProcesses", "idleUnloadMinutes"] as const;
 export type SettingKey = (typeof SETTING_KEYS)[number];
 
 // A device's answer about its settings: what is in effect, where each value came from, which are fixed by an
