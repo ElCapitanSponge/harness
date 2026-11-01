@@ -25,6 +25,7 @@ The first web page proved the idea: a device connects out, the gateway routes to
 | Own app and web portal, both able to configure selected agents; the family will use it later | More than one person means accounts, roles and per-person history | J, K |
 | Take inspiration from PewDiePie's interface | Its reported ideas (several models answering and voting, many small models at once) fit a pool of models | M |
 | The confirmation flow needs work | Approvals are a plain Allow or Decline card | L |
+| The harness must work with the skills used in Claude Code and other AI chats; the owner relies heavily on Matt Pocock's skills | Sessions know nothing about skills, project instruction files, sub-agents or structured questions, which those skills lean on | N |
 | Documentation needs a great deal of improvement; should feed a wiki or an Astro site later | One long README plus a security page | I |
 
 **Note on one word.** The feedback asks that conversations are "ephemeral" when navigating or refreshing. It is read here as the opposite: they must **survive** navigation and refresh. If ephemeral (disposable) was meant for some conversations, that is a small addition to ticket C (a "temporary chat" that is not saved).
@@ -168,6 +169,35 @@ Ideas taken from PewDiePie's self-hosted "ChatOS" (as reported by news coverage;
 - **Swarm:** many small models on one task, results gathered. Later, and only if it proves useful.
 - Each mode shows how long each model took and what it cost in tokens, so the person can see whether it was worth it.
 
+### N. Skills and project instructions
+
+The owner relies heavily on Matt Pocock's skills and wants them to work in the harness as they do in Claude Code. The format is the **Agent Skills** layout, which Claude Code, Codex, Gemini CLI and Cursor are reported to share (sources disagree on the full list of tools): a folder per skill with a `SKILL.md` that starts with front matter (`name`, `description`), plus any side files. Claude.ai's own Skills are the same folder, zipped.
+
+**What the installed skills actually use** (37 skills in `~/.claude/skills`, read on 2026-11-01):
+
+| Used by the skills | How many | What the harness needs |
+|---|---|---|
+| `name` and `description` front matter | all 37 | List them for the model to choose from |
+| `disable-model-invocation: true` | 23 | The model must not start these on its own; only the person does, by typing `/name` |
+| `argument-hint` | 4 | Show the hint in the `/` menu and pass what the person types as the skill's arguments |
+| Side files beside `SKILL.md` (for example `tdd/mocking.md`) | most | Let the model read them, relative to the skill's folder |
+| An `agents/openai.yaml` file (display name, short description) | most | Ignore it safely; it is metadata for Codex and can supply a nicer label |
+| "Skill tool" (one skill loading another) | 23 mentions | A tool that loads a skill by name |
+| Sub-agents | about 35 mentions | A tool that runs a task in a fresh, separate conversation and returns its result |
+| Asking the user structured questions | 1 | A tool that shows options in the page and returns the answer |
+| A to-do or plan tool | 1 | The plan tool in #29 |
+| `gh` and shell commands | several | Already covered by the command tool and its approval |
+
+**Behaviour**
+
+- **Where skills come from.** On the device the session runs on: the person's own skills (`~/.claude/skills`, `~/.agents/skills`) and the project's (`.claude/skills`, `.agents/skills` inside the project root). The search folders are a device setting (B). The gateway can also hold a **library** that is available in every conversation, including chats with no device, and that can be imported and exported as a zip so skills move between the harness, Claude.ai and other tools.
+- **Progressive loading.** Only names and descriptions go into the model's instructions. The full text loads when the model (or the person) calls the skill, so a long skill does not use up a small model's context until it is needed.
+- **Running one.** Typing `/` in the composer lists skills with their hints; `/to-tickets some plan` loads that skill with the rest as its arguments. A skill marked `disable-model-invocation` is never started by the model.
+- **Reading a skill's other files.** The session may read inside a skill's folder, read-only, even when the folder is outside the project root.
+- **Project instructions.** `AGENTS.md` and `CLAUDE.md` in the project root (and the person's own, such as `~/.claude/CLAUDE.md`) are put in the model's instructions, with `@file` imports followed. This is how the repository's own `AGENTS.md` works with any model.
+- **Honest limits for small local models.** Skills are written for large models. A 9B model may follow a short skill well and a long, multi-step one badly, and loading a long skill uses a large share of a small context window. The interface shows how much of the context a skill used (F), and the skills page notes which skills are long.
+- **Sub-agents** are child conversations with their own context and a chosen subset of tools, run on any device and model in the pool, shown nested under their parent. This also lets a small main model hand a long task to a bigger one.
+
 ### I. Documentation
 
 Reorganise `docs/` so it reads well on GitHub, can be copied into the GitHub wiki, and can feed an Astro site later (Starlight). Every page has front matter (`title`, `description`, `sidebar.order`) and uses relative links with no GitHub-only features.
@@ -226,6 +256,7 @@ I documentation: structure first, then a page with every feature
 | K | #49 The desktop app |
 | L | #50 Permission modes and approval cards |
 | M | #51 Multi-model modes |
+| N | #53 Skills and project instructions, #54 Skills in the interface, #55 Sub-agents and asking questions |
 | I | #43 Documentation structure, #44 Reference documentation and link check |
 | Standards | #46 Strict ESLint for the whole repository (comes before the shell, #37) |
 
