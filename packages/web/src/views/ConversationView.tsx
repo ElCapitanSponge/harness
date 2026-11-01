@@ -11,7 +11,8 @@ import { Message, StatusLine } from "@/components/Messages";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/fields";
 import { useConversation } from "@/lib/useConversation";
-import { useSessions } from "@/lib/queries";
+import { useSessions, useSkills } from "@/lib/queries";
+import { parseSlash } from "@/lib/skills";
 
 const Conversation = ({ id }: { id: string }) => {
   const navigate = useNavigate();
@@ -24,6 +25,8 @@ const Conversation = ({ id }: { id: string }) => {
   const [picked, setPicked] = useState("");
   // The effort for the next message; until one is chosen it is the one the conversation has.
   const [pickedEffort, setPickedEffort] = useState<Effort | "default" | undefined>(undefined);
+  const folder = useSkills(info?.kind === "code" ? { device: info.device, root: info.root } : undefined);
+  const skills = info?.kind === "code" ? folder.data?.[0]?.skills : undefined;
   const scroller = useRef<HTMLDivElement>(null);
   const stuck = useRef(true);
   const last = state.items.at(-1);
@@ -86,7 +89,7 @@ const Conversation = ({ id }: { id: string }) => {
                 <div className="px-10">
                   <Button onClick={() => {
                     stuck.current = true;
-                    void send(lastUser.text);
+                    void send(lastUser.text, undefined, undefined, parseSlash(lastUser.text, skills ?? []));
                   }}
                   >
                     <RotateCcw /> Retry
@@ -111,9 +114,10 @@ const Conversation = ({ id }: { id: string }) => {
         draftKey={id}
         busy={state.busy}
         disabled={!info || offline}
+        skills={skills}
         onSend={(text) => {
           stuck.current = true;
-          void send(text, picked || undefined, pickedEffort);
+          void send(text, picked || undefined, pickedEffort, parseSlash(text, skills ?? []));
         }}
         onStop={() => {
           void cancel();

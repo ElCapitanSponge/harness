@@ -180,3 +180,15 @@ describe("the skills installed on this machine", () => {
     expect(skills.length).toBeGreaterThan(0);
   });
 });
+
+describe("a skill the person starts", () => {
+  it("loads one the model may not start, with its arguments, and reports the length of each skill", async () => {
+    const dir = path.join(home, ".claude", "skills");
+    await skill(dir, "quiet", "name: quiet\ndescription: Hidden.\ndisable-model-invocation: true", "Do it for $ARGUMENTS.");
+    expect(await run("start_skill", { name: "quiet", arguments: "me" })).toContain("Do it for me.");
+    await expect(run("start_skill", { name: "nope" })).rejects.toThrow("no skill named");
+    const { skills } = await discoverSkills(root, home);
+    expect(skills[0]?.length).toBeGreaterThan(30);
+    expect(findTool("start_skill")?.hidden).toBe(true);
+  });
+});

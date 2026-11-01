@@ -1,4 +1,4 @@
-import { Bot, Brain, ChevronRight, Layers, Loader2, ShieldQuestion, Wrench } from "lucide-react";
+import { Bot, Brain, ChevronRight, Layers, Sparkles, Loader2, ShieldQuestion, Wrench } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Markdown } from "@/components/Markdown";
@@ -70,6 +70,20 @@ export const Message = ({ item, model, onAnswer }: { item: Item; model: string; 
       return (
         <div className="px-10">
           <Thinking item={item} />
+        </div>
+      );
+
+    case "skill":
+      return (
+        <div className="px-10">
+          <details className="group rounded-lg text-muted-foreground">
+            <summary className="flex w-fit max-w-full cursor-pointer list-none items-center gap-1.5 rounded-md px-1 py-0.5 text-xs font-semibold hover:bg-muted">
+              <ChevronRight className="size-3.5 shrink-0 transition-transform group-open:rotate-90" />
+              <Sparkles className="size-3.5 shrink-0" />
+              <span className="truncate">Skill: {item.name}{item.arguments ? ` - ${item.arguments}` : ""}</span>
+            </summary>
+            <div className="mt-1 max-h-96 overflow-y-auto whitespace-pre-wrap border-l-2 pl-3 [overflow-wrap:anywhere] text-[13px] leading-5">{item.text}</div>
+          </details>
         </div>
       );
 

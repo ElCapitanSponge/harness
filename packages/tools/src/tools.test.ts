@@ -159,6 +159,7 @@ describe("tool metadata", () => {
       jq: false,
       fzf_filter: false,
       skill: false,
+      start_skill: false,
       project_context: false,
     });
   });

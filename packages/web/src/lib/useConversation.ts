@@ -70,13 +70,13 @@ export const useConversation = (id: string) => {
 
   const state = useSelector(store);
 
-  const send = async (text: string, model?: string, effort?: Effort | "default"): Promise<void> => {
+  const send = async (text: string, model?: string, effort?: Effort | "default", skill?: { name: string; arguments: string }): Promise<void> => {
     // Busy at once, so the button changes before the first event comes back.
     store.setState((s) => {
       return markBusy(s);
     });
     try {
-      await api<unknown>(`/sessions/${id}/messages`, { method: "POST", body: { text, ...(model ? { model } : {}), ...(effort ? { effort } : {}) } });
+      await api<unknown>(`/sessions/${id}/messages`, { method: "POST", body: { text, ...(model ? { model } : {}), ...(effort ? { effort } : {}), ...(skill ? { skill } : {}) } });
     } catch (err) {
       store.setState((s) => {
         return applyEvent(s, { type: "error", message: err instanceof Error ? err.message : "Could not send." });

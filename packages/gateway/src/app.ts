@@ -1,6 +1,6 @@
 import { toOpenAIResponse, toSse } from "@harness/claude";
 import { ChatRequest, DeviceToolRequest, ModelLoad, ModelUnload, SessionApproval, SessionCreate, SessionMessage, SessionRename, flattenError } from "@harness/core";
-import { findTool } from "@harness/tools";
+import { findTool, type ProjectContext } from "@harness/tools";
 import { Hono, type Context } from "hono";
 import { bearerAuth } from "./auth.js";
 import type { Registry } from "./registry.js";
@@ -207,7 +207,7 @@ export const createApp = ({ registry, apiKey, relay, sessions, ledger, claude = 
       return c.json({ error: flattenError(parsed.error) }, 400);
     }
     try {
-      session.send(parsed.data.text, parsed.data.model, parsed.data.effort);
+      session.send(parsed.data.text, parsed.data.model, parsed.data.effort, parsed.data.skill);
     } catch (err) {
       return c.json({ error: { message: (err as Error).message } }, 409);
     }
@@ -290,6 +290,35 @@ export const createApp = ({ registry, apiKey, relay, sessions, ledger, claude = 
       },
     });
     return new Response(stream, { headers: { "content-type": "text/event-stream", "cache-control": "no-store" } });
+  });
+
+  // The skills and instruction files each device finds in each project folder it exposes, for the composer's slash menu and the skills
+  // page. `device` and `root` narrow it to one folder. A device that cannot answer (an older one) is listed with no skills.
+  app.get("/skills", async (c) => {
+    const only = { device: c.req.query("device"), root: c.req.query("root") };
+    const folders = registry.live().filter((n) => {
+      return n.kind === "local" && (only.device === undefined || n.nodeId === only.device);
+    }).flatMap((n) => {
+      return (n.roots ?? []).filter((r) => {
+        return only.root === undefined || r === only.root;
+      }).map((root) => {
+        return { device: n.nodeId, root };
+      });
+    });
+    return c.json(await Promise.all(folders.map(async ({ device, root }) => {
+      try {
+        const result = await relay.callTool(device, root, "project_context", {}, { timeoutMs: 15_000 });
+        const context = result.ok ? JSON.parse(result.output) as ProjectContext : undefined;
+        if (context) {
+          return { device, root, skills: context.skills, skipped: context.skipped, instructions: context.instructions.map((i) => {
+            return { source: i.source, length: i.text.length };
+          }) };
+        }
+        return { device, root, skills: [], skipped: [], instructions: [], note: result.output };
+      } catch (err) {
+        return { device, root, skills: [], skipped: [], instructions: [], note: err instanceof Error ? err.message : String(err) };
+      }
+    })));
   });
 
   // Everything that can be chosen, for the interface: each model on each device with what choosing it would do, and Claude.

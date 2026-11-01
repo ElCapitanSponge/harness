@@ -190,7 +190,8 @@ export const SessionCreate = z.object({
 });
 export const SessionApproval = z.object({ approve: z.boolean(), always: z.boolean().optional() });
 // `model` picks the model for this message and those after it, so one conversation can move between models, devices and Claude.
-export const SessionMessage = z.object({ text: z.string().min(1), model: z.string().min(1).optional(), effort: z.enum(["default", ...EFFORTS]).optional() });
+// `skill` is a skill the person started with / in the page; `text` is what they typed (the skill's name and its arguments).
+export const SessionMessage = z.object({ text: z.string().min(1), model: z.string().min(1).optional(), effort: z.enum(["default", ...EFFORTS]).optional(), skill: z.object({ name: z.string().min(1), arguments: z.string().optional() }).optional() });
 export const SessionRename = z.object({ title: z.string().trim().min(1).max(120) });
 
 // What happens in a coding session, in order. Sent to clients as server-sent events.
@@ -198,6 +199,8 @@ export type SessionEvent
   = | { type: "user"; text: string }
     | { type: "text"; text: string; model?: string; device?: string; reason?: string }
     | { type: "thinking"; text: string }
+    // A skill the person started: its name, what they gave it, and the instructions it put in the conversation.
+    | { type: "skill"; name: string; arguments: string; text: string }
     | { type: "tool"; summary: string }
     | { type: "approval"; id: string; tool: string; summary: string }
     | { type: "approval-resolved"; id: string; approved: boolean }

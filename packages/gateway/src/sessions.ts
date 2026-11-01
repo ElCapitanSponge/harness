@@ -208,6 +208,8 @@ interface SessionDeps {
   relay: Pick<Relay, "callTool">;
   // What the device says about the project's instructions and skills; without it the session tells the model nothing of them.
   projectContext?(device: string, root: string, session: string): Promise<ProjectContext | undefined>;
+  // The text of a skill the person started, with its arguments filled in. Throws if the device cannot load it.
+  startSkill?(device: string, root: string, session: string, name: string, args: string): Promise<string>;
   complete: Complete;
   // Looks up what the device allows right now. Throws if it is not connected or no longer exposes the root.
   resolve(device: string, root: string): ToolSpec[];
@@ -247,6 +249,8 @@ export class Session {
   compaction: { time: number; tokensAfter: number } | undefined;
   // Which model on which device made the latest call, to label the reply that follows.
   private lastRoute: { model: string; device: string } | undefined;
+  // A skill the person started with the message being sent.
+  private starting: { name: string; arguments?: string } | undefined;
   // With the model set to "auto": what was chosen for the turn, kept so the next turn can stay on it.
   private chosen: AutoChoice | undefined;
   // The call whose size last made automatic compaction fail, so one failure does not repeat on every message.
@@ -342,10 +346,14 @@ export class Session {
   }
 
   // Throws if a turn is running or the device is not connected: a session whose device is away can be read, not continued.
-  send(text: string, model?: string, effort?: Effort | "default"): void {
+  send(text: string, model?: string, effort?: Effort | "default", skill?: { name: string; arguments?: string }): void {
     if (this.abort) {
       throw new Error("the session is busy with a turn");
     }
+    if (skill && (this.kind === "chat" || !this.deps.startSkill)) {
+      throw new Error("skills run in a coding session, on a device");
+    }
+    this.starting = skill;
     if (model !== undefined && model !== this.current) {
       this.current = model;
       // Picking a model takes Auto off, and picking Auto starts its choice afresh.
@@ -539,12 +547,30 @@ export class Session {
         });
   }
 
+  // If the person started a skill with this message, its instructions go into the conversation in place of the bare command.
+  private async runStartedSkill(): Promise<void> {
+    const skill = this.starting;
+    this.starting = undefined;
+    const last = this.history.at(-1);
+    if (!skill || !this.deps.startSkill || last?.role !== "user") {
+      return;
+    }
+    const args = skill.arguments?.trim() ?? "";
+    const text = await this.deps.startSkill(this.device, this.root, this.id, skill.name, args);
+    const typed = typeof last.content === "string" ? last.content : "";
+    last.content = `${typed}\n\nThe person started the skill "${skill.name}". Follow its instructions:\n\n${text}`;
+    this.emit({ type: "skill", name: skill.name, arguments: args, text });
+  }
+
   private async run(abort: AbortController, offered: ToolSpec[]): Promise<void> {
     let specs = offered;
     try {
       this.decide();
       if (this.kind === "code" && this.deps.projectContext) {
         specs = await this.learnProject(offered);
+      }
+      if (this.starting) {
+        await this.runStartedSkill();
       }
     } catch (err) {
       this.history.pop();
@@ -634,11 +660,12 @@ export class Sessions {
   private deps: SessionDeps;
 
   constructor(
-    private opts: { registry: Registry; relay: Pick<Relay, "callTool">; complete: Complete; store?: SessionStore; stored?: StoredSession[]; ledger?: UsageLedger; compactAt?: number; claude?: ClaudeState; autoPrefs?: AutoPrefs; projectContext?: SessionDeps["projectContext"] },
+    private opts: { registry: Registry; relay: Pick<Relay, "callTool">; complete: Complete; store?: SessionStore; stored?: StoredSession[]; ledger?: UsageLedger; compactAt?: number; claude?: ClaudeState; autoPrefs?: AutoPrefs; projectContext?: SessionDeps["projectContext"]; startSkill?: SessionDeps["startSkill"] },
   ) {
     this.deps = {
       relay: opts.relay,
       projectContext: opts.projectContext,
+      startSkill: opts.startSkill,
       complete: opts.complete,
       ledger: opts.ledger,
       compactAt: opts.compactAt,

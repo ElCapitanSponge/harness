@@ -21,6 +21,16 @@ An older device that cannot answer leaves the session exactly as it was.
 
 A skill with `disable-model-invocation: true` is never listed for the model and the tool refuses to load it; it is for the person to start. The tool is a reading tool, needs no approval, and is offered only when the device allows its own tools and at least one skill may be used by the model.
 
+## Running a skill yourself
+
+In a coding conversation, typing `/` at the start of a message opens a menu of the skills in that folder, with each one's hint and description. It filters as you type (names that start with it first, then names and descriptions that contain it). Up and Down move, Enter or Tab completes the name, Escape closes it, and a click picks one. It lists every skill, including those only you may start.
+
+Send `/name the rest` and the rest becomes the skill's arguments. The gateway loads the skill on the device, puts its instructions into the conversation after what you typed, and the thread shows the skill as a collapsed block (name and arguments, open it to read the text). If the skill cannot be loaded the message is not sent and the reason is shown. A chat with no device has no skills yet.
+
+## The Skills page
+
+**Skills** in the sidebar lists, for each device and project folder it exposes: the instruction files read (and how long), every skill with its description, hint, whether it is yours or the project's, whether only you start it, and its length; and any skills skipped, with the path and the reason. A device too old to answer is listed with a note. The same data is at `GET /skills` (`?device=&root=` narrows it).
+
 ## Not built yet
 
-The slash menu in the composer, the skills page, importing and exporting skills, the gateway's own skill library, a setting for the skill folders, sub-agents and the ask-the-person tool are the rest of [#53](https://github.com/ElCapitanSponge/harness/issues/53).
+Importing and exporting skills and the gateway's own skill library (so chats with no device have skills), a setting for the skill folders, sub-agents and the ask-the-person tool are the rest of [#53](https://github.com/ElCapitanSponge/harness/issues/53).

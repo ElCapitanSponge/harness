@@ -3,6 +3,9 @@ import { useLayoutEffect, useRef, useState, type KeyboardEvent, type ReactNode, 
 import { Markdown } from "@/components/Markdown";
 import { Button } from "@/components/ui/button";
 import { codeBlock, continueList, insideFence, link, prefixLines, wrapSelection, type Edit } from "@/lib/markdown-edit";
+import { matchSkills, slashQuery } from "@/lib/skills";
+import type { SkillInfo } from "@/lib/types";
+import { cn } from "@/lib/utils";
 
 const read = (name: string): string => {
   try {
@@ -35,12 +38,19 @@ const Tool = ({ label, onClick, disabled, pressed, children }: { label: string; 
 // The message box. It takes markdown: a toolbar and the usual shortcuts (Ctrl or Cmd with B, I, E for code, K for a link), lists
 // that carry on, a live preview, and Enter that adds a line inside a code block instead of sending. What was typed and not sent
 // is kept for each conversation, so a refresh does not lose it.
-export const Composer = ({ draftKey, busy, disabled, placeholder, onSend, onStop }: { draftKey: string; busy: boolean; disabled?: boolean; placeholder?: string; onSend: (text: string) => void; onStop?: () => void }) => {
+export const Composer = ({ draftKey, busy, disabled, placeholder, skills, onSend, onStop }: { draftKey: string; busy: boolean; disabled?: boolean; placeholder?: string; skills?: SkillInfo[]; onSend: (text: string) => void; onStop?: () => void }) => {
   const name = `harness-draft-${draftKey}`;
   const [text, setText] = useState(() => {
     return read(name);
   });
   const [preview, setPreview] = useState(false);
+  // The slash menu: typing / first lists the skills; the arrows move, Enter or Tab completes the name, Escape closes it.
+  const [active, setActive] = useState(0);
+  const [dismissed, setDismissed] = useState(false);
+  const query = slashQuery(text);
+  const matches = query !== undefined && skills ? matchSkills(skills, query) : [];
+  const menu = matches.length > 0 && !dismissed && !preview;
+  const chosen = Math.min(active, Math.max(0, matches.length - 1));
   const ref = useRef<HTMLTextAreaElement>(null);
   // Where the selection should be once the text it belongs to has been drawn.
   const selection = useRef<{ start: number; end: number } | undefined>(undefined);
@@ -60,6 +70,8 @@ export const Composer = ({ draftKey, busy, disabled, placeholder, onSend, onStop
   }, [text, preview]);
 
   const change = (value: string): void => {
+    setActive(0);
+    setDismissed(false);
     setText(value);
     write(name, value);
   };
@@ -91,6 +103,25 @@ export const Composer = ({ draftKey, busy, disabled, placeholder, onSend, onStop
   const keys = (ev: KeyboardEvent<HTMLTextAreaElement>): void => {
     if (ev.nativeEvent.isComposing) {
       return;
+    }
+    if (menu) {
+      const pick = matches[chosen];
+      if (ev.key === "ArrowDown" || ev.key === "ArrowUp") {
+        ev.preventDefault();
+        setActive((chosen + (ev.key === "ArrowDown" ? 1 : matches.length - 1)) % matches.length);
+        return;
+      }
+      if ((ev.key === "Enter" || ev.key === "Tab") && pick && !ev.shiftKey) {
+        ev.preventDefault();
+        change(`/${pick.name} `);
+        selection.current = { start: pick.name.length + 2, end: pick.name.length + 2 };
+        return;
+      }
+      if (ev.key === "Escape") {
+        ev.preventDefault();
+        setDismissed(true);
+        return;
+      }
     }
     const mod = ev.ctrlKey || ev.metaKey;
     if (mod && !ev.shiftKey && !ev.altKey && ev.key !== "Enter") {
@@ -138,12 +169,40 @@ export const Composer = ({ draftKey, busy, disabled, placeholder, onSend, onStop
 
   return (
     <form
-      className="mx-auto w-full max-w-3xl px-4 pb-4"
+      className="relative mx-auto w-full max-w-3xl px-4 pb-4"
       onSubmit={(ev: SyntheticEvent) => {
         ev.preventDefault();
         submit();
       }}
     >
+      {menu
+        ? (
+            <ul id={`${name}-skills`} role="listbox" aria-label="Skills" className="absolute inset-x-4 bottom-full z-10 mb-1 max-h-64 overflow-y-auto rounded-xl border bg-card p-1 shadow-card">
+              {matches.map((s, i) => {
+                return (
+                  <li
+                    key={s.name}
+                    id={`${name}-skill-${s.name}`}
+                    role="option"
+                    aria-selected={i === chosen}
+                    className={cn("cursor-pointer rounded-lg px-3 py-1.5", i === chosen && "bg-accent text-accent-foreground")}
+                    onMouseDown={(ev) => {
+                      ev.preventDefault();
+                      change(`/${s.name} `);
+                      selection.current = { start: s.name.length + 2, end: s.name.length + 2 };
+                    }}
+                  >
+                    <div className="flex items-baseline gap-2">
+                      <span className="font-semibold">/{s.name}</span>
+                      {s.hint ? <span className="text-xs text-muted-foreground">{s.hint}</span> : null}
+                    </div>
+                    <div className="line-clamp-2 text-xs text-muted-foreground">{s.description}</div>
+                  </li>
+                );
+              })}
+            </ul>
+          )
+        : null}
       <div className="rounded-2xl border border-input bg-card p-2 shadow-card focus-within:border-primary">
         <div className="mb-1 flex items-center gap-0.5 border-b pb-1" role="toolbar" aria-label="Formatting">
           <Tool label="Bold" disabled={preview} onClick={() => {
@@ -228,6 +287,10 @@ export const Composer = ({ draftKey, busy, disabled, placeholder, onSend, onStop
                   value={text}
                   rows={1}
                   aria-label="Message"
+                  role={skills ? "combobox" : undefined}
+                  aria-expanded={skills ? menu : undefined}
+                  aria-controls={menu ? `${name}-skills` : undefined}
+                  aria-activedescendant={menu && matches[chosen] ? `${name}-skill-${matches[chosen].name}` : undefined}
                   placeholder={placeholder ?? "Message (markdown works)"}
                   className="max-h-[40vh] min-h-9 min-w-0 flex-1 resize-none bg-transparent px-2 py-1.5 outline-none placeholder:text-muted-foreground"
                   onChange={(ev) => {
