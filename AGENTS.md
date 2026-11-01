@@ -24,3 +24,4 @@ Project memory lives in git, not in chat:
 - `docs/adr/` holds decisions that are hard to reverse, surprising and a real trade-off. Add the next numbered file when one is made; mark an old one `superseded by ADR-NNNN` rather than rewriting history.
 - GitHub Issues hold the plan. Issue #2 is the roadmap for the web UI and device tunnel; close or update tickets as work lands.
 - Commits use Conventional Commits and reference the issue they advance (`Refs #N`).
+- Run `pnpm typecheck`, `pnpm lint` and `pnpm test` before pushing. The standards (no `any`, no `var`, arrow functions only, braces always) are in `docs/contributing.md`.

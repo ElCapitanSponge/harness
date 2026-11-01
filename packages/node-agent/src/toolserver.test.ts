@@ -33,14 +33,16 @@ afterEach(async () => {
   await fs.rm(outside, { recursive: true, force: true });
 });
 
-async function call(allowed: string[], root: string, name: string, args: Record<string, unknown>): Promise<{ ok: boolean; output: string }> {
+const call = async (allowed: string[], root: string, name: string, args: Record<string, unknown>): Promise<{ ok: boolean; output: string }> => {
   const server = createToolServer({ roots: { proj: dir }, allowed });
   let result: TunnelMessage | undefined;
-  await server.handle({ type: "tool", id: "t1", root, name, args }, (m) => (result = m));
+  await server.handle({ type: "tool", id: "t1", root, name, args }, (m) => {
+    return (result = m);
+  });
   expect(result).toMatchObject({ type: "tool-result", id: "t1" });
   const r = result as unknown as { ok: boolean; output: string };
   return { ok: r.ok, output: r.output };
-}
+};
 
 describe("createToolServer", () => {
   const readOnly = ["read_file", "list_dir", "grep"];
@@ -69,7 +71,7 @@ describe("createToolServer", () => {
   });
 
   it("refuses an unknown root, including inherited object keys", async () => {
-    expect(await call(readOnly, "other", "read_file", { path: "a.txt" })).toEqual({ ok: false, output: 'unknown project root "other"' });
+    expect(await call(readOnly, "other", "read_file", { path: "a.txt" })).toEqual({ ok: false, output: "unknown project root \"other\"" });
     expect((await call(readOnly, "constructor", "read_file", { path: "a.txt" })).ok).toBe(false);
   });
 

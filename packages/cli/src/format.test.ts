@@ -2,13 +2,15 @@ import type { NodeRecord } from "@harness/core";
 import { describe, expect, it } from "vitest";
 import { formatModels, formatNodes } from "./format.js";
 
-const node = (over: Partial<NodeRecord> & { nodeId: string }): NodeRecord => ({
-  kind: "local",
-  busy: false,
-  models: [],
-  lastSeen: 100_000,
-  ...over,
-});
+const node = (over: Partial<NodeRecord> & { nodeId: string }): NodeRecord => {
+  return {
+    kind: "local",
+    busy: false,
+    models: [],
+    lastSeen: 100_000,
+    ...over,
+  };
+};
 
 describe("formatNodes", () => {
   it("says so when there are no nodes", () => {

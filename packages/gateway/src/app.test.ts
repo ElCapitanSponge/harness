@@ -4,33 +4,51 @@ import { createApp } from "./app.js";
 import { Registry } from "./registry.js";
 import { Sessions } from "./sessions.js";
 
-const beat = (over: Partial<Heartbeat> = {}): Heartbeat => ({
-  nodeId: "pc",
-  kind: "local",
-  busy: false,
-  models: [{ id: "qwen", loaded: true }, { id: "idle-model", loaded: false }],
-  ...over,
-});
+const beat = (over: Partial<Heartbeat> = {}): Heartbeat => {
+  return {
+    nodeId: "pc",
+    kind: "local",
+    busy: false,
+    models: [{ id: "qwen", loaded: true }, { id: "idle-model", loaded: false }],
+    ...over,
+  };
+};
 
-const json = (body: unknown, headers: Record<string, string> = {}) => ({
-  method: "POST",
-  headers: { "content-type": "application/json", ...headers },
-  body: JSON.stringify(body),
-});
+const json = (body: unknown, headers: Record<string, string> = {}) => {
+  return {
+    method: "POST",
+    headers: { "content-type": "application/json", ...headers },
+    body: JSON.stringify(body),
+  };
+};
 
-const chat = (over: Record<string, unknown> = {}) => ({ model: "auto", messages: [{ role: "user", content: "hi" }], ...over });
+const chat = (over: Record<string, unknown> = {}) => {
+  return { model: "auto", messages: [{ role: "user", content: "hi" }], ...over };
+};
 
 let registry: Registry;
 let relay: { request: ReturnType<typeof vi.fn>; callTool: ReturnType<typeof vi.fn>; callClaude: ReturnType<typeof vi.fn>; callModel: ReturnType<typeof vi.fn> };
 
-const build = (apiKey?: string) => createApp({ registry, apiKey, relay: relay as never, sessions: new Sessions({ registry, relay: relay as never, complete: (async () => ({ role: "assistant", content: "ok" })) as never }) });
+const build = (apiKey?: string) => {
+  return createApp({ registry, apiKey, relay: relay as never, sessions: new Sessions({ registry, relay: relay as never, complete: (async () => {
+    return { role: "assistant", content: "ok" };
+  }) as never }) });
+};
 
 beforeEach(() => {
   registry = new Registry();
   relay = {
-    callModel: vi.fn(async () => ({ ok: true, output: "loaded qwen" })),
-    callClaude: vi.fn(async () => ({ ok: true, output: JSON.stringify({ text: "pong", model: "claude:sonnet" }) })),
-    callTool: vi.fn(async () => ({ ok: true, output: "file contents" })), request: vi.fn(async () => new Response(JSON.stringify({ choices: [{ message: { role: "assistant", content: "hello" } }] }), { status: 200 })) };
+    callModel: vi.fn(async () => {
+      return { ok: true, output: "loaded qwen" };
+    }),
+    callClaude: vi.fn(async () => {
+      return { ok: true, output: JSON.stringify({ text: "pong", model: "claude:sonnet" }) };
+    }),
+    callTool: vi.fn(async () => {
+      return { ok: true, output: "file contents" };
+    }), request: vi.fn(async () => {
+      return new Response(JSON.stringify({ choices: [{ message: { role: "assistant", content: "hello" } }] }), { status: 200 });
+    }) };
 });
 
 describe("auth", () => {
@@ -65,7 +83,11 @@ describe("web page", () => {
     const html = await (await build().request("/")).text();
     const script = html.slice(html.indexOf("<script>") + 8, html.indexOf("</script>"));
     expect(script.length).toBeGreaterThan(1000);
-    expect(() => new Function(script)).not.toThrow();
+
+    expect(() => {
+      // eslint-disable-next-line @typescript-eslint/no-implied-eval -- compiling the page's script without running it is the whole test
+      return new Function(script);
+    }).not.toThrow();
   });
 });
 
@@ -73,7 +95,9 @@ describe("nodes", () => {
   it("lists the registered nodes", async () => {
     registry.upsert(beat());
     const nodes = (await (await build().request("/nodes")).json()) as { nodeId: string }[];
-    expect(nodes.map((n) => n.nodeId)).toEqual(["pc"]);
+    expect(nodes.map((n) => {
+      return n.nodeId;
+    })).toEqual(["pc"]);
   });
 
   it("no longer accepts heartbeats over HTTP; devices register through the tunnel", async () => {
@@ -82,8 +106,9 @@ describe("nodes", () => {
 });
 
 describe("device tools", () => {
-  const call = (app: ReturnType<typeof build>, nodeId: string, body: unknown, headers: Record<string, string> = {}) =>
-    app.request(`/devices/${nodeId}/tools`, json(body, headers));
+  const call = (app: ReturnType<typeof build>, nodeId: string, body: unknown, headers: Record<string, string> = {}) => {
+    return app.request(`/devices/${nodeId}/tools`, json(body, headers));
+  };
 
   it("runs a tool on a connected device and returns its result", async () => {
     registry.upsert(beat());
@@ -129,7 +154,9 @@ describe("device tools", () => {
 });
 
 describe("device model control", () => {
-  const post = (app: ReturnType<typeof build>, path: string, body: unknown, headers: Record<string, string> = {}) => app.request(path, json(body, headers));
+  const post = (app: ReturnType<typeof build>, path: string, body: unknown, headers: Record<string, string> = {}) => {
+    return app.request(path, json(body, headers));
+  };
 
   it("loads and unloads a model on a device that allows it", async () => {
     registry.upsert(beat({ modelControl: true }));
@@ -166,7 +193,9 @@ describe("device model control", () => {
 });
 
 describe("session endpoints", () => {
-  const post = (app: ReturnType<typeof build>, path: string, body: unknown) => app.request(path, json(body));
+  const post = (app: ReturnType<typeof build>, path: string, body: unknown) => {
+    return app.request(path, json(body));
+  };
 
   it("creates a session, lists it, and rejects bad input, unknown devices and missing sessions", async () => {
     registry.upsert(beat({ roots: ["proj"], allowedTools: ["read_file"] }));
@@ -175,7 +204,9 @@ describe("session endpoints", () => {
     const created = await post(app, "/sessions", { model: "qwen", device: "pc", root: "proj" });
     expect(created.status).toBe(201);
     const { id } = (await created.json()) as { id: string };
-    expect(((await (await app.request("/sessions")).json()) as { id: string }[]).map((s) => s.id)).toEqual([id]);
+    expect(((await (await app.request("/sessions")).json()) as { id: string }[]).map((s) => {
+      return s.id;
+    })).toEqual([id]);
 
     expect((await post(app, "/sessions", { model: "qwen" })).status).toBe(400);
     expect((await post(app, "/sessions", { model: "qwen", device: "ghost", root: "proj" })).status).toBe(400);
@@ -204,21 +235,31 @@ describe("/v1/models", () => {
   it("lists loaded local models but not unloaded ones", async () => {
     registry.upsert(beat());
     const body = (await (await build().request("/v1/models")).json()) as { data: { id: string; owned_by: string }[] };
-    const ids = body.data.map((m) => m.id);
+    const ids = body.data.map((m) => {
+      return m.id;
+    });
     expect(ids).toContain("qwen");
     expect(ids).not.toContain("idle-model");
-    expect(body.data.find((m) => m.id === "qwen")?.owned_by).toBe("pc");
+    expect(body.data.find((m) => {
+      return m.id === "qwen";
+    })?.owned_by).toBe("pc");
   });
 
   it("lists the Claude models only while a device that is logged in to Claude is connected", async () => {
     registry.upsert(beat());
     const without = (await (await build().request("/v1/models")).json()) as { data: { id: string }[] };
-    expect(without.data.map((m) => m.id)).not.toContain("claude");
+    expect(without.data.map((m) => {
+      return m.id;
+    })).not.toContain("claude");
 
     registry.upsert(beat({ nodeId: "mac", claude: true }));
     const withDevice = (await (await build().request("/v1/models")).json()) as { data: { id: string; owned_by: string }[] };
-    expect(withDevice.data.map((m) => m.id)).toEqual(expect.arrayContaining(["claude", "claude:sonnet", "claude:opus", "claude:haiku"]));
-    expect(withDevice.data.find((m) => m.id === "claude")?.owned_by).toBe("mac");
+    expect(withDevice.data.map((m) => {
+      return m.id;
+    })).toEqual(expect.arrayContaining(["claude", "claude:sonnet", "claude:opus", "claude:haiku"]));
+    expect(withDevice.data.find((m) => {
+      return m.id === "claude";
+    })?.owned_by).toBe("mac");
   });
 });
 
@@ -277,7 +318,7 @@ describe("chat: Claude routing", () => {
     expect(res.status).toBe(200);
     expect(res.headers.get("x-harness-node")).toBe("mac");
     expect(((await res.json()) as { choices: { message: { content: string } }[] }).choices[0]?.message.content).toBe("pong");
-    expect(relay.callClaude).toHaveBeenCalledWith("mac", expect.stringContaining('"model":"claude:sonnet"'));
+    expect(relay.callClaude).toHaveBeenCalledWith("mac", expect.stringContaining("\"model\":\"claude:sonnet\""));
     expect(relay.request).not.toHaveBeenCalled();
   });
 
@@ -285,7 +326,7 @@ describe("chat: Claude routing", () => {
     const res = await build().request("/v1/chat/completions", json(chat({ model: "claude", stream: true })));
     expect(res.headers.get("content-type")).toBe("text/event-stream");
     const text = await res.text();
-    expect(text).toContain('"content":"pong"');
+    expect(text).toContain("\"content\":\"pong\"");
     expect(text).toContain("data: [DONE]");
   });
 

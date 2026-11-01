@@ -16,28 +16,41 @@ import { Sessions, createCompleter } from "./sessions.js";
 import { attachTunnel } from "./tunnel.js";
 
 // A real gateway, a real node agent and a fake LM Studio, all on loopback: the device exposes nothing inbound.
-let gateway: Server;
-let lmstudio: Server;
+let gateway: Server | undefined;
+let lmstudio: Server | undefined;
 let tunnelHandle: { close(): void } | undefined;
-let attached: { close(): void };
+let attached: { close(): void } | undefined;
 
-const listen = (server: Server): Promise<number> =>
-  new Promise((resolve) => server.listen(0, "127.0.0.1", () => resolve((server.address() as AddressInfo).port)));
+const listen = (server: Server): Promise<number> => {
+  return new Promise((resolve) => {
+    return server.listen(0, "127.0.0.1", () => {
+      resolve((server.address() as AddressInfo).port);
+    });
+  });
+};
 
 afterEach(async () => {
   tunnelHandle?.close();
   attached?.close();
   lmstudio?.closeAllConnections();
   gateway?.closeAllConnections();
-  await Promise.all([new Promise((r) => lmstudio?.close(r)), new Promise((r) => gateway?.close(r))]);
+  await Promise.all([new Promise((r) => {
+    return lmstudio?.close(r);
+  }), new Promise((r) => {
+    return gateway?.close(r);
+  })]);
 });
 
 const until = async (check: () => boolean): Promise<void> => {
-  for (let i = 0; i < 200 && !check(); i++) await new Promise((r) => setTimeout(r, 10));
+  for (let i = 0; i < 200 && !check(); i++) {
+    await new Promise((r) => {
+      return setTimeout(r, 10);
+    });
+  }
   expect(check()).toBe(true);
 };
 
-async function setup(opts: { apiKey?: string; handler: Parameters<typeof createServer>[1]; tools?: ToolServer; claude?: ClaudeServer }) {
+const setup = async (opts: { apiKey?: string; handler: Parameters<typeof createServer>[1]; tools?: ToolServer; claude?: ClaudeServer }) => {
   lmstudio = createServer(opts.handler);
   const lmPort = await listen(lmstudio);
 
@@ -45,7 +58,10 @@ async function setup(opts: { apiKey?: string; handler: Parameters<typeof createS
   const relay = new Relay();
   const app = createApp({ registry, relay, sessions: new Sessions({ registry, relay, complete: createCompleter({ registry, relay }) }), apiKey: opts.apiKey });
   // The same adapter the real gateway uses, so streamed responses behave as they do in production.
-  gateway = createServer(getRequestListener(app.fetch));
+  const listener = getRequestListener(app.fetch);
+  gateway = createServer((req, res) => {
+    void listener(req, res);
+  });
   attached = attachTunnel(gateway, { registry, relay, apiKey: opts.apiKey });
   const gwPort = await listen(gateway);
 
@@ -53,14 +69,18 @@ async function setup(opts: { apiKey?: string; handler: Parameters<typeof createS
     gatewayUrl: `http://127.0.0.1:${gwPort}`,
     apiKey: opts.apiKey,
     intervalMs: 50,
-    heartbeat: async () => ({ nodeId: "pc", kind: "local", busy: false, models: [{ id: "qwen", loaded: true }], roots: opts.tools?.rootNames(), allowedTools: opts.tools?.allowedNames(), claude: opts.claude ? true : undefined }),
+    heartbeat: async () => {
+      return { nodeId: "pc", kind: "local", busy: false, models: [{ id: "qwen", loaded: true }], roots: opts.tools?.rootNames(), allowedTools: opts.tools?.allowedNames(), claude: opts.claude ? true : undefined };
+    },
     tools: opts.tools,
     claude: opts.claude,
     chat: createChatServer({ inferenceUrl: `http://127.0.0.1:${lmPort}` }),
   });
-  await until(() => registry.live().length === 1);
+  await until(() => {
+    return registry.live().length === 1;
+  });
   return { gwPort };
-}
+};
 
 describe("tools run on the device through the tunnel", () => {
   it("reads a file in the device's project root over the gateway, and refuses what it did not expose", async () => {
@@ -68,7 +88,9 @@ describe("tools run on the device through the tunnel", () => {
     await fs.writeFile(path.join(root, "hello.txt"), "hi from the device\n");
     try {
       const { gwPort } = await setup({
-        handler: () => undefined,
+        handler: () => {
+          return undefined;
+        },
         tools: createToolServer({ roots: { proj: root }, allowed: ["read_file", "list_dir"] }),
       });
       const call = async (body: unknown) => {
@@ -105,11 +127,13 @@ describe("a coding session over the tunnel", () => {
         tools: createToolServer({ roots: { proj: root }, allowed: ["read_file", "list_dir"] }),
         handler: (req, res) => {
           let body = "";
-          req.on("data", (c) => (body += c));
+          req.on("data", (c: Buffer) => {
+            body += c.toString();
+          });
           req.on("end", () => {
-            requests.push(JSON.parse(body));
-            const message =
-              requests.length === 1
+            requests.push(JSON.parse(body) as (typeof requests)[number]);
+            const message
+              = requests.length === 1
                 ? { role: "assistant", content: null, tool_calls: [{ id: "c1", type: "function", function: { name: "read_file", arguments: JSON.stringify({ path: "hello.txt" }) } }] }
                 : { role: "assistant", content: "The file greets you." };
             res.writeHead(200, { "content-type": "application/json" });
@@ -117,8 +141,12 @@ describe("a coding session over the tunnel", () => {
           });
         },
       });
-      const api = (p: string, init?: RequestInit) => fetch(`http://127.0.0.1:${gwPort}${p}`, init);
-      const post = (p: string, body: unknown) => api(p, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+      const api = (p: string, init?: RequestInit) => {
+        return fetch(`http://127.0.0.1:${gwPort}${p}`, init);
+      };
+      const post = (p: string, body: unknown) => {
+        return api(p, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+      };
 
       const created = await post("/sessions", { model: "qwen", device: "pc", root: "proj" });
       expect(created.status).toBe(201);
@@ -129,20 +157,26 @@ describe("a coding session over the tunnel", () => {
       const reader = events.body!.getReader();
       const decoder = new TextDecoder();
       let text = "";
-      while (!text.includes('"type":"done"')) {
+      while (!text.includes("\"type\":\"done\"")) {
         const chunk = await reader.read();
-        if (chunk.done) break;
+        if (chunk.done) {
+          break;
+        }
         text += decoder.decode(chunk.value);
       }
       await reader.cancel();
 
-      const types = [...text.matchAll(/"type":"(\w+)"/g)].map((m) => m[1]);
+      const types = [...text.matchAll(/"type":"(\w+)"/g)].map((m) => {
+        return m[1];
+      });
       expect(types).toEqual(["user", "tool", "text", "done"]);
       expect(text).toContain("The file greets you.");
       // The second model call saw the file contents that were read on the device.
       expect(JSON.stringify(requests[1]?.messages)).toContain("hi from the device");
       // The model was only offered the read-only tools this device allows.
-      expect((requests[0]?.tools as { function: { name: string } }[]).map((t) => t.function.name).sort()).toEqual(["list_dir", "read_file"]);
+      expect(((requests[0]?.tools ?? []) as { function: { name: string } }[]).map((t) => {
+        return t.function.name;
+      }).sort()).toEqual(["list_dir", "read_file"]);
     } finally {
       await fs.rm(root, { recursive: true, force: true });
     }
@@ -153,9 +187,13 @@ describe("approvals over the tunnel", () => {
   // A model that always asks to write notes.txt, then says it is finished once it has seen a tool result.
   const writerModel: Parameters<typeof createServer>[1] = (req, res) => {
     let body = "";
-    req.on("data", (c) => (body += c));
+    req.on("data", (c: Buffer) => {
+      body += c.toString();
+    });
     req.on("end", () => {
-      const sawResult = (JSON.parse(body) as { messages: { role: string }[] }).messages.some((m) => m.role === "tool");
+      const sawResult = (JSON.parse(body) as { messages: { role: string }[] }).messages.some((m) => {
+        return m.role === "tool";
+      });
       const message = sawResult
         ? { role: "assistant", content: "All done." }
         : {
@@ -168,14 +206,18 @@ describe("approvals over the tunnel", () => {
     });
   };
 
-  async function run(decide: boolean): Promise<{ root: string; types: string[] }> {
+  const run = async (decide: boolean): Promise<{ root: string; types: string[] }> => {
     const root = await fs.mkdtemp(path.join(os.tmpdir(), "harness-approval-"));
     const { gwPort } = await setup({
       tools: createToolServer({ roots: { proj: root }, allowed: ["read_file", "write_file"] }),
       handler: writerModel,
     });
-    const api = (p: string, init?: RequestInit) => fetch(`http://127.0.0.1:${gwPort}${p}`, init);
-    const post = (p: string, body: unknown) => api(p, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+    const api = (p: string, init?: RequestInit) => {
+      return fetch(`http://127.0.0.1:${gwPort}${p}`, init);
+    };
+    const post = (p: string, body: unknown) => {
+      return api(p, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+    };
 
     const { id } = (await (await post("/sessions", { model: "qwen", device: "pc", root: "proj" })).json()) as { id: string };
     await post(`/sessions/${id}/messages`, { text: "write the notes" });
@@ -184,11 +226,13 @@ describe("approvals over the tunnel", () => {
     const decoder = new TextDecoder();
     let text = "";
     let answered = false;
-    while (!text.includes('"type":"done"')) {
+    while (!text.includes("\"type\":\"done\"")) {
       const chunk = await reader.read();
-      if (chunk.done) break;
+      if (chunk.done) {
+        break;
+      }
       text += decoder.decode(chunk.value);
-      const ask = text.match(/"type":"approval","id":"([^"]+)"/);
+      const ask = /"type":"approval","id":"([^"]+)"/.exec(text);
       if (ask && !answered) {
         answered = true;
         // The file must not exist while the approval is still pending.
@@ -197,8 +241,10 @@ describe("approvals over the tunnel", () => {
       }
     }
     await reader.cancel();
-    return { root, types: [...text.matchAll(/"type":"([a-z-]+)"/g)].map((m) => m[1]!) };
-  }
+    return { root, types: [...text.matchAll(/"type":"([a-z-]+)"/g)].map((m) => {
+      return m[1]!;
+    }) };
+  };
 
   it("writes the file on the device only after it is approved", async () => {
     const { root, types } = await run(true);
@@ -225,7 +271,9 @@ describe("Claude served by a device over the tunnel", () => {
   it("answers a Claude chat through the gateway by running the CLI on the device, with no CLI on the gateway", async () => {
     const asked: string[] = [];
     const { gwPort } = await setup({
-      handler: () => undefined,
+      handler: () => {
+        return undefined;
+      },
       claude: createClaudeServer({
         bin: "claude",
         run: async (_bin, req) => {
@@ -236,7 +284,9 @@ describe("Claude served by a device over the tunnel", () => {
     });
 
     const models = (await (await fetch(`http://127.0.0.1:${gwPort}/v1/models`)).json()) as { data: { id: string; owned_by: string }[] };
-    expect(models.data.find((m) => m.id === "claude:sonnet")?.owned_by).toBe("pc");
+    expect(models.data.find((m) => {
+      return m.id === "claude:sonnet";
+    })?.owned_by).toBe("pc");
 
     const res = await fetch(`http://127.0.0.1:${gwPort}/v1/chat/completions`, {
       method: "POST",
@@ -250,9 +300,13 @@ describe("Claude served by a device over the tunnel", () => {
   });
 
   it("offers no Claude models and returns 503 when no device serves it", async () => {
-    const { gwPort } = await setup({ handler: () => undefined });
+    const { gwPort } = await setup({ handler: () => {
+      return undefined;
+    } });
     const models = (await (await fetch(`http://127.0.0.1:${gwPort}/v1/models`)).json()) as { data: { id: string }[] };
-    expect(models.data.map((m) => m.id)).not.toContain("claude");
+    expect(models.data.map((m) => {
+      return m.id;
+    })).not.toContain("claude");
     const res = await fetch(`http://127.0.0.1:${gwPort}/v1/chat/completions`, {
       method: "POST",
       headers: { "content-type": "application/json" },
@@ -269,7 +323,9 @@ describe("chat relayed through the tunnel", () => {
       apiKey: "k",
       handler: (req, res) => {
         let body = "";
-        req.on("data", (c) => (body += c));
+        req.on("data", (c: Buffer) => {
+          body += c.toString();
+        });
         req.on("end", () => {
           seen.push(`${req.method} ${req.url} ${body}`);
           res.writeHead(200, { "content-type": "application/json" });
@@ -280,7 +336,7 @@ describe("chat relayed through the tunnel", () => {
 
     const res = await fetch(`http://127.0.0.1:${gwPort}/v1/chat/completions`, {
       method: "POST",
-      headers: { "content-type": "application/json", authorization: "Bearer k" },
+      headers: { "content-type": "application/json", "authorization": "Bearer k" },
       body: JSON.stringify({ model: "auto", messages: [{ role: "user", content: "hi" }] }),
     });
     expect(res.status).toBe(200);
@@ -288,16 +344,16 @@ describe("chat relayed through the tunnel", () => {
     expect(JSON.stringify(await res.json())).toContain("hello from the device");
     expect(seen).toHaveLength(1);
     expect(seen[0]).toContain("POST /v1/chat/completions");
-    expect(seen[0]).toContain('"model":"qwen"');
+    expect(seen[0]).toContain("\"model\":\"qwen\"");
   });
 
   it("streams server-sent events through to the caller", async () => {
     const { gwPort } = await setup({
       handler: (_req, res) => {
         res.writeHead(200, { "content-type": "text/event-stream" });
-        res.write('data: {"choices":[{"delta":{"content":"one "}}]}\n\n');
+        res.write("data: {\"choices\":[{\"delta\":{\"content\":\"one \"}}]}\n\n");
         setTimeout(() => {
-          res.write('data: {"choices":[{"delta":{"content":"two"}}]}\n\n');
+          res.write("data: {\"choices\":[{\"delta\":{\"content\":\"two\"}}]}\n\n");
           res.end("data: [DONE]\n\n");
         }, 30);
       },
@@ -310,8 +366,8 @@ describe("chat relayed through the tunnel", () => {
     });
     expect(res.headers.get("content-type")).toBe("text/event-stream");
     const text = await res.text();
-    expect(text).toContain('"content":"one "');
-    expect(text).toContain('"content":"two"');
+    expect(text).toContain("\"content\":\"one \"");
+    expect(text).toContain("\"content\":\"two\"");
     expect(text).toContain("[DONE]");
   });
 
@@ -319,7 +375,7 @@ describe("chat relayed through the tunnel", () => {
     const { gwPort } = await setup({
       handler: (_req, res) => {
         res.writeHead(400, { "content-type": "application/json" });
-        res.end('{"error":{"message":"context too long"}}');
+        res.end("{\"error\":{\"message\":\"context too long\"}}");
       },
     });
     const res = await fetch(`http://127.0.0.1:${gwPort}/v1/chat/completions`, {
@@ -332,9 +388,13 @@ describe("chat relayed through the tunnel", () => {
   });
 
   it("returns a 502 naming the node when its model server is down", async () => {
-    const { gwPort } = await setup({ handler: () => undefined });
-    await new Promise((r) => lmstudio.close(r));
-    lmstudio.closeAllConnections();
+    const { gwPort } = await setup({ handler: () => {
+      return undefined;
+    } });
+    await new Promise((r) => {
+      return lmstudio?.close(r);
+    });
+    lmstudio?.closeAllConnections();
     const res = await fetch(`http://127.0.0.1:${gwPort}/v1/chat/completions`, {
       method: "POST",
       headers: { "content-type": "application/json" },

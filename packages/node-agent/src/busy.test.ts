@@ -3,7 +3,7 @@ import { detectBusy, parsePs, parseTasklist } from "./busy.js";
 
 describe("parseTasklist", () => {
   it("extracts lower-cased image names from csv lines, including CRLF and blanks", () => {
-    const out = parseTasklist('"System Idle Process","0","Services","0","8 K"\r\n"RocketLeague.exe","4242","Console","1","1,234,567 K"\r\n\r\n');
+    const out = parseTasklist("\"System Idle Process\",\"0\",\"Services\",\"0\",\"8 K\"\r\n\"RocketLeague.exe\",\"4242\",\"Console\",\"1\",\"1,234,567 K\"\r\n\r\n");
     expect(out).toEqual(new Set(["system idle process", "rocketleague.exe"]));
   });
 });
@@ -15,7 +15,9 @@ describe("parsePs", () => {
 });
 
 describe("detectBusy", () => {
-  const running = async () => new Set(["chrome.exe", "cs2.exe"]);
+  const running = async () => {
+    return new Set(["chrome.exe", "cs2.exe"]);
+  };
 
   it("reports busy with the name of the game that matched", async () => {
     expect(await detectBusy(["eldenring.exe", "cs2.exe"], running)).toEqual({ busy: true, reason: "game running: cs2.exe" });

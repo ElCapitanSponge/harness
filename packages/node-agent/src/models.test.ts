@@ -2,20 +2,32 @@ import type { TunnelMessage } from "@harness/core";
 import { describe, expect, it, vi } from "vitest";
 import { createModelServer } from "./models.js";
 
-const fakeLms = () => ({
-  serverStart: vi.fn(async () => "started"),
-  load: vi.fn(async (model: string) => `loaded ${model}`),
-  unload: vi.fn(async () => ""),
-});
+const fakeLms = () => {
+  return {
+    serverStart: vi.fn(async () => {
+      return "started";
+    }),
+    load: vi.fn(async (model: string) => {
+      return `loaded ${model}`;
+    }),
+    unload: vi.fn(async () => {
+      return "";
+    }),
+  };
+};
 
-async function run(opts: { enabled?: boolean; busy?: boolean }, msg: { op: "load" | "unload"; model?: string; contextLength?: number }) {
+const run = async (opts: { enabled?: boolean; busy?: boolean }, msg: { op: "load" | "unload"; model?: string; contextLength?: number }) => {
   const lms = fakeLms();
-  const server = createModelServer({ enabled: opts.enabled ?? true, isBusy: async () => opts.busy ?? false, lms });
+  const server = createModelServer({ enabled: opts.enabled ?? true, isBusy: async () => {
+    return opts.busy ?? false;
+  }, lms });
   const out: TunnelMessage[] = [];
-  await server.handle({ type: "model", id: "m1", ...msg }, (m) => out.push(m));
+  await server.handle({ type: "model", id: "m1", ...msg }, (m) => {
+    return out.push(m);
+  });
   expect(out).toHaveLength(1);
   return { lms, reply: out[0] as { type: "tool-result"; id: string; ok: boolean; output: string } };
-}
+};
 
 describe("createModelServer", () => {
   it("loads a model with its context length, starting the LM Studio server first", async () => {
@@ -64,7 +76,11 @@ describe("createModelServer", () => {
     const lms = fakeLms();
     lms.load.mockRejectedValue(new Error("model not found"));
     const out: TunnelMessage[] = [];
-    await createModelServer({ enabled: true, isBusy: async () => false, lms }).handle({ type: "model", id: "m", op: "load", model: "nope" }, (m) => out.push(m));
+    await createModelServer({ enabled: true, isBusy: async () => {
+      return false;
+    }, lms }).handle({ type: "model", id: "m", op: "load", model: "nope" }, (m) => {
+      return out.push(m);
+    });
     expect(out[0]).toMatchObject({ ok: false, output: "model not found" });
   });
 });

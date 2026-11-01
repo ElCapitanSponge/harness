@@ -8,11 +8,15 @@ let sender: Sender;
 beforeEach(() => {
   relay = new Relay();
   sent = [];
-  sender = { send: (data) => sent.push(JSON.parse(data)) };
+  sender = { send: (data) => {
+    return sent.push(JSON.parse(data) as Record<string, unknown>);
+  } };
   relay.attach("pc", sender);
 });
 
-const lastId = (): string => sent.at(-1)!.id as string;
+const lastId = (): string => {
+  return sent.at(-1)!.id as string;
+};
 
 describe("Relay tools", () => {
   it("sends a tool call down the tunnel and resolves with the device's result", async () => {
@@ -37,7 +41,9 @@ describe("Relay tools", () => {
   });
 
   it("ignores a result that comes from a different device", async () => {
-    relay.attach("laptop", { send: () => undefined });
+    relay.attach("laptop", { send: () => {
+      return undefined;
+    } });
     const pending = relay.callTool("pc", "proj", "read_file", {}, { timeoutMs: 50 });
     relay.handle("laptop", { type: "tool-result", id: lastId(), ok: true, output: "forged" });
     await expect(pending).rejects.toThrow("timed out");
@@ -59,10 +65,10 @@ describe("Relay model control", () => {
 
 describe("Relay Claude requests", () => {
   it("sends the request body to the device and resolves with its answer", async () => {
-    const pending = relay.callClaude("pc", '{"model":"claude"}');
-    expect(sent[0]).toMatchObject({ type: "claude", body: '{"model":"claude"}' });
-    relay.handle("pc", { type: "tool-result", id: lastId(), ok: true, output: '{"text":"pong"}' });
-    expect(await pending).toEqual({ ok: true, output: '{"text":"pong"}' });
+    const pending = relay.callClaude("pc", "{\"model\":\"claude\"}");
+    expect(sent[0]).toMatchObject({ type: "claude", body: "{\"model\":\"claude\"}" });
+    relay.handle("pc", { type: "tool-result", id: lastId(), ok: true, output: "{\"text\":\"pong\"}" });
+    expect(await pending).toEqual({ ok: true, output: "{\"text\":\"pong\"}" });
   });
 
   it("rejects when the device is not connected, or its tunnel closes while waiting", async () => {
@@ -83,8 +89,8 @@ describe("Relay", () => {
   });
 
   it("sends the request down the tunnel and streams the reply back as a Response", async () => {
-    const pending = relay.request("pc", '{"model":"qwen"}');
-    expect(sent[0]).toMatchObject({ type: "request", body: '{"model":"qwen"}' });
+    const pending = relay.request("pc", "{\"model\":\"qwen\"}");
+    expect(sent[0]).toMatchObject({ type: "request", body: "{\"model\":\"qwen\"}" });
     const id = lastId();
 
     relay.handle("pc", { type: "head", id, status: 200, contentType: "text/event-stream" });
@@ -102,12 +108,12 @@ describe("Relay", () => {
     const pending = relay.request("pc", "{}");
     const id = lastId();
     relay.handle("pc", { type: "head", id, status: 400 });
-    relay.handle("pc", { type: "chunk", id, data: '{"error":"bad"}' });
+    relay.handle("pc", { type: "chunk", id, data: "{\"error\":\"bad\"}" });
     relay.handle("pc", { type: "end", id });
     const res = await pending;
     expect(res.status).toBe(400);
     expect(res.headers.get("content-type")).toBe("application/json");
-    expect(await res.text()).toBe('{"error":"bad"}');
+    expect(await res.text()).toBe("{\"error\":\"bad\"}");
   });
 
   it("rejects when the device fails before sending a reply", async () => {
@@ -139,7 +145,9 @@ describe("Relay", () => {
   });
 
   it("ignores a detach from a connection that has since been replaced", async () => {
-    const newer: Sender = { send: () => undefined };
+    const newer: Sender = { send: () => {
+      return undefined;
+    } };
     relay.attach("pc", newer);
     relay.detach("pc", sender);
     expect(relay.connected("pc")).toBe(true);
@@ -162,15 +170,21 @@ describe("Relay", () => {
   });
 
   it("ignores replies for unknown ids and replies from a different device", async () => {
-    relay.attach("laptop", { send: () => undefined });
+    relay.attach("laptop", { send: () => {
+      return undefined;
+    } });
     const pending = relay.request("pc", "{}");
     const id = lastId();
     relay.handle("laptop", { type: "head", id, status: 200 });
     relay.handle("pc", { type: "head", id: "nope", status: 200 });
 
     let settled = false;
-    void pending.then(() => (settled = true));
-    await new Promise((r) => setTimeout(r, 20));
+    void pending.then(() => {
+      return (settled = true);
+    });
+    await new Promise((r) => {
+      return setTimeout(r, 20);
+    });
     expect(settled).toBe(false);
 
     relay.handle("pc", { type: "head", id, status: 200 });

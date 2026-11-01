@@ -2,21 +2,29 @@ import { NODE_TTL_MS, type Heartbeat } from "@harness/core";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { Registry } from "./registry.js";
 
-const hb = (nodeId: string): Heartbeat => ({
-  nodeId,
-  kind: "local",
-  busy: false,
-  models: [],
-});
+const hb = (nodeId: string): Heartbeat => {
+  return {
+    nodeId,
+    kind: "local",
+    busy: false,
+    models: [],
+  };
+};
 
 describe("Registry", () => {
-  beforeEach(() => vi.useFakeTimers());
-  afterEach(() => vi.useRealTimers());
+  beforeEach(() => {
+    return vi.useFakeTimers();
+  });
+  afterEach(() => {
+    return vi.useRealTimers();
+  });
 
   it("returns nodes that have heartbeated recently", () => {
     const r = new Registry();
     r.upsert(hb("pc"));
-    expect(r.live().map((n) => n.nodeId)).toEqual(["pc"]);
+    expect(r.live().map((n) => {
+      return n.nodeId;
+    })).toEqual(["pc"]);
   });
 
   it("drops nodes whose heartbeat is older than the TTL", () => {

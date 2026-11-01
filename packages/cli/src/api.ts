@@ -26,8 +26,12 @@ export class Gateway {
       headers: authHeaders(this.apiKey),
       signal: AbortSignal.timeout(5000),
     });
-    if (res.status === 401) throw new Error("gateway rejected the API key (set HARNESS_API_KEY)");
-    if (!res.ok) throw new Error(`gateway returned ${res.status}`);
+    if (res.status === 401) {
+      throw new Error("gateway rejected the API key (set HARNESS_API_KEY)");
+    }
+    if (!res.ok) {
+      throw new Error(`gateway returned ${res.status}`);
+    }
     return (await res.json()) as NodeRecord[];
   }
 
@@ -38,16 +42,28 @@ export class Gateway {
       headers: { "content-type": "application/json", ...authHeaders(this.apiKey) },
       body: JSON.stringify({ root, name, args }),
     });
-    const body = (await res.json().catch(() => ({}))) as { error?: { message?: string } } & Partial<DeviceToolResult>;
-    if (res.status === 401) throw new Error("gateway rejected the API key (set HARNESS_API_KEY)");
-    if (!res.ok) throw new Error(body.error?.message ?? `gateway returned ${res.status}`);
+    const body = (await res.json().catch(() => {
+      return {};
+    })) as { error?: { message?: string } } & Partial<DeviceToolResult>;
+    if (res.status === 401) {
+      throw new Error("gateway rejected the API key (set HARNESS_API_KEY)");
+    }
+    if (!res.ok) {
+      throw new Error(body.error?.message ?? `gateway returned ${res.status}`);
+    }
     return { ok: body.ok ?? false, output: body.output ?? "" };
   }
 
   private async check(res: Response): Promise<void> {
-    if (res.ok) return;
-    if (res.status === 401) throw new Error("gateway rejected the API key (set HARNESS_API_KEY)");
-    const body = (await res.json().catch(() => ({}))) as { error?: { message?: string } };
+    if (res.ok) {
+      return;
+    }
+    if (res.status === 401) {
+      throw new Error("gateway rejected the API key (set HARNESS_API_KEY)");
+    }
+    const body = (await res.json().catch(() => {
+      return {};
+    })) as { error?: { message?: string } };
     throw new Error(body.error?.message ?? `gateway returned ${res.status}`);
   }
 
@@ -72,10 +88,18 @@ export class Gateway {
   // Loads or unloads a model in a connected device's LM Studio.
   async deviceModel(device: string, op: "load" | "unload", input: { model?: string; contextLength?: number }): Promise<string> {
     const res = await this.fetchImpl(`${this.baseUrl}/devices/${encodeURIComponent(device)}/models/${op}`, this.json(input));
-    const body = (await res.json().catch(() => ({}))) as { error?: { message?: string }; ok?: boolean; output?: string };
-    if (res.status === 401) throw new Error("gateway rejected the API key (set HARNESS_API_KEY)");
-    if (!res.ok) throw new Error(body.error?.message ?? `gateway returned ${res.status}`);
-    if (!body.ok) throw new Error(body.output ?? "the device refused");
+    const body = (await res.json().catch(() => {
+      return {};
+    })) as { error?: { message?: string }; ok?: boolean; output?: string };
+    if (res.status === 401) {
+      throw new Error("gateway rejected the API key (set HARNESS_API_KEY)");
+    }
+    if (!res.ok) {
+      throw new Error(body.error?.message ?? `gateway returned ${res.status}`);
+    }
+    if (!body.ok) {
+      throw new Error(body.output ?? "the device refused");
+    }
     return body.output ?? "";
   }
 
@@ -84,11 +108,15 @@ export class Gateway {
   }
 
   // Follows a session's events from index `from` until the caller stops iterating or aborts.
-  async *sessionEvents(sessionId: string, from = 0, signal?: AbortSignal): AsyncGenerator<SessionEvent> {
+  async* sessionEvents(sessionId: string, from = 0, signal?: AbortSignal): AsyncGenerator<SessionEvent> {
     const res = await this.fetchImpl(`${this.baseUrl}/sessions/${sessionId}/events?from=${from}`, { headers: authHeaders(this.apiKey), signal });
     await this.check(res);
-    if (!res.body) return;
-    for await (const data of sseData(res.body)) yield JSON.parse(data) as SessionEvent;
+    if (!res.body) {
+      return;
+    }
+    for await (const data of sseData(res.body)) {
+      yield JSON.parse(data) as SessionEvent;
+    }
   }
 
   async complete(model: string, messages: ChatMessage[], tools?: Tool[]): Promise<Completion> {
@@ -97,22 +125,32 @@ export class Gateway {
       headers: { "content-type": "application/json", ...authHeaders(this.apiKey) },
       body: JSON.stringify({ model, messages, ...(tools?.length ? { tools } : {}) }),
     });
-    const body = (await res.json().catch(() => ({}))) as {
+    const body = (await res.json().catch(() => {
+      return {};
+    })) as {
       error?: { message?: string };
       model?: string;
       choices?: { message?: ChatMessage }[];
     };
-    if (res.status === 401) throw new Error("gateway rejected the API key (set HARNESS_API_KEY)");
-    if (!res.ok) throw new Error(body.error?.message ?? `gateway returned ${res.status}`);
+    if (res.status === 401) {
+      throw new Error("gateway rejected the API key (set HARNESS_API_KEY)");
+    }
+    if (!res.ok) {
+      throw new Error(body.error?.message ?? `gateway returned ${res.status}`);
+    }
     const message = body.choices?.[0]?.message;
-    if (!message) throw new Error("gateway returned no completion");
+    if (!message) {
+      throw new Error("gateway returned no completion");
+    }
     return { message, model: body.model ?? model, node: res.headers.get("x-harness-node") ?? "unknown" };
   }
 
   async chat(model: string, messages: ChatMessage[]): Promise<ChatReply> {
     const { message, model: used, node } = await this.complete(model, messages);
     const text = textOf(message.content);
-    if (!text && !message.tool_calls?.length) throw new Error("gateway returned no completion");
+    if (!text && !message.tool_calls?.length) {
+      throw new Error("gateway returned no completion");
+    }
     return { text, model: used, node };
   }
 }

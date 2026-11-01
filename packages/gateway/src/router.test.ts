@@ -2,18 +2,24 @@ import type { ChatRequest, NodeRecord } from "@harness/core";
 import { describe, expect, it } from "vitest";
 import { CLAUDE_MODEL_IDS, isClaudeModel, pickRoute } from "./router.js";
 
-const node = (over: Partial<NodeRecord> & { nodeId: string }): NodeRecord => ({
-  kind: "local",
-  busy: false,
-  models: [],
-  lastSeen: Date.now(),
-  ...over,
-});
+const node = (over: Partial<NodeRecord> & { nodeId: string }): NodeRecord => {
+  return {
+    kind: "local",
+    busy: false,
+    models: [],
+    lastSeen: Date.now(),
+    ...over,
+  };
+};
 
-const req = (model: string): ChatRequest => ({ model, messages: [{ role: "user", content: "hi" }] });
+const req = (model: string): ChatRequest => {
+  return { model, messages: [{ role: "user", content: "hi" }] };
+};
 
 describe("pickRoute", () => {
-  const loaded = (id: string) => ({ id, loaded: true });
+  const loaded = (id: string) => {
+    return { id, loaded: true };
+  };
 
   it("routes an exact model id to the node that has it loaded", () => {
     const a = node({ nodeId: "a", models: [loaded("qwen")] });

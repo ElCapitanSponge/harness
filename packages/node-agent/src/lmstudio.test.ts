@@ -1,10 +1,15 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { listModels } from "./lmstudio.js";
 
-const mockFetch = (body: unknown, ok = true, status = 200) =>
-  vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok, status, json: async () => body }));
+const mockFetch = (body: unknown, ok = true, status = 200) => {
+  return vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok, status, json: async () => {
+    return body;
+  } }));
+};
 
-afterEach(() => vi.unstubAllGlobals());
+afterEach(() => {
+  return vi.unstubAllGlobals();
+});
 
 describe("listModels", () => {
   it("maps loaded state and prefers the loaded context length", async () => {
@@ -22,7 +27,9 @@ describe("listModels", () => {
 
   it("filters out embedding models", async () => {
     mockFetch({ data: [{ id: "emb", type: "embeddings", state: "not-loaded" }, { id: "llm", type: "llm", state: "loaded" }] });
-    expect((await listModels("http://x")).map((m) => m.id)).toEqual(["llm"]);
+    expect((await listModels("http://x")).map((m) => {
+      return m.id;
+    })).toEqual(["llm"]);
   });
 
   it("throws when LM Studio returns an error status", async () => {

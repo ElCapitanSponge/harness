@@ -17,7 +17,9 @@ afterEach(async () => {
   await fs.rm(outside, { recursive: true, force: true });
 });
 
-const run = (name: string, args: Record<string, unknown>) => findTool(name)!.run(args, { cwd: dir });
+const run = (name: string, args: Record<string, unknown>) => {
+  return findTool(name)!.run(args, { cwd: dir });
+};
 
 describe("resolveInside", () => {
   it("accepts existing and not-yet-existing paths inside the directory", async () => {
@@ -56,7 +58,7 @@ describe("read_file", () => {
   });
 
   it("rejects a non-string path", async () => {
-    await expect(run("read_file", { path: 5 })).rejects.toThrow('"path" must be a string');
+    await expect(run("read_file", { path: 5 })).rejects.toThrow("\"path\" must be a string");
   });
 });
 
@@ -121,24 +123,26 @@ describe("edit_file", () => {
 
 describe("run_command", () => {
   it("returns output and the exit code", async () => {
-    expect(await run("run_command", { command: 'node -e "console.log(\'hi\')"' })).toBe("exit code 0\nhi");
+    expect(await run("run_command", { command: "node -e \"console.log('hi')\"" })).toBe("exit code 0\nhi");
   });
 
   it("reports a failing command", async () => {
-    const out = await run("run_command", { command: 'node -e "process.exit(3)"' });
+    const out = await run("run_command", { command: "node -e \"process.exit(3)\"" });
     expect(out).toContain("exit code 3");
   });
 
   it("runs in the working directory", async () => {
     await fs.writeFile(path.join(dir, "marker.txt"), "");
-    const out = await run("run_command", { command: 'node -e "console.log(require(\'fs\').readdirSync(\'.\').join())"' });
+    const out = await run("run_command", { command: "node -e \"console.log(require('fs').readdirSync('.').join())\"" });
     expect(out).toContain("marker.txt");
   });
 });
 
 describe("tool metadata", () => {
   it("only asks approval for tools that change things", () => {
-    const needs = Object.fromEntries(tools.map((t) => [t.def.function.name, t.needsApproval]));
+    const needs = Object.fromEntries(tools.map((t) => {
+      return [t.def.function.name, t.needsApproval];
+    }));
     expect(needs).toEqual({ read_file: false, list_dir: false, grep: false, write_file: true, edit_file: true, run_command: true });
   });
 });

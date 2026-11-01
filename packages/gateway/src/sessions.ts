@@ -27,23 +27,31 @@ export interface SessionStore {
 
 // Answers one model call for a coding session by routing it through the pool, like any other chat request. It asks for a
 // stream so the caller can show the model's thinking and answer as they arrive, and returns the finished message.
-export function createCompleter(deps: { registry: Registry; relay: Pick<Relay, "request"> }): Complete {
+export const createCompleter = (deps: { registry: Registry; relay: Pick<Relay, "request"> }): Complete => {
   return async (model, messages, tools, signal, hooks) => {
     const route = pickRoute(deps.registry.live(), { model, messages, tools });
-    if (!route) throw new Error(`no idle node has model "${model}" loaded`);
+    if (!route) {
+      throw new Error(`no idle node has model "${model}" loaded`);
+    }
     const res = await deps.relay.request(route.node.nodeId, JSON.stringify({ model: route.model, messages, tools, stream: true }), signal);
 
     if (!res.ok || !(res.headers.get("content-type") ?? "").includes("text/event-stream")) {
       // An error, or a server that answered in one piece anyway.
-      const body = (await res.json().catch(() => undefined)) as { error?: { message?: string }; choices?: { message?: ChatMessage }[] } | undefined;
-      if (!res.ok) throw new Error(body?.error?.message ?? `node ${route.node.nodeId} returned ${res.status}`);
+      const body = (await res.json().catch(() => {
+        return undefined;
+      })) as { error?: { message?: string }; choices?: { message?: ChatMessage }[] } | undefined;
+      if (!res.ok) {
+        throw new Error(body?.error?.message ?? `node ${route.node.nodeId} returned ${res.status}`);
+      }
       const message = body?.choices?.[0]?.message;
-      if (!message) throw new Error("the model returned no message");
+      if (!message) {
+        throw new Error("the model returned no message");
+      }
       return message;
     }
     return assembleStream(res, hooks);
   };
-}
+};
 
 interface StreamDelta {
   content?: string | null;
@@ -53,22 +61,28 @@ interface StreamDelta {
 }
 
 // Reads a chat completion stream, reporting text and reasoning as they arrive, and builds the finished message.
-export async function assembleStream(res: Response, hooks?: StreamHooks): Promise<ChatMessage> {
+export const assembleStream = async (res: Response, hooks?: StreamHooks): Promise<ChatMessage> => {
   let content = "";
   let reasoning = "";
   const calls: { id: string; name: string; args: string }[] = [];
 
   for await (const data of sseData(res.body as ReadableStream<Uint8Array>)) {
-    if (data === "[DONE]") break;
+    if (data === "[DONE]") {
+      break;
+    }
     let chunk: { error?: { message?: string }; choices?: { delta?: StreamDelta }[] };
     try {
-      chunk = JSON.parse(data);
+      chunk = JSON.parse(data) as typeof chunk;
     } catch {
       continue;
     }
-    if (chunk.error) throw new Error(chunk.error.message ?? "the model stream failed");
+    if (chunk.error) {
+      throw new Error(chunk.error.message ?? "the model stream failed");
+    }
     const delta = chunk.choices?.[0]?.delta;
-    if (!delta) continue;
+    if (!delta) {
+      continue;
+    }
 
     const thought = delta.reasoning_content ?? delta.reasoning;
     if (thought) {
@@ -83,18 +97,30 @@ export async function assembleStream(res: Response, hooks?: StreamHooks): Promis
     for (const piece of delta.tool_calls ?? []) {
       const at = piece.index ?? calls.length;
       const call = (calls[at] ??= { id: "", name: "", args: "" });
-      if (piece.id) call.id = piece.id;
-      if (piece.function?.name) call.name += piece.function.name;
-      if (piece.function?.arguments) call.args += piece.function.arguments;
+      if (piece.id) {
+        call.id = piece.id;
+      }
+      if (piece.function?.name) {
+        call.name += piece.function.name;
+      }
+      if (piece.function?.arguments) {
+        call.args += piece.function.arguments;
+      }
     }
   }
 
   const toolCalls: ToolCall[] = calls
-    .filter((c) => c?.name)
-    .map((c, i) => ({ id: c.id || `call_${i}`, type: "function" as const, function: { name: c.name, arguments: c.args } }));
-  if (!content && toolCalls.length === 0) throw new Error("the model returned no message");
+    .filter((c) => {
+      return c.name !== "";
+    })
+    .map((c, i) => {
+      return { id: c.id || `call_${i}`, type: "function" as const, function: { name: c.name, arguments: c.args } };
+    });
+  if (!content && toolCalls.length === 0) {
+    throw new Error("the model returned no message");
+  }
   return { role: "assistant", content, ...(toolCalls.length ? { tool_calls: toolCalls } : {}), ...(reasoning ? { reasoning_content: reasoning } : {}) };
-}
+};
 
 const APPROVAL_TIMEOUT_MS = 5 * 60_000;
 // Reasoning can run to many thousands of characters a step; keep enough to read without bloating saved sessions.
@@ -160,24 +186,34 @@ export class Session {
 
   // Replays what has already happened, then follows live. Returns an unsubscribe function.
   subscribe(listener: (event: SessionEvent | LiveSessionEvent) => void, from = 0): () => void {
-    for (const event of this.events.slice(from)) listener(event);
+    for (const event of this.events.slice(from)) {
+      listener(event);
+    }
     this.listeners.add(listener);
-    return () => this.listeners.delete(listener);
+    return () => {
+      return this.listeners.delete(listener);
+    };
   }
 
   private emit(event: SessionEvent): void {
     this.events.push(event);
-    for (const listener of this.listeners) listener(event);
+    for (const listener of this.listeners) {
+      listener(event);
+    }
   }
 
   // Live pieces go to whoever is watching right now and are not kept: the finished event holds the same words.
   private emitLive(event: LiveSessionEvent): void {
-    for (const listener of this.listeners) listener(event);
+    for (const listener of this.listeners) {
+      listener(event);
+    }
   }
 
   // Throws if a turn is running or the device is not connected: a session whose device is away can be read, not continued.
   send(text: string): void {
-    if (this.abort) throw new Error("the session is busy with a turn");
+    if (this.abort) {
+      throw new Error("the session is busy with a turn");
+    }
     const specs = this.deps.resolve(this.device, this.root);
     this.abort = new AbortController();
     this.emit({ type: "user", text });
@@ -187,30 +223,40 @@ export class Session {
 
   cancel(): void {
     this.abort?.abort();
-    for (const settle of [...this.approvals.values()]) settle(false);
+    for (const settle of this.approvals.values()) {
+      settle(false);
+    }
   }
 
   // Answers a pending approval. Returns false if there is no such approval (already answered or timed out).
   answer(approvalId: string, approved: boolean, always = false): boolean {
     const settle = this.approvals.get(approvalId);
-    if (!settle) return false;
+    if (!settle) {
+      return false;
+    }
     settle(approved, always);
     return true;
   }
 
   // Changes need an answer from whoever is driving the session. No answer in five minutes counts as no.
   private approve = (tool: string, summary: string): Promise<boolean> => {
-    if (this.autoApprove || this.always.has(tool)) return Promise.resolve(true);
+    if (this.autoApprove || this.always.has(tool)) {
+      return Promise.resolve(true);
+    }
     const id = randomUUID();
     return new Promise<boolean>((resolve) => {
       const settle = (approved: boolean, always = false): void => {
         clearTimeout(timer);
         this.approvals.delete(id);
-        if (approved && always) this.always.add(tool);
+        if (approved && always) {
+          this.always.add(tool);
+        }
         this.emit({ type: "approval-resolved", id, approved });
         resolve(approved);
       };
-      const timer = setTimeout(() => settle(false), APPROVAL_TIMEOUT_MS);
+      const timer = setTimeout(() => {
+        settle(false);
+      }, APPROVAL_TIMEOUT_MS);
       this.approvals.set(id, settle);
       this.emit({ type: "approval", id, tool, summary });
     });
@@ -223,21 +269,35 @@ export class Session {
         tools: specs,
         complete: async (messages, tools) => {
           // A cancel that arrived while a tool was running must stop the turn before the next model call.
-          if (abort.signal.aborted) throw new Error("cancelled");
+          if (abort.signal.aborted) {
+            throw new Error("cancelled");
+          }
           return this.deps.complete(this.model, messages, tools, abort.signal, {
-            thinking: (piece) => this.emitLive({ type: "thinking-delta", text: piece }),
-            text: (piece) => this.emitLive({ type: "text-delta", text: piece }),
+            thinking: (piece) => {
+              this.emitLive({ type: "thinking-delta", text: piece });
+            },
+            text: (piece) => {
+              this.emitLive({ type: "text-delta", text: piece });
+            },
           });
         },
         run: async (name, args) => {
           const result = await this.deps.relay.callTool(this.device, this.root, name, args, { session: this.id });
-          if (!result.ok) throw new Error(result.output);
+          if (!result.ok) {
+            throw new Error(result.output);
+          }
           return result.output;
         },
         approve: this.approve,
-        onThinking: (text) => this.emit({ type: "thinking", text: text.length > MAX_STORED_THOUGHT ? text.slice(0, MAX_STORED_THOUGHT) + "... (shortened)" : text }),
-        onText: (text) => this.emit({ type: "text", text }),
-        onTool: (summary) => this.emit({ type: "tool", summary }),
+        onThinking: (text) => {
+          this.emit({ type: "thinking", text: text.length > MAX_STORED_THOUGHT ? text.slice(0, MAX_STORED_THOUGHT) + "... (shortened)" : text });
+        },
+        onText: (text) => {
+          this.emit({ type: "text", text });
+        },
+        onTool: (summary) => {
+          this.emit({ type: "tool", summary });
+        },
       });
       this.emit({ type: "done", ...outcome });
     } catch (err) {
@@ -261,21 +321,43 @@ export class Sessions {
     this.deps = {
       relay: opts.relay,
       complete: opts.complete,
-      resolve: (device, root) => this.resolve(device, root),
-      connected: (device) => opts.registry.live().some((n) => n.nodeId === device),
+      resolve: (device, root) => {
+        return this.resolve(device, root);
+      },
+      connected: (device) => {
+        return opts.registry.live().some((n) => {
+          return n.nodeId === device;
+        });
+      },
       // A session that was deleted while its last turn was still ending must not be written back.
-      persist: (session) => this.sessions.has(session.id) && void opts.store?.save(session.toStored()).catch((err: Error) => console.warn(`[gateway] could not save session ${session.id}: ${err.message}`)),
+      persist: (session) => {
+        return this.sessions.has(session.id) && void opts.store?.save(session.toStored()).catch((err: unknown) => {
+          console.warn(`[gateway] could not save session ${session.id}: ${err instanceof Error ? err.message : String(err)}`);
+        });
+      },
     };
     // Sessions from before a restart come back as they were at the end of their last turn.
-    for (const stored of opts.stored ?? []) this.sessions.set(stored.id, new Session(stored, this.deps));
+    for (const stored of opts.stored ?? []) {
+      this.sessions.set(stored.id, new Session(stored, this.deps));
+    }
   }
 
   private resolve(device: string, root: string): ToolSpec[] {
-    const node = this.opts.registry.live().find((n) => n.nodeId === device);
-    if (!node) throw new Error(`device "${device}" is not connected`);
-    if (!node.roots?.includes(root)) throw new Error(`device "${device}" does not expose a project root named "${root}"`);
-    const specs = allTools.filter((t) => node.allowedTools?.includes(t.def.function.name));
-    if (specs.length === 0) throw new Error(`device "${device}" does not allow any tools`);
+    const node = this.opts.registry.live().find((n) => {
+      return n.nodeId === device;
+    });
+    if (!node) {
+      throw new Error(`device "${device}" is not connected`);
+    }
+    if (!node.roots?.includes(root)) {
+      throw new Error(`device "${device}" does not expose a project root named "${root}"`);
+    }
+    const specs = allTools.filter((t) => {
+      return node.allowedTools?.includes(t.def.function.name);
+    });
+    if (specs.length === 0) {
+      throw new Error(`device "${device}" does not allow any tools`);
+    }
     return specs;
   }
 
@@ -284,7 +366,9 @@ export class Sessions {
       throw new Error("Claude models cannot drive a coding session through the gateway yet; pick a local model");
     }
     this.resolve(input.device, input.root);
-    const platform = this.opts.registry.live().find((n) => n.nodeId === input.device)?.platform;
+    const platform = this.opts.registry.live().find((n) => {
+      return n.nodeId === input.device;
+    })?.platform;
     const session = new Session(
       { id: randomUUID(), model: input.model, device: input.device, root: input.root, created: Date.now(), history: [{ role: "system", content: systemPrompt(input.root, platform) }] },
       this.deps,
@@ -300,16 +384,24 @@ export class Sessions {
   }
 
   list(): SessionInfo[] {
-    return [...this.sessions.values()].map((s) => s.info()).sort((a, b) => b.created - a.created);
+    return [...this.sessions.values()].map((s) => {
+      return s.info();
+    }).sort((a, b) => {
+      return b.created - a.created;
+    });
   }
 
   // Stops a session and forgets it, including from disk.
   async delete(id: string): Promise<boolean> {
     const session = this.sessions.get(id);
-    if (!session) return false;
+    if (!session) {
+      return false;
+    }
     session.cancel();
     this.sessions.delete(id);
-    await this.opts.store?.remove(id).catch(() => undefined);
+    await this.opts.store?.remove(id).catch(() => {
+      return undefined;
+    });
     return true;
   }
 }

@@ -15,16 +15,22 @@ export interface AuditEntry {
 
 // Appends one JSON line per tool call to a file on this device, so what the gateway asked for is on record here
 // even if the gateway cannot be trusted. Writes are queued in order; a failure to write is reported once.
-export function createAuditLog(file: string, warn: (message: string) => void = console.warn): (entry: AuditEntry) => void {
-  let queue: Promise<unknown> = fs.mkdir(path.dirname(file), { recursive: true }).catch(() => undefined);
+export const createAuditLog = (file: string, warn: (message: string) => void = console.warn): (entry: AuditEntry) => void => {
+  let queue: Promise<unknown> = fs.mkdir(path.dirname(file), { recursive: true }).catch(() => {
+    return undefined;
+  });
   let warned = false;
   return (entry) => {
     queue = queue
-      .then(() => fs.appendFile(file, JSON.stringify(entry) + String.fromCharCode(10), { mode: 0o600 }))
-      .catch((err: Error) => {
-        if (warned) return;
+      .then(() => {
+        return fs.appendFile(file, JSON.stringify(entry) + String.fromCharCode(10), { mode: 0o600 });
+      })
+      .catch((err: unknown) => {
+        if (warned) {
+          return;
+        }
         warned = true;
-        warn(`[agent] cannot write the audit log ${file}: ${err.message}`);
+        warn(`[agent] cannot write the audit log ${file}: ${err instanceof Error ? err.message : String(err)}`);
       });
   };
-}
+};

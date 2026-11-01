@@ -4,11 +4,11 @@ type Send = (msg: TunnelMessage) => void;
 
 // Answers chat requests relayed from the gateway by calling this device's own model server on localhost
 // and streaming the reply back. It only ever calls the one chat endpoint, whatever the gateway sends.
-export function createChatServer(opts: { inferenceUrl: string; fetchImpl?: typeof fetch }) {
+export const createChatServer = (opts: { inferenceUrl: string; fetchImpl?: typeof fetch }) => {
   const fetchImpl = opts.fetchImpl ?? fetch;
   const inflight = new Map<string, AbortController>();
 
-  async function serve(id: string, body: string, send: Send, signal: AbortSignal): Promise<void> {
+  const serve = async (id: string, body: string, send: Send, signal: AbortSignal): Promise<void> => {
     try {
       const res = await fetchImpl(`${opts.inferenceUrl}/v1/chat/completions`, {
         method: "POST",
@@ -21,19 +21,25 @@ export function createChatServer(opts: { inferenceUrl: string; fetchImpl?: typeo
         const decoder = new TextDecoder();
         for await (const chunk of res.body as unknown as AsyncIterable<Uint8Array>) {
           const data = decoder.decode(chunk, { stream: true });
-          if (data) send({ type: "chunk", id, data });
+          if (data) {
+            send({ type: "chunk", id, data });
+          }
         }
         const rest = decoder.decode();
-        if (rest) send({ type: "chunk", id, data: rest });
+        if (rest) {
+          send({ type: "chunk", id, data: rest });
+        }
       }
       send({ type: "end", id });
     } catch (err) {
-      if (signal.aborted) return;
+      if (signal.aborted) {
+        return;
+      }
       send({ type: "fail", id, message: (err as Error).message });
     } finally {
       inflight.delete(id);
     }
-  }
+  };
 
   return {
     handle(msg: Extract<RelayRequest, { type: "request" | "cancel" }>, send: Send): void {
@@ -46,10 +52,12 @@ export function createChatServer(opts: { inferenceUrl: string; fetchImpl?: typeo
       void serve(msg.id, msg.body, send, controller.signal);
     },
     cancelAll(): void {
-      for (const controller of inflight.values()) controller.abort();
+      for (const controller of inflight.values()) {
+        controller.abort();
+      }
       inflight.clear();
     },
   };
-}
+};
 
 export type ChatServer = ReturnType<typeof createChatServer>;

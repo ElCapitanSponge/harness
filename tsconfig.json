@@ -17,5 +17,5 @@
       "@harness/lmstudio": ["./packages/lmstudio/src/index.ts"]
     }
   },
-  "include": ["packages/*/src/**/*.ts", "scripts/**/*.ts"]
+  "include": ["packages/*/src/**/*.ts", "scripts/**/*.ts", "eslint.config.ts"]
 }
