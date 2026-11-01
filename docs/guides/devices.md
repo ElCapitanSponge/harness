@@ -1,3 +1,10 @@
+---
+title: Devices and their settings
+description: What each device lets the gateway do, how its settings are changed, the shell, and adding a device
+sidebar:
+  order: 20
+---
+
 # Devices and their settings
 
 Each device decides what the gateway may do on it. The **Devices** button on the page shows every connected device's effective settings and, for a device that allows it, lets you change them without editing its `.env`.
@@ -28,7 +35,7 @@ A device with model control on unloads a model after **20 minutes without use** 
 
 ## Who decides
 
-A device accepts changes from the page only if it was started with `REMOTE_CONFIG=1` ([ADR 0008](adr/0008-devices-accept-remote-settings-only-when-opted-in.md)). Without it the page shows the settings read-only. The order of precedence is:
+A device accepts changes from the page only if it was started with `REMOTE_CONFIG=1` ([ADR 0008](../adr/0008-devices-accept-remote-settings-only-when-opted-in.md)). Without it the page shows the settings read-only. The order of precedence is:
 
 1. an environment variable on the device (the setting shows as locked, and a change is refused);
 2. the saved settings file (`SETTINGS_FILE`, default `~/.harness/agent-settings.json`);

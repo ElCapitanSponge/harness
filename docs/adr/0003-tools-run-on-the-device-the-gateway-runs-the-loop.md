@@ -1,5 +1,9 @@
 ---
+title: Tools run on the device that owns the files; the agent loop runs on the gateway
+description: In a coding session the model loop (model call, tool call, result) runs on the gateway, and each tool call is relayed over the tunnel to the chosen device, w...
 status: accepted
+sidebar:
+  order: 3
 ---
 
 # Tools run on the device that owns the files; the agent loop runs on the gateway

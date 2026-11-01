@@ -1,6 +1,13 @@
+---
+title: Importing and exporting conversations
+description: Bring a chat in from Claude Code, ChatGPT or Claude.ai, or take a conversation out as markdown
+sidebar:
+  order: 70
+---
+
 # Importing and exporting conversations
 
-Bring a chat from another tool into Torii and carry on with any model, or take a Torii conversation out as markdown. Importing never sends anything to a model: the turns become stored events and history exactly as they are, the conversation opens with a note saying where it came from, and the next message you send goes to whichever model you pick (see [switching-models.md](switching-models.md)). Before that message the usual check against the model's context window applies, so a very long import is compacted or refused with a reason, as any long conversation is.
+Bring a chat from another tool into Torii and carry on with any model, or take a Torii conversation out as markdown. Importing never sends anything to a model: the turns become stored events and history exactly as they are, the conversation opens with a note saying where it came from, and the next message you send goes to whichever model you pick (see [switching-models.md](models.md)). Before that message the usual check against the model's context window applies, so a very long import is compacted or refused with a reason, as any long conversation is.
 
 ## Import page
 

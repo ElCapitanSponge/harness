@@ -1,3 +1,10 @@
+---
+title: Security model
+description: What the gateway and devices trust, the limits on each device, and how to tighten them
+sidebar:
+  order: 6
+---
+
 # Security model
 
 The harness lets one service (the gateway) read files and run commands on every connected device. That is the point, and it is also the main risk. This page says what is protected, what is not, and how to tighten it.
@@ -8,6 +15,13 @@ The harness lets one service (the gateway) read files and run commands on every 
 - **The API key.** Anyone holding it can use the gateway, including starting coding sessions and answering approvals.
 - **Your tailnet.** The gateway listens only on loopback, the LAN and Tailscale addresses you choose, and refuses to start on a network address without a key. Anyone who can reach that port and has the key is you.
 - **The model.** A model can be wrong, or be steered by text it reads (a README, a web page, a file it was asked to summarise). Treat its tool calls as untrusted requests.
+
+## On the network
+
+- The gateway refuses to listen on any non-loopback address unless `HARNESS_API_KEY` is set, and refuses `0.0.0.0` or `::` unless `HARNESS_ALLOW_ANY_INTERFACE=1` (the container image sets it).
+- With a key set, every route requires `Authorization: Bearer <key>`, including the `/tunnel` WebSocket that devices register over.
+- The key lives in `.env`, which is git-ignored. Do not commit it or paste it into chats.
+- The Claude backend uses your own `claude` login, so anyone holding the harness key can spend your Claude plan. Treat the key accordingly.
 
 ## What limits the damage
 

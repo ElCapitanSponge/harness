@@ -1,3 +1,10 @@
+---
+title: Usage, context and compaction
+description: Where tokens go, the context meter, compacting a conversation, and the Usage page
+sidebar:
+  order: 40
+---
+
 # Context and usage
 
 Every model call is written to a **ledger** in the gateway's database: when, which conversation, which device and model, the prompt and completion tokens, how long it took, and the model's context window. The ledger survives restarts and keeps a deleted conversation's calls, so totals do not shrink when a chat is tidied away.

@@ -1,3 +1,10 @@
+---
+title: Claude in Torii
+description: How Claude answers through a logged-in device, what reaches it, effort levels and plan limits
+sidebar:
+  order: 30
+---
+
 # Claude in Torii
 
 Claude answers through a device that is logged in to it: the gateway sends the request down that device's tunnel and the agent runs the official `claude` program with the owner's own login and plan. The harness never reads or forwards the login. Turn Claude on for a device on the Devices page (or `CLAUDE_ENABLED=1`).
@@ -13,6 +20,10 @@ Each call runs the program from an empty folder with its own system prompt repla
 ## Effort
 
 Models that can be told how hard to think show an **Effort** choice next to the model picker: Default, then low, medium, high, xhigh and max for Claude (the program's `--effort`), and low, medium and high for the gpt-oss models (sent as the reasoning effort). A model that cannot be told shows no control. The choice belongs to the conversation, applies from the next message, and moving to a model with fewer levels uses its nearest one. Choose Default to leave it to the model.
+
+## Where the login lives
+
+The gateway does not run Claude itself. A device that is logged in to the official `claude` CLI answers Claude requests (turn Claude on for it on the Devices page, or start its agent with `CLAUDE_ENABLED=1`), so requests use that login and its plan limits. Claude models appear in `/v1/models` and the model picker only while such a device is connected, and a gateway in a container needs no login. The harness does not extract or proxy credentials ([ADR 0001](../adr/0001-claude-through-the-official-cli.md)). Usage is shared with everything else on that account.
 
 ## Limits
 

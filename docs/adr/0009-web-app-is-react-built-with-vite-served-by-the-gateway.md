@@ -1,5 +1,9 @@
 ---
+title: The web app is React built with Vite and served by the gateway
+description: "The first page was one HTML string inside the gateway: no build step, no dependencies, a strict policy that allowed only inline script."
 status: accepted
+sidebar:
+  order: 9
 ---
 
 # The web app is React built with Vite and served by the gateway

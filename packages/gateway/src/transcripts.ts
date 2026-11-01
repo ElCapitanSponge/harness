@@ -1,7 +1,7 @@
 import type { SessionEvent } from "@harness/core";
 
 // Bringing a conversation in from another tool, and writing one out. Pure functions of text, so each format can be tested. The
-// formats and what is kept are in docs/importing.md.
+// formats and what is kept are in docs/guides/importing.md.
 
 export interface Turn {
   role: "user" | "assistant";

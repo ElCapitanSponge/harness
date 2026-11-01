@@ -11,6 +11,7 @@
     "lint": "oxlint && eslint .",
     "test": "vitest run",
     "test:watch": "vitest",
+    "docs:check": "tsx scripts/docs-check.ts",
     "harness": "tsx --env-file-if-exists=.env packages/cli/src/bin.ts",
     "bench": "tsx scripts/bench.ts",
     "gateway": "pnpm --filter @harness/gateway start",

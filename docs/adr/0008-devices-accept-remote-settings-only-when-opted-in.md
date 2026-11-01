@@ -1,5 +1,9 @@
 ---
+title: Devices accept remote settings only when started with REMOTE_CONFIG=1
+description: The page can change a device's settings (project roots, allowed tools, model control, Claude, game processes) without editing its .env.
 status: accepted
+sidebar:
+  order: 8
 ---
 
 # Devices accept remote settings only when started with REMOTE_CONFIG=1

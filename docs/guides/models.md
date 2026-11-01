@@ -1,3 +1,10 @@
+---
+title: Models, Auto mode and switching
+description: Choosing a model for each message, how Auto chooses, and what happens when a conversation must fit a window
+sidebar:
+  order: 10
+---
+
 # Switching models inside a conversation
 
 The model is chosen for each message, not once for the conversation. Next to the message box, **Next message goes to** shows the model the conversation is on; pick another and that message, and the ones after it, go there. It can be a model on any connected device, or Claude.
@@ -14,7 +21,7 @@ Not a council: one model answers each message. Orchestrating several models on o
 
 ## Auto
 
-**Auto (Torii chooses)** is the first option in the model picker and what a new conversation starts on. Instead of you picking, the gateway chooses the model for each message from simple rules and says why under the reply ("Auto: qwen3-coder-30b: loaded on anakin, fits 3k tokens"). The rules are in [ADR 0010](adr/0010-auto-mode-chooses-by-rules-and-explains-itself.md); in short:
+**Auto (Torii chooses)** is the first option in the model picker and what a new conversation starts on. Instead of you picking, the gateway chooses the model for each message from simple rules and says why under the reply ("Auto: qwen3-coder-30b: loaded on anakin, fits 3k tokens"). The rules are in [ADR 0010](../adr/0010-auto-mode-chooses-by-rules-and-explains-itself.md); in short:
 
 - It only considers models that can hold the conversation plus a reply, and for a coding session only windows of 8,000 tokens or more.
 - It stays on the model that answered last while that still fits.

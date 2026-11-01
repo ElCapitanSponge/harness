@@ -1,5 +1,9 @@
 ---
+title: The gateway keeps its state in SQLite on the data volume
+description: Conversations, the usage ledger and device settings are stored in one SQLite database on the gateway's data volume, which on TrueNAS is a folder on the stora...
 status: accepted
+sidebar:
+  order: 7
 ---
 
 # The gateway keeps its state in SQLite on the data volume

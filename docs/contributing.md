@@ -19,6 +19,27 @@ CI runs the same three, in that order, plus a job that builds the gateway image 
 
 Commits follow [Conventional Commits](https://www.conventionalcommits.org): `type(scope): summary`, with `Refs #N` or `Closes #N` for the issue.
 
+## Repository layout
+
+| Package | Purpose |
+|---|---|
+| `packages/core` | Shared Zod schemas and the tunnel protocol: chat request, heartbeat, tool calls, session events |
+| `packages/tools` | The sandboxed file and command tools, skills, and the coding agent loop. Used by the CLI and the gateway |
+| `packages/claude` | Runs the `claude` CLI and shapes its answers as OpenAI responses |
+| `packages/lmstudio` | Wraps the `lms` CLI, with input checks |
+| `packages/node-agent` | Runs on each device: dials the gateway, reports models and busy state, answers relayed chat, tool, Claude and model-control requests |
+| `packages/gateway` | Device registry, router, tunnel, conversation store, OpenAI-compatible API and the web page |
+| `packages/web` | The web interface (React) the gateway serves |
+| `packages/cli` | The `harness` command |
+
+Routing policy lives in `packages/gateway/src/router.ts`, separate from transport, so tiering and fallback rules can change without touching the HTTP code.
+
+## Documentation
+
+A feature is not done until its page in `docs/` is written or updated, and the [glossary](../GLOSSARY.md) has any new term. Every page needs a `title`, a `description` and a `sidebar.order` in its front matter, and links between pages are relative, so the folder reads on GitHub, can be copied into the wiki and can feed a documentation site later. `pnpm docs:check` (also part of `pnpm test`, so CI runs it) fails on a missing front matter field, a link to a file that does not exist, or a link to a heading that does not exist.
+
+Where a page goes: `getting-started/` for the first hour, `guides/` for how to set up and use something, `reference/` for the complete lists (settings, commands, routes, protocol), `adr/` for decisions, `specs/` for plans. The page for a setting or a route goes in the reference as well as the guide.
+
 ## Code standards
 
 These are enforced by the linter, not by review. A rule is an error or it is off; there are no warnings.
