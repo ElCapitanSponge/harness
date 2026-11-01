@@ -44,6 +44,8 @@ export const WEB_PAGE = String.raw`<!doctype html>
   .approval .actions { display: flex; gap: 8px; flex-wrap: wrap; }
   .approval.answered .actions { display: none; }
   .note { color: var(--muted); font-size: 14px; }
+  .thought { color: var(--muted); font-size: 13px; margin-bottom: 6px; }
+  .thought div { white-space: pre-wrap; overflow-wrap: anywhere; }
   .role { font-size: 12px; color: var(--muted); margin-bottom: 2px; }
   form#send { display: flex; gap: 8px; padding: 12px 16px; border-top: 1px solid var(--line); }
   form#send textarea { flex: 1; resize: none; max-height: 40vh; }
@@ -226,14 +228,16 @@ export const WEB_PAGE = String.raw`<!doctype html>
     }
   }
 
-  // Reads a chat completion stream and calls onDelta with each piece of text.
-  async function readStream(res, onDelta) {
+  // Reads a chat completion stream. onDelta gets each piece of the answer; onThought gets the model's reasoning,
+  // which some models (Qwen 3.5, for one) stream first, for a long time, before any answer text.
+  async function readStream(res, onDelta, onThought) {
     await eachEvent(res, function (payload) {
       if (payload === "[DONE]") return;
       var parsed;
       try { parsed = JSON.parse(payload); } catch (e) { return; }
       if (parsed.error) throw new Error(parsed.error.message || "stream error");
       var delta = parsed.choices && parsed.choices[0] && parsed.choices[0].delta;
+      if (delta && delta.reasoning_content && onThought) onThought(delta.reasoning_content);
       if (delta && delta.content) onDelta(delta.content);
     });
   }
@@ -481,9 +485,26 @@ export const WEB_PAGE = String.raw`<!doctype html>
       });
       if (res.status === 401) throw new Error("The key was rejected. Sign out and enter it again.");
       if (!res.ok) throw new Error(await errorText(res));
+      var thought = null;
+      var thoughtText = "";
       await readStream(res, function (piece) {
+        if (thought && !reply) thought.open = false;
         reply += piece;
         body.textContent = reply;
+        $("log").scrollTop = $("log").scrollHeight;
+      }, function (piece) {
+        if (!thought) {
+          thought = document.createElement("details");
+          thought.className = "thought";
+          thought.open = true;
+          var title = document.createElement("summary");
+          title.textContent = "Thinking";
+          thought.appendChild(title);
+          thought.appendChild(document.createElement("div"));
+          body.parentNode.insertBefore(thought, body);
+        }
+        thoughtText += piece;
+        thought.lastChild.textContent = thoughtText;
         $("log").scrollTop = $("log").scrollHeight;
       });
       if (reply) history.push({ role: "assistant", content: reply });

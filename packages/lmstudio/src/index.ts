@@ -4,11 +4,21 @@ import path from "node:path";
 
 export type Run = (bin: string, args: string[]) => Promise<string>;
 
+// `lms` draws a spinner and progress percentage while loading. That arrives as terminal escape codes and a long run
+// of repeated "Loading <model> NN% <spinner>" frames. Keep only what a person would want to read.
+export function cleanOutput(text: string): string {
+  return text
+    .replace(/\u001b\[[0-9;?]*[A-Za-z]/g, "")
+    .replace(/Loading \S+ \d+% [⠀-⣿]\s*/g, "")
+    .replace(/\r/g, "")
+    .trim();
+}
+
 const defaultRun: Run = (bin, args) =>
   new Promise((resolve, reject) => {
     execFile(bin, args, { timeout: 300_000 }, (err, stdout, stderr) => {
-      if (err) reject(new Error(stderr.trim() || stdout.trim() || err.message));
-      else resolve(stdout.trim());
+      if (err) reject(new Error(cleanOutput(stderr) || cleanOutput(stdout) || err.message));
+      else resolve(cleanOutput(stdout));
     });
   });
 

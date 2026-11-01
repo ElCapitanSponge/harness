@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { loadArgs, unloadArgs, validateContext, validateModel } from "./index.js";
+import { cleanOutput, loadArgs, unloadArgs, validateContext, validateModel } from "./index.js";
 
 describe("validateModel", () => {
   it("accepts the ids LM Studio uses", () => {
@@ -26,6 +26,19 @@ describe("validateContext", () => {
     for (const v of [1.5, 0, -5, 255, 4_000_001, "8192", NaN, Infinity]) {
       expect(() => validateContext(v), String(v)).toThrow("invalid context length");
     }
+  });
+});
+
+describe("cleanOutput", () => {
+  it("drops the loading spinner and escape codes but keeps the result", () => {
+    const esc = String.fromCharCode(27);
+    const raw = `${esc}[?25lLoading qwen3.5-9b 0% ⠋${esc}[?25lLoading qwen3.5-9b 2% ⠙${esc}[?25lLoading qwen3.5-9b 100% ⠋${esc}[K${esc}[?25hModel loaded successfully in 21.59s.\r\n(6.10 GiB)\n`;
+    expect(cleanOutput(raw)).toBe("Model loaded successfully in 21.59s.\n(6.10 GiB)");
+  });
+
+  it("leaves plain output alone apart from trimming", () => {
+    expect(cleanOutput("  unloaded qwen \n")).toBe("unloaded qwen");
+    expect(cleanOutput("")).toBe("");
   });
 });
 
