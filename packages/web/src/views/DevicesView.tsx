@@ -177,7 +177,7 @@ const SettingsForm = ({ node, report }: { node: NodeRecord; report: SettingsRepo
         <p className="text-xs text-muted-foreground">Nothing in a read-only folder can be written, edited, deleted or committed, and commands do not run there. Sessions there are not offered the tools that could.</p>
       </Field>
       <Field name="onDeviceTools" label="Tools on this device" report={report}>
-        <ToolGroupControl group="device" label="Tools on this device" hint="Work on this machine's files and programs: reading files, searching, git, jq, fzf. Can change adds writing and editing files, running commands and committing, which always ask first." value={onDevice} onChange={setOnDevice} disabled={off("onDeviceTools")} tools={report.tools ?? []} />
+        <ToolGroupControl group="device" label="Tools on this device" hint="Work on this machine's files and programs: reading files, searching, git, jq, fzf. Can change adds a full shell (PowerShell 7 on Windows, or cmd if it is not installed; bash or zsh elsewhere), which can do anything the machine can, plus writing and editing files and committing. Each of them asks first." value={onDevice} onChange={setOnDevice} disabled={off("onDeviceTools")} tools={report.tools ?? []} />
       </Field>
       <Field name="remoteTools" label="Tools that reach out" report={report}>
         <ToolGroupControl group="remote" label="Tools that reach out" hint="Go beyond this machine: fetching web pages and GitHub. Can change adds opening pull requests and comments, which always ask first. Fetching a page asks each time." value={remote} onChange={setRemote} disabled={off("remoteTools")} tools={report.tools ?? []} />

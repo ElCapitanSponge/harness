@@ -8,7 +8,7 @@ Each device decides what the gateway may do on it. The **Devices** button on the
 | --- | --- | --- |
 | Project folders | `PROJECT_ROOTS` | The folders coding sessions may work in, as `name=path`. |
 | Read-only folders | `READ_ONLY_ROOTS` | Names of project folders that can only be read. Nothing in them can be written, edited, deleted or committed, and commands do not run there. |
-| Tools on this device | `ALLOW_ON_DEVICE_TOOLS` | `off`, `read` or `change` (default `read`). Tools that work on this machine's files and programs: reading and searching files, `git_read`, `jq`, `fzf_filter`. `change` adds `write_file`, `edit_file`, `run_command` and `git_write`, which always ask first. |
+| Tools on this device | `ALLOW_ON_DEVICE_TOOLS` | `off`, `read` or `change` (default `read`). Tools that work on this machine's files and programs: reading and searching files, `git_read`, `jq`, `fzf_filter`. `change` adds `write_file`, `edit_file`, `git_write` and `run_command`, a full shell (see below), which always ask first. |
 | Tools that reach out | `ALLOW_REMOTE_TOOLS` | `off`, `read` or `change` (default `off`). Tools that go beyond this machine: `web_fetch` and `gh_read`. `change` adds `gh_write`, which always asks first. |
 | Model control | `ALLOW_MODEL_CONTROL` | Lets the gateway load and unload models in this device's LM Studio. |
 | Claude | `CLAUDE_ENABLED` | Answers Claude requests with this device's logged-in `claude` CLI. |
@@ -47,3 +47,16 @@ Open **Devices → Add a device** and copy the command for the machine's operati
 ## From the command line
 
 `harness settings <device>` shows the same report as the page; `harness settings <device> <key> <json>` changes one setting (for example `harness settings anakin claude true`) on a device started with `REMOTE_CONFIG=1`. `harness sessions` lists saved conversations.
+
+## The shell
+
+With tools on this device set to **Can change**, the model gets `run_command`: one tool that runs a command in the device's own shell, so it can do nearly anything else a session needs (build, test, install packages, move or delete files, git, curl, any installed program) without a separate option for each. It asks first every time, unless you choose "Always allow run_command" for the session.
+
+- **Windows:** PowerShell 7 (`pwsh`) if it is installed, otherwise `cmd.exe`. Windows PowerShell 5 is not used.
+- **macOS and Linux:** your login shell if it is zsh or bash, otherwise bash, otherwise sh.
+- The agent tells the gateway which shell it has, and the model's instructions name it and its syntax (PowerShell cmdlets and `;`, or `dir`, `findstr` and `&&` in cmd), so it writes commands that will run.
+- Commands run in the project folder, with the exit code and output (both streams) returned, stopped after 120 seconds.
+- A command gets the agent's environment **without anything that looks like a secret**: `HARNESS_*`, and any name containing KEY, TOKEN, SECRET, PASSWORD, CREDENTIAL or AUTH (except `SSH_AUTH_SOCK`). So a command cannot read the gateway key or a token the agent holds. A program that needs a login (`gh`) uses its own saved login.
+- **A folder marked read-only never gets a shell**, because a command cannot be fenced in.
+
+Read-only keeps only the specific reading tools (`read_file`, `list_dir`, `grep`, `git_read`, `jq`, `fzf_filter`), because a shell cannot be made read-only.
