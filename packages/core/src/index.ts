@@ -134,15 +134,17 @@ export const DeviceToolResult = z.object({ ok: z.boolean(), output: z.string() }
 export type DeviceToolResult = z.infer<typeof DeviceToolResult>;
 
 // Starting a coding session, and sending it a message.
+// With no device and root it is a chat; with both it is a coding session on that device's project root.
 export const SessionCreate = z.object({
   model: z.string().min(1),
-  device: z.string().min(1),
-  root: z.string().min(1),
+  device: z.string().min(1).optional(),
+  root: z.string().min(1).optional(),
   // Skip approval prompts for this session. An explicit opt-in by whoever starts it.
   autoApprove: z.boolean().optional(),
 });
 export const SessionApproval = z.object({ approve: z.boolean(), always: z.boolean().optional() });
 export const SessionMessage = z.object({ text: z.string().min(1) });
+export const SessionRename = z.object({ title: z.string().trim().min(1).max(120) });
 
 // What happens in a coding session, in order. Sent to clients as server-sent events.
 export type SessionEvent
@@ -172,6 +174,10 @@ export interface SessionInfo {
   busy: boolean;
   events: number;
   created: number;
+  updated: number;
+  // A chat has no device or files; a code conversation works on a device's project root.
+  kind: "chat" | "code";
+  title: string;
   // Whether the device is connected now. A session whose device is away can be read but not continued.
   deviceConnected: boolean;
 }

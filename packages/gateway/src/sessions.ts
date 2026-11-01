@@ -14,10 +14,12 @@ export type Complete = (model: string, messages: ChatMessage[], tools: Tool[], s
 // Everything needed to bring a session back after a restart. Always taken at a turn boundary, never mid-turn.
 export interface StoredSession {
   id: string;
+  title: string;
   model: string;
   device: string;
   root: string;
   created: number;
+  updated: number;
   history: ChatMessage[];
   events: SessionEvent[];
 }
@@ -29,10 +31,26 @@ export interface SessionStore {
 
 // Answers one model call for a coding session by routing it through the pool, like any other chat request. It asks for a
 // stream so the caller can show the model's thinking and answer as they arrive, and returns the finished message.
-export const createCompleter = (deps: { registry: Registry; relay: Pick<Relay, "request">; loader: Pick<ModelLoader, "ensure"> }): Complete => {
+export const createCompleter = (deps: { registry: Registry; relay: Pick<Relay, "request" | "callClaude">; loader: Pick<ModelLoader, "ensure"> }): Complete => {
   return async (model, messages, tools, signal, hooks) => {
+    // Claude answers through a device that is logged in to it, in one piece.
+    if (isClaudeModel(model)) {
+      const device = deps.registry.live().find((n) => {
+        return n.claude;
+      });
+      if (!device) {
+        throw new Error("no connected device is logged in to Claude");
+      }
+      const reply = await deps.relay.callClaude(device.nodeId, JSON.stringify({ model, messages }));
+      if (!reply.ok) {
+        throw new Error(reply.output);
+      }
+      const text = (JSON.parse(reply.output) as { text: string }).text;
+      hooks?.text?.(text);
+      return { role: "assistant", content: text };
+    }
     const route = await resolveRoute({ registry: deps.registry, loader: deps.loader }, { model, messages, tools });
-    const res = await deps.relay.request(route.node.nodeId, JSON.stringify({ model: route.model, messages, tools, stream: true }), signal);
+    const res = await deps.relay.request(route.node.nodeId, JSON.stringify({ model: route.model, messages, tools: tools.length > 0 ? tools : undefined, stream: true }), signal);
 
     if (!res.ok || !(res.headers.get("content-type") ?? "").includes("text/event-stream")) {
       // An error, or a server that answered in one piece anyway.
@@ -122,6 +140,12 @@ export const assembleStream = async (res: Response, hooks?: StreamHooks): Promis
 };
 
 const APPROVAL_TIMEOUT_MS = 5 * 60_000;
+
+// A conversation is named after what it started with, until the person renames it.
+const titleFrom = (text: string): string => {
+  const oneLine = text.replace(/\s+/g, " ").trim();
+  return oneLine.length > 60 ? `${oneLine.slice(0, 57)}...` : oneLine;
+};
 // Reasoning can run to many thousands of characters a step; keep enough to read without bloating saved sessions.
 const MAX_STORED_THOUGHT = 6000;
 
@@ -137,6 +161,8 @@ interface SessionDeps {
 
 export class Session {
   readonly id: string;
+  title: string;
+  updated: number;
   readonly model: string;
   readonly device: string;
   readonly root: string;
@@ -149,17 +175,24 @@ export class Session {
   private always = new Set<string>();
 
   constructor(
-    init: Pick<StoredSession, "id" | "model" | "device" | "root" | "created"> & { history: ChatMessage[]; events?: SessionEvent[] },
+    init: Pick<StoredSession, "id" | "title" | "model" | "device" | "root" | "created" | "updated"> & { history: ChatMessage[]; events?: SessionEvent[] },
     private deps: SessionDeps,
     private autoApprove = false,
   ) {
     this.id = init.id;
+    this.title = init.title;
+    this.updated = init.updated;
     this.model = init.model;
     this.device = init.device;
     this.root = init.root;
     this.created = init.created;
     this.history = init.history;
     this.events = init.events ?? [];
+  }
+
+  // A chat has no device and no tools; a code conversation has both.
+  get kind(): "chat" | "code" {
+    return this.device === "" ? "chat" : "code";
   }
 
   get busy(): boolean {
@@ -175,12 +208,15 @@ export class Session {
       busy: this.busy,
       events: this.events.length,
       created: this.created,
-      deviceConnected: this.deps.connected(this.device),
+      updated: this.updated,
+      kind: this.kind,
+      title: this.title,
+      deviceConnected: this.kind === "chat" || this.deps.connected(this.device),
     };
   }
 
   toStored(): StoredSession {
-    return { id: this.id, model: this.model, device: this.device, root: this.root, created: this.created, history: [...this.history], events: [...this.events] };
+    return { id: this.id, title: this.title, model: this.model, device: this.device, root: this.root, created: this.created, updated: this.updated, history: [...this.history], events: [...this.events] };
   }
 
   // Replays what has already happened, then follows live. Returns an unsubscribe function.
@@ -201,6 +237,12 @@ export class Session {
     }
   }
 
+  rename(title: string): void {
+    this.title = title;
+    this.updated = Date.now();
+    this.deps.persist?.(this);
+  }
+
   // Live pieces go to whoever is watching right now and are not kept: the finished event holds the same words.
   private emitLive(event: LiveSessionEvent): void {
     for (const listener of this.listeners) {
@@ -213,7 +255,10 @@ export class Session {
     if (this.abort) {
       throw new Error("the session is busy with a turn");
     }
-    const specs = this.deps.resolve(this.device, this.root);
+    const specs = this.kind === "chat" ? [] : this.deps.resolve(this.device, this.root);
+    if (this.title === "") {
+      this.title = titleFrom(text);
+    }
     this.abort = new AbortController();
     this.emit({ type: "user", text });
     this.history.push({ role: "user", content: text });
@@ -305,10 +350,13 @@ export class Session {
       this.emit(abort.signal.aborted ? { type: "cancelled" } : { type: "error", message: (err as Error).message });
     } finally {
       this.abort = undefined;
+      this.updated = Date.now();
       this.deps.persist?.(this);
     }
   }
 }
+
+const CHAT_PROMPT = "You are a helpful assistant. Answer clearly and say so when you are not sure.";
 
 export class Sessions {
   private sessions = new Map<string, Session>();
@@ -360,16 +408,26 @@ export class Sessions {
     return specs;
   }
 
-  create(input: { model: string; device: string; root: string; autoApprove?: boolean }): Session {
-    if (isClaudeModel(input.model)) {
-      throw new Error("Claude models cannot drive a coding session through the gateway yet; pick a local model");
+  create(input: { model: string; device?: string; root?: string; autoApprove?: boolean }): Session {
+    if ((input.device === undefined) !== (input.root === undefined)) {
+      throw new Error("a coding session needs both a device and a project root; a chat needs neither");
     }
-    this.resolve(input.device, input.root);
-    const platform = this.opts.registry.live().find((n) => {
-      return n.nodeId === input.device;
-    })?.platform;
+    const device = input.device ?? "";
+    const root = input.root ?? "";
+    let prompt = CHAT_PROMPT;
+    if (device !== "") {
+      if (isClaudeModel(input.model)) {
+        throw new Error("Claude models cannot drive a coding session through the gateway yet; pick a local model");
+      }
+      this.resolve(device, root);
+      const platform = this.opts.registry.live().find((n) => {
+        return n.nodeId === device;
+      })?.platform;
+      prompt = systemPrompt(root, platform);
+    }
+    const now = Date.now();
     const session = new Session(
-      { id: randomUUID(), model: input.model, device: input.device, root: input.root, created: Date.now(), history: [{ role: "system", content: systemPrompt(input.root, platform) }] },
+      { id: randomUUID(), title: "", model: input.model, device, root, created: now, updated: now, history: [{ role: "system", content: prompt }] },
       this.deps,
       input.autoApprove ?? false,
     );
@@ -386,7 +444,7 @@ export class Sessions {
     return [...this.sessions.values()].map((s) => {
       return s.info();
     }).sort((a, b) => {
-      return b.created - a.created;
+      return b.updated - a.updated;
     });
   }
 

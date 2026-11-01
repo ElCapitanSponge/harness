@@ -1,5 +1,5 @@
 import { toOpenAIResponse, toSse, type ClaudeResult } from "@harness/claude";
-import { ChatRequest, DeviceToolRequest, ModelLoad, ModelUnload, SessionApproval, SessionCreate, SessionMessage, flattenError } from "@harness/core";
+import { ChatRequest, DeviceToolRequest, ModelLoad, ModelUnload, SessionApproval, SessionCreate, SessionMessage, SessionRename, flattenError } from "@harness/core";
 import { findTool } from "@harness/tools";
 import { Hono, type Context } from "hono";
 import { bearerAuth } from "./auth.js";
@@ -150,6 +150,21 @@ export const createApp = ({ registry, apiKey, relay, sessions, loader }: AppDeps
       return c.json({ error: { message: "no such pending approval" } }, 404);
     }
     return c.json({ ok: true });
+  });
+
+  app.patch("/sessions/:id", async (c) => {
+    const session = sessions.get(c.req.param("id"));
+    if (!session) {
+      return c.json({ error: { message: "no such conversation" } }, 404);
+    }
+    const parsed = SessionRename.safeParse(await c.req.json().catch(() => {
+      return undefined;
+    }));
+    if (!parsed.success) {
+      return c.json({ error: flattenError(parsed.error) }, 400);
+    }
+    session.rename(parsed.data.title);
+    return c.json(session.info());
   });
 
   app.delete("/sessions/:id", async (c) => {
