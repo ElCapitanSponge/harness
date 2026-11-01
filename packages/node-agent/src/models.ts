@@ -11,15 +11,20 @@ interface Lms {
 
 // Loads and unloads models in this device's LM Studio when the gateway asks, if the owner has allowed it.
 // A device that is busy (for example a game is running) refuses, so a remote load cannot take its GPU.
-export const createModelServer = (opts: { enabled: boolean; isBusy: () => Promise<boolean>; lms?: Lms }) => {
+export const createModelServer = (opts: { enabled: boolean | (() => boolean); isBusy: () => Promise<boolean>; lms?: Lms }) => {
   const lms = opts.lms ?? (realLms);
+  const enabled = (): boolean => {
+    return typeof opts.enabled === "function" ? opts.enabled() : opts.enabled;
+  };
   return {
-    enabled: opts.enabled,
+    get enabled(): boolean {
+      return enabled();
+    },
     async handle(msg: ModelMessage, send: (m: TunnelMessage) => void): Promise<void> {
       const reply = (ok: boolean, output: string): void => {
         send({ type: "tool-result", id: msg.id, ok, output });
       };
-      if (!opts.enabled) {
+      if (!enabled()) {
         reply(false, "remote model control is not enabled on this device (set ALLOW_MODEL_CONTROL=1)");
         return;
       }

@@ -239,7 +239,7 @@ describe("conversation routes", () => {
     const sessions = new Sessions({ registry, relay: { callTool: vi.fn() }, complete: setup().complete });
     const app = createApp({
       registry,
-      relay: { request: vi.fn(), callTool: vi.fn(), callClaude: vi.fn(), callModel: vi.fn() },
+      relay: { request: vi.fn(), callTool: vi.fn(), callClaude: vi.fn(), callModel: vi.fn(), callSettings: vi.fn() },
       loader: { ensure: vi.fn() },
       sessions,
     });

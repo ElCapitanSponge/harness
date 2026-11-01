@@ -21,6 +21,7 @@ const TOOL_TIMEOUT_MS = 150_000;
 const CLAUDE_TIMEOUT_MS = 10 * 60_000;
 // Loading a large model can take a few minutes.
 const MODEL_TIMEOUT_MS = 6 * 60_000;
+const SETTINGS_TIMEOUT_MS = 15_000;
 
 interface Pending {
   nodeId: string;
@@ -154,6 +155,13 @@ export class Relay {
     return this.rpc(nodeId, (id) => {
       return { type: "model", id, op, model, contextLength };
     }, MODEL_TIMEOUT_MS);
+  }
+
+  // Reads or changes a device's settings. The device decides whether to accept a change.
+  callSettings(nodeId: string, op: "get" | "set", settings?: Record<string, unknown>): Promise<ToolResult> {
+    return this.rpc(nodeId, (id) => {
+      return { type: "settings", id, op, settings };
+    }, SETTINGS_TIMEOUT_MS);
   }
 
   private rpc(nodeId: string, message: (id: string) => RelayRequest, timeoutMs: number): Promise<ToolResult> {

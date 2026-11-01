@@ -27,11 +27,17 @@ export const parseRoots = (value: string | undefined): Record<string, string> =>
 // Runs the tools the gateway asks for, only inside the project roots this device chose to expose and only the
 // tools in `allowed`. Anything else is refused here, whatever the gateway sends.
 export const createToolServer = (opts: { roots: Record<string, string>; allowed: string[]; audit?: (entry: AuditEntry) => void }) => {
-  const allowed = new Set(opts.allowed);
+  let roots = opts.roots;
+  let allowed = new Set(opts.allowed);
 
   return {
+    // Replaces what this device exposes, for a settings change that applies without a restart.
+    configure(next: { roots: Record<string, string>; allowed: string[] }): void {
+      roots = next.roots;
+      allowed = new Set(next.allowed);
+    },
     rootNames: (): string[] => {
-      return Object.keys(opts.roots);
+      return Object.keys(roots);
     },
     allowedNames: (): string[] => {
       return [...allowed];
@@ -54,7 +60,7 @@ export const createToolServer = (opts: { roots: Record<string, string>; allowed:
 
       const tool = findTool(msg.name);
       const summary = tool ? tool.describe(msg.args) : msg.name;
-      const cwd = Object.hasOwn(opts.roots, msg.root) ? opts.roots[msg.root] : undefined;
+      const cwd = Object.hasOwn(roots, msg.root) ? roots[msg.root] : undefined;
       if (!cwd) {
         finish(false, `unknown project root "${msg.root}"`, "refused", summary);
         return;

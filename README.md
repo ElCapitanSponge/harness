@@ -187,6 +187,8 @@ If no idle node matches, the gateway returns `503`.
 | `NODE_ID` | node agent | machine hostname. Must be unique: two devices with the same id keep replacing each other's connection |
 | `GAME_PROCESSES` | node agent | comma-separated executable names; a match marks the node busy |
 | `ALLOW_MODEL_CONTROL` | node agent | unset. Set to `1` to let the gateway load and unload models in this device's LM Studio (refused while the device is busy) |
+| `REMOTE_CONFIG` | node agent | unset. Set to `1` to let the page change this device's settings (see [devices.md](docs/devices.md)) |
+| `SETTINGS_FILE` | node agent | `~/.harness/agent-settings.json`. Where settings changed from the page are saved |
 | `PROJECT_ROOTS` | node agent | unset (no tools exposed). `name=path` entries for folders coding sessions may use |
 | `ALLOWED_TOOLS` | node agent | `read_file,list_dir,grep`. Add `write_file,edit_file,run_command` to allow changes |
 | `AUDIT_LOG` | node agent | `~/.harness/audit.log`. Every tool call the gateway makes on this device, one JSON line each |

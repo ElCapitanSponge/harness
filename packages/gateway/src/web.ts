@@ -83,6 +83,14 @@ export const WEB_PAGE = String.raw`<!doctype html>
   #gate h1 { margin: 0; }
   #gate p { margin: 0; color: var(--muted); }
   #gate .err { color: var(--error); min-height: 1.5em; }
+  #devices { flex: 1; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 12px; }
+  #devices-list { display: flex; flex-direction: column; gap: 12px; }
+  .dev-card, .dev-add { border: 1px solid var(--line); border-radius: 10px; padding: 12px; background: var(--surface); display: flex; flex-direction: column; gap: 8px; }
+  .dev-card h2 { margin: 0; font-size: 16px; }
+  .dev-card p, .dev-add p { margin: 0; }
+  .dev-field { display: flex; flex-direction: column; gap: 4px; }
+  .dev-checks { display: flex; flex-wrap: wrap; gap: 4px 14px; }
+  .dev-cmd { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
   [hidden] { display: none !important; }
 </style>
 </head>
@@ -107,6 +115,7 @@ export const WEB_PAGE = String.raw`<!doctype html>
     <button id="new" type="button">New</button>
     <button id="rename" type="button" disabled>Rename</button>
     <button id="forget" type="button" disabled>Delete</button>
+    <button id="devices-btn" type="button" aria-pressed="false">Devices</button>
     <button id="lock" type="button">Sign out</button>
   </header>
   <div id="codebar" hidden>
@@ -114,6 +123,9 @@ export const WEB_PAGE = String.raw`<!doctype html>
     <select id="root" aria-label="Project folder"></select>
     <button id="start" class="primary" type="button">Start session</button>
   </div>
+  <section id="devices" hidden>
+    <div id="devices-list"></div>
+  </section>
   <div id="log" hidden></div>
   <form id="send" hidden>
     <textarea id="input" rows="1" placeholder="Message" aria-label="Message"></textarea>
@@ -774,6 +786,166 @@ export const WEB_PAGE = String.raw`<!doctype html>
     this.style.height = Math.min(this.scrollHeight, window.innerHeight * 0.4) + "px";
     saveDraft();
   });
+
+  // ---- devices: each device's settings, changed from here when the device allows it ------------------------------------
+
+  var TOOL_NAMES = ["read_file", "list_dir", "grep", "write_file", "edit_file", "run_command"];
+  var SETTING_ENV = { projectRoots: "PROJECT_ROOTS", allowedTools: "ALLOWED_TOOLS", modelControl: "ALLOW_MODEL_CONTROL", claude: "CLAUDE_ENABLED", gameProcesses: "GAME_PROCESSES" };
+  var NL = String.fromCharCode(10);
+
+  function el(tag, cls, text) {
+    var e = document.createElement(tag);
+    if (cls) e.className = cls;
+    if (text !== undefined) e.textContent = text;
+    return e;
+  }
+
+  function showDevices(on) {
+    $("devices").hidden = !on;
+    $("log").hidden = on;
+    $("send").hidden = on;
+    $("codebar").hidden = on || mode !== "code";
+    $("devices-btn").setAttribute("aria-pressed", String(on));
+    if (on) loadDeviceSettings().catch(function (err) { $("devices-list").textContent = err.message || "Could not load devices."; });
+  }
+
+  function addCommand(host) {
+    var origin = window.location.origin;
+    var shown = [
+      { label: "Windows (PowerShell)", text: function (k) { return "$env:GATEWAY_URL='" + origin + "'; $env:HARNESS_API_KEY='" + k + "'; $env:REMOTE_CONFIG='1'; pnpm agent"; } },
+      { label: "Linux or macOS", text: function (k) { return "GATEWAY_URL=" + origin + " HARNESS_API_KEY=" + k + " REMOTE_CONFIG=1 pnpm agent"; } }
+    ];
+    var box = el("details", "dev-add");
+    box.appendChild(el("summary", "", "Add a device"));
+    box.appendChild(el("p", "note", "Run this from a clone of the repository on the new machine, after pnpm install. REMOTE_CONFIG=1 lets this page change its settings; leave it out to keep the device read-only. The key is copied, not shown."));
+    shown.forEach(function (s) {
+      var row = el("div", "dev-cmd");
+      row.appendChild(el("span", "", s.label));
+      var copy = el("button", "", "Copy command");
+      copy.type = "button";
+      copy.addEventListener("click", function () {
+        navigator.clipboard.writeText(s.text(key)).then(function () { copy.textContent = "Copied"; }, function () { copy.textContent = "Could not copy"; });
+      });
+      row.appendChild(copy);
+      box.appendChild(row);
+    });
+    host.appendChild(box);
+  }
+
+  function field(card, report, name, label, build) {
+    var wrap = el("div", "dev-field");
+    var locked = report.locked.indexOf(name) >= 0;
+    wrap.appendChild(el("label", "", label));
+    var control = build(report.settings[name], locked || !report.remoteConfig);
+    wrap.appendChild(control.node);
+    var source = report.sources[name];
+    wrap.appendChild(el("span", "note", locked ? "fixed by " + SETTING_ENV[name] + " on the device" : source === "file" ? "set from here" : "default"));
+    card.appendChild(wrap);
+    return control;
+  }
+
+  function deviceCard(node, report) {
+    var card = el("section", "dev-card");
+    card.appendChild(el("h2", "", node.nodeId + (node.platform ? " (" + node.platform + ")" : "")));
+    card.appendChild(el("p", "note", report.remoteConfig ? "This device accepts settings changes from here." : "Read-only: start its agent with REMOTE_CONFIG=1 to change settings from here."));
+
+    var roots = field(card, report, "projectRoots", "Project folders (name=path, one per line)", function (value, off) {
+      var t = el("textarea");
+      t.rows = 3;
+      t.disabled = off;
+      t.value = Object.keys(value).map(function (k) { return k + "=" + value[k]; }).join(NL);
+      return { node: t, read: function () {
+        var out = {};
+        t.value.split(NL).forEach(function (line) {
+          var i = line.indexOf("=");
+          if (i > 0 && line.slice(i + 1).trim()) out[line.slice(0, i).trim()] = line.slice(i + 1).trim();
+        });
+        return out;
+      } };
+    });
+    var tools = field(card, report, "allowedTools", "Tools coding sessions may run", function (value, off) {
+      var d = el("div", "dev-checks");
+      var boxes = TOOL_NAMES.map(function (name) {
+        var l = el("label", "dev-check");
+        var c = el("input");
+        c.type = "checkbox";
+        c.disabled = off;
+        c.checked = value.indexOf(name) >= 0;
+        l.appendChild(c);
+        l.appendChild(document.createTextNode(" " + name));
+        d.appendChild(l);
+        return { name: name, box: c };
+      });
+      return { node: d, read: function () { return boxes.filter(function (b) { return b.box.checked; }).map(function (b) { return b.name; }); } };
+    });
+    function toggle(name, label) {
+      return field(card, report, name, label, function (value, off) {
+        var c = el("input");
+        c.type = "checkbox";
+        c.disabled = off;
+        c.checked = value;
+        return { node: c, read: function () { return c.checked; } };
+      });
+    }
+    var control = toggle("modelControl", "Let the gateway load and unload models");
+    var claude = toggle("claude", "Answer Claude requests with this device's claude login");
+    var games = field(card, report, "gameProcesses", "Game programs that make the device busy (comma separated)", function (value, off) {
+      var t = el("input");
+      t.disabled = off;
+      t.value = value.join(", ");
+      return { node: t, read: function () { return t.value.split(",").map(function (s) { return s.trim(); }).filter(Boolean); } };
+    });
+
+    var status = el("div", "note");
+    status.setAttribute("role", "status");
+    if (report.remoteConfig) {
+      var save = el("button", "primary", "Save settings");
+      save.type = "button";
+      save.addEventListener("click", function () {
+        var patch = {};
+        var all = { projectRoots: roots, allowedTools: tools, modelControl: control, claude: claude, gameProcesses: games };
+        Object.keys(all).forEach(function (name) { if (report.locked.indexOf(name) < 0) patch[name] = all[name].read(); });
+        status.textContent = "Saving...";
+        fetch("/devices/" + encodeURIComponent(node.nodeId) + "/settings", {
+          method: "PUT",
+          headers: Object.assign({ "content-type": "application/json" }, authHeaders()),
+          body: JSON.stringify(patch)
+        }).then(function (res) {
+          if (!res.ok) return errorText(res).then(function (m) { status.textContent = "Not saved: " + m; status.className = "msg error"; });
+          status.className = "note";
+          status.textContent = "Saved. It applies now, with no restart.";
+          return loadDevices().catch(function () {});
+        }).catch(function (err) { status.textContent = "Not saved: " + (err.message || "failed"); status.className = "msg error"; });
+      });
+      card.appendChild(save);
+    }
+    card.appendChild(status);
+    return card;
+  }
+
+  async function loadDeviceSettings() {
+    var list = $("devices-list");
+    list.textContent = "Loading...";
+    var res = await fetch("/nodes", { headers: authHeaders() });
+    if (!res.ok) throw new Error(await errorText(res));
+    var all = await res.json();
+    list.textContent = "";
+    if (!all.length) list.appendChild(el("p", "note", "No device is connected."));
+    for (var i = 0; i < all.length; i++) {
+      var r = await fetch("/devices/" + encodeURIComponent(all[i].nodeId) + "/settings", { headers: authHeaders() });
+      if (r.ok) {
+        list.appendChild(deviceCard(all[i], await r.json()));
+      } else {
+        var card = el("section", "dev-card");
+        card.appendChild(el("h2", "", all[i].nodeId));
+        card.appendChild(el("p", "note", "Its settings cannot be read: " + (await errorText(r)) + ". An older agent does not support this; update it."));
+        list.appendChild(card);
+      }
+    }
+    addCommand(list);
+  }
+
+  $("devices-btn").addEventListener("click", function () { showDevices($("devices").hidden); });
 
   show(false);
   if (key) connect(key).catch(function () { try { sessionStorage.removeItem("harness-key"); } catch (e) {} show(false); });

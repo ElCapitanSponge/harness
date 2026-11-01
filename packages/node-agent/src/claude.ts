@@ -5,10 +5,14 @@ type ClaudeMessage = Extract<RelayRequest, { type: "claude" }>;
 
 // Answers Claude requests with the official `claude` CLI on this device, using the login already on it.
 // The harness never reads or forwards that login; it only starts the CLI and returns what it printed.
-export const createClaudeServer = (opts: { bin: string; run?: (bin: string, req: ChatRequest) => Promise<ClaudeResult> }) => {
+export const createClaudeServer = (opts: { bin: string; enabled?: () => boolean; run?: (bin: string, req: ChatRequest) => Promise<ClaudeResult> }) => {
   const run = opts.run ?? runClaude;
   return {
     async handle(msg: ClaudeMessage, send: (m: TunnelMessage) => void): Promise<void> {
+      if (opts.enabled && !opts.enabled()) {
+        send({ type: "tool-result", id: msg.id, ok: false, output: "Claude is not enabled on this device" });
+        return;
+      }
       try {
         const parsed = ChatRequest.safeParse(JSON.parse(msg.body));
         if (!parsed.success) {
