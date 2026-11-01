@@ -32,8 +32,9 @@ export const Models: StoryObj = {
   },
   play: async ({ canvasElement }) => {
     const picker = within(canvasElement).getByLabelText("Model");
-    // The first usable model is chosen for you; ones that cannot run are listed but cannot be chosen.
-    await expect(picker).toHaveValue("qwen3-coder-30b");
+    // Auto is chosen for you; ones that cannot run are listed but cannot be chosen.
+    await expect(picker).toHaveValue("auto");
+    await expect(within(picker).getByRole("option", { name: "Auto (Torii chooses)" })).toBeEnabled();
     await expect(within(picker).getByRole("option", { name: /llama-70b/ })).toBeDisabled();
     await expect(within(picker).getByRole("option", { name: /phi-4.*busy/ })).toBeDisabled();
   },
@@ -81,7 +82,9 @@ export const NoModels: StoryObj = {
     return <div className="max-w-sm"><ModelPicker value="" onChange={fn()} /></div>;
   },
   play: async ({ canvasElement }) => {
-    await expect(within(canvasElement).getByLabelText("Model")).toBeDisabled();
+    // With nothing connected, Auto is all there is, and it will say why nothing can be chosen when a message is sent.
+    await expect(within(canvasElement).getByLabelText("Model")).toHaveValue("auto");
+    await expect(within(canvasElement).getByRole("option", { name: "No models: connect a device" })).toBeDisabled();
   },
 };
 

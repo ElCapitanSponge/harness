@@ -434,3 +434,45 @@ describe("Session approvals", () => {
     expect(s.answer(id, true)).toBe(false);
   });
 });
+
+describe("Session in Auto mode", () => {
+  const auto = (): Session => {
+    sessions = new Sessions({
+      registry,
+      relay,
+      complete: complete,
+      autoPrefs: { prefer: [], avoid: [], keepFree: [] },
+    });
+    return create({ model: "auto" });
+  };
+
+  it("chooses a model for the turn, answers with it, and says why", async () => {
+    registry.upsert(beat({ models: [{ id: "qwen", loaded: true, contextLength: 32_768 }] }));
+    script({ role: "assistant", content: "hi" });
+    const s = auto();
+    s.send("hello");
+    await until(() => {
+      return types(s).includes("done");
+    });
+    expect(complete.mock.calls[0]?.[0]).toBe("qwen");
+    expect(s.model).toBe("auto");
+    expect(s.info().chosen).toMatchObject({ model: "qwen", device: "pc" });
+    expect(s.events.find((e) => {
+      return e.type === "text";
+    })).toMatchObject({ model: "qwen", reason: expect.stringContaining("qwen") as string });
+  });
+
+  it("ends the turn with the reason, and keeps nothing, when no model can be used", async () => {
+    registry.upsert(beat({ busy: true, busyReason: "a game" }));
+    const s = auto();
+    s.send("hello");
+    await until(() => {
+      return types(s).includes("error");
+    });
+    expect(complete).not.toHaveBeenCalled();
+    expect(s.events.find((e) => {
+      return e.type === "error";
+    })).toMatchObject({ message: expect.stringContaining("every device is busy") as string });
+    expect(s.busy).toBe(false);
+  });
+});

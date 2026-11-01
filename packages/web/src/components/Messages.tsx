@@ -59,7 +59,7 @@ export const Message = ({ item, model, onAnswer }: { item: Item; model: string; 
             <Bot className="size-4" />
           </div>
           <div className="min-w-0 flex-1 pr-10">
-            <div className="mb-0.5 text-xs font-semibold text-muted-foreground">{item.model ?? model}{item.device ? <span className="font-normal"> on {item.device}</span> : null}</div>
+            <div className="mb-0.5 text-xs font-semibold text-muted-foreground">{item.model ?? model}{item.device ? <span className="font-normal"> on {item.device}</span> : null}{item.reason ? <span className="font-normal"> - Auto: {item.reason}</span> : null}</div>
             <Markdown text={item.text} />
             {item.streaming ? <span className="ml-0.5 inline-block h-4 w-1.5 animate-pulse bg-primary align-middle" aria-hidden /> : null}
           </div>

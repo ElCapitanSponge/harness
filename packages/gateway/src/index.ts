@@ -9,6 +9,7 @@ import { assertSafeBinding } from "./auth.js";
 import { resolveHosts } from "./hosts.js";
 import { Registry } from "./registry.js";
 import { Relay } from "./relay.js";
+import { parseList } from "./auto.js";
 import { ClaudeState } from "./claude.js";
 import { Sessions, createCompleter } from "./sessions.js";
 import { importLegacySessions } from "./legacy.js";
@@ -48,6 +49,13 @@ const sessions = new Sessions({
   compactAt: Number.isFinite(compactPercent) && compactPercent > 0 && compactPercent < 100 ? compactPercent / 100 : 0,
   registry,
   relay,
+  claude,
+  // Auto mode: models to prefer or avoid (names, best first), and devices it must never choose.
+  autoPrefs: {
+    prefer: parseList(process.env.HARNESS_AUTO_PREFER),
+    avoid: parseList(process.env.HARNESS_AUTO_AVOID),
+    keepFree: parseList(process.env.HARNESS_AUTO_KEEP_FREE),
+  },
   complete: createCompleter({ registry, relay, loader, claude }),
   store,
   stored: store.loadAll(),

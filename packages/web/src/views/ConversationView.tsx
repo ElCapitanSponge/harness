@@ -50,7 +50,7 @@ const Conversation = ({ id }: { id: string }) => {
       <header className="flex items-center gap-2 border-b bg-card px-4 py-2">
         {info?.kind === "code" ? <Code2 className="size-4 text-muted-foreground" /> : <MessageSquare className="size-4 text-muted-foreground" />}
         <h1 className="min-w-0 flex-1 truncate text-base font-semibold">{info ? (info.title || "New conversation") : "Conversation"}</h1>
-        {info ? <Badge tone="brand">{info.model}</Badge> : null}
+        {info ? <Badge tone="brand">{info.model === "auto" ? `Auto${info.chosen ? `: ${info.chosen.model}` : ""}` : info.model}</Badge> : null}
         {info ? <ContextMeter id={id} busy={state.busy} /> : null}
         {info?.kind === "code" ? <Badge tone={info.deviceConnected ? "neutral" : "warning"}>{info.device}:{info.root}{info.deviceConnected ? "" : " offline"}</Badge> : null}
         {info
@@ -102,7 +102,7 @@ const Conversation = ({ id }: { id: string }) => {
       <div className="mx-auto flex w-full max-w-3xl items-center gap-2 px-4 pb-1.5 text-xs text-muted-foreground">
         <span>Next message goes to</span>
         <ModelPicker className="h-7 w-auto max-w-64 text-xs" value={picked || model} disabled={state.busy || !info} onChange={setPicked} />
-        <EffortPicker className="h-7 w-auto max-w-40 text-xs" model={picked || model} value={pickedEffort === "default" ? undefined : (pickedEffort ?? info?.effort)} disabled={state.busy || !info} onChange={(next) => {
+        <EffortPicker className="h-7 w-auto max-w-40 text-xs" model={(picked || model) === "auto" ? (info?.chosen?.model ?? "auto") : (picked || model)} value={pickedEffort === "default" ? undefined : (pickedEffort ?? info?.effort)} disabled={state.busy || !info} onChange={(next) => {
           setPickedEffort(next ?? "default");
         }}
         />
