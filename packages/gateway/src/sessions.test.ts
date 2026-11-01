@@ -74,7 +74,7 @@ describe("Sessions.create", () => {
     const s = create();
     expect(sessions.get(s.id)).toBe(s);
     expect(sessions.list()).toEqual([
-      { id: s.id, model: "qwen", device: "pc", root: "proj", busy: false, events: 0, created: expect.any(Number) as number, deviceConnected: true },
+      { id: s.id, model: "qwen", device: "pc", root: "proj", busy: false, events: 0, created: expect.any(Number) as number, updated: expect.any(Number) as number, kind: "code", title: "", deviceConnected: true },
     ]);
   });
 

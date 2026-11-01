@@ -212,7 +212,10 @@ describe("session endpoints", () => {
       return s.id;
     })).toEqual([id]);
 
-    expect((await post(app, "/sessions", { model: "qwen" })).status).toBe(400);
+    // A model alone is a chat. A device without a project root, or a root without a device, is a mistake.
+    expect((await post(app, "/sessions", {})).status).toBe(400);
+    expect((await post(app, "/sessions", { model: "qwen", device: "pc" })).status).toBe(400);
+    expect((await post(app, "/sessions", { model: "qwen", root: "proj" })).status).toBe(400);
     expect((await post(app, "/sessions", { model: "qwen", device: "ghost", root: "proj" })).status).toBe(400);
     expect((await post(app, "/sessions/nope/messages", { text: "hi" })).status).toBe(404);
     expect((await post(app, `/sessions/${id}/messages`, { text: "" })).status).toBe(400);

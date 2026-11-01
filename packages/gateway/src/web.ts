@@ -102,16 +102,17 @@ export const WEB_PAGE = String.raw`<!doctype html>
       <button id="tab-chat" type="button" aria-pressed="true">Chat</button>
       <button id="tab-code" type="button" aria-pressed="false">Code</button>
     </div>
+    <select id="past" aria-label="Conversations"></select>
     <select id="model" aria-label="Model"></select>
-    <button id="new" type="button">New chat</button>
+    <button id="new" type="button">New</button>
+    <button id="rename" type="button" disabled>Rename</button>
+    <button id="forget" type="button" disabled>Delete</button>
     <button id="lock" type="button">Sign out</button>
   </header>
   <div id="codebar" hidden>
     <select id="device" aria-label="Device"></select>
     <select id="root" aria-label="Project folder"></select>
     <button id="start" class="primary" type="button">Start session</button>
-    <select id="past" aria-label="Past sessions"></select>
-    <button id="forget" type="button">Delete</button>
   </div>
   <div id="log" hidden></div>
   <form id="send" hidden>
@@ -125,8 +126,6 @@ export const WEB_PAGE = String.raw`<!doctype html>
 (function () {
   var $ = function (id) { return document.getElementById(id); };
   var key = "";
-  var history = [];
-  var controller = null;
   var mode = "chat";
   var session = null;
   var follower = null;
@@ -315,12 +314,16 @@ export const WEB_PAGE = String.raw`<!doctype html>
     key = candidate;
     try {
       await loadModels();
+      await loadConversations();
     } catch (err) {
       key = "";
       throw err;
     }
     try { sessionStorage.setItem("harness-key", key); } catch (e) {}
     show(true);
+    // An address like #/c/<id> opens that conversation, so a refresh or a shared link lands where it was.
+    var wanted = idFromHash();
+    if (wanted) await openConversation(wanted);
   }
 
   $("gate").addEventListener("submit", async function (ev) {
@@ -334,32 +337,24 @@ export const WEB_PAGE = String.raw`<!doctype html>
   $("lock").addEventListener("click", function () {
     try { sessionStorage.removeItem("harness-key"); } catch (e) {}
     key = "";
-    history = [];
-    endSession();
-    $("log").textContent = "";
+    closeConversation();
     show(false);
   });
 
   $("new").addEventListener("click", function () {
-    if (mode === "code") { setMode("code"); return; }
-    if (controller) controller.abort();
-    history = [];
-    $("log").textContent = "";
-    loadModels().catch(function () {});
+    closeConversation();
+    $("input").focus();
   });
 
   $("stop").addEventListener("click", function () {
-    if (mode === "code" && session) {
-      fetch("/sessions/" + session.id + "/cancel", { method: "POST", headers: Object.assign({ "content-type": "application/json" }, authHeaders()), body: "{}" }).catch(function () {});
-      return;
-    }
-    if (controller) controller.abort();
+    if (!session) return;
+    fetch("/sessions/" + session.id + "/cancel", { method: "POST", headers: Object.assign({ "content-type": "application/json" }, authHeaders()), body: "{}" }).catch(function () {});
   });
 
   function setBusy(busy) {
     $("go").disabled = busy;
     $("stop").hidden = !busy;
-    $("model").disabled = busy;
+    $("model").disabled = busy || Boolean(session);
   }
 
   // Calls onData with the payload of each server-sent event in a response body.
@@ -384,20 +379,6 @@ export const WEB_PAGE = String.raw`<!doctype html>
     }
   }
 
-  // Reads a chat completion stream. onDelta gets each piece of the answer; onThought gets the model's reasoning,
-  // which some models (Qwen 3.5, for one) stream first, for a long time, before any answer text.
-  async function readStream(res, onDelta, onThought) {
-    await eachEvent(res, function (payload) {
-      if (payload === "[DONE]") return;
-      var parsed;
-      try { parsed = JSON.parse(payload); } catch (e) { return; }
-      if (parsed.error) throw new Error(parsed.error.message || "stream error");
-      var delta = parsed.choices && parsed.choices[0] && parsed.choices[0].delta;
-      if (delta && delta.reasoning_content && onThought) onThought(delta.reasoning_content);
-      if (delta && delta.content) onDelta(delta.content);
-    });
-  }
-
   function note(text, cls) {
     var el = document.createElement("div");
     el.className = cls || "note";
@@ -408,6 +389,7 @@ export const WEB_PAGE = String.raw`<!doctype html>
   }
 
   function endSession() {
+    clearWaiting();
     if (follower) follower.abort();
     follower = null;
     session = null;
@@ -451,22 +433,6 @@ export const WEB_PAGE = String.raw`<!doctype html>
     if (!firstUsable) note("No local model is loaded. Load one on a device first.");
   }
 
-  function setMode(next) {
-    if (controller) controller.abort();
-    endSession();
-    mode = next;
-    history = [];
-    $("log").textContent = "";
-    $("tab-chat").setAttribute("aria-pressed", String(next === "chat"));
-    $("tab-code").setAttribute("aria-pressed", String(next === "code"));
-    $("codebar").hidden = next !== "code";
-    $("new").textContent = next === "code" ? "New session" : "New chat";
-    $("input").placeholder = next === "code" ? "Message (start a session first)" : "Message";
-    loadModels()
-      .then(function () { return next === "code" ? Promise.all([loadDevices(), loadPast()]) : null; })
-      .catch(function (err) { note(err.message || "Could not load.", "msg error"); });
-  }
-
   function answer(id, approve, always) {
     fetch("/sessions/" + session.id + "/approvals/" + id, {
       method: "POST",
@@ -508,7 +474,14 @@ export const WEB_PAGE = String.raw`<!doctype html>
   }
 
   function render(event) {
-    if (event.type === "user") addMessage("you", event.text, "user");
+    if (event.type !== "user") clearWaiting();
+    if (event.type === "user") {
+      addMessage("you", event.text, "user");
+      if (sending) {
+        sending = false;
+        startWaiting(session.model);
+      }
+    }
     else if (event.type === "thinking-delta") {
       if (!live.thought) live.thought = makeThought($("log"), null, false);
       live.thought.add(event.text);
@@ -537,6 +510,7 @@ export const WEB_PAGE = String.raw`<!doctype html>
     } else if (event.type === "done") {
       endLive();
       setBusy(false);
+      loadConversations().catch(function () {});
       if (event.declined) note("Declined. Nothing was changed. Tell me what to do instead.");
       else if (event.stopped) note("Stopped at the step limit. Say continue to go on.");
     } else if (event.type === "cancelled") {
@@ -577,153 +551,215 @@ export const WEB_PAGE = String.raw`<!doctype html>
     }
   }
 
-  var pastList = [];
+  // ---- conversations: chats and coding sessions are saved on the gateway and open from an address --------------------------
 
-  async function loadPast() {
-    var res = await fetch("/sessions", { headers: authHeaders() });
-    if (!res.ok) return;
-    pastList = await res.json();
-    var past = $("past");
-    past.textContent = "";
-    option(past, "", "Past sessions (" + pastList.length + ")");
-    pastList.forEach(function (s) {
-      option(past, s.id, new Date(s.created).toLocaleString() + " - " + s.device + ":" + s.root + " - " + s.model + (s.deviceConnected ? "" : " (device offline)"));
-    });
-    if (session) past.value = session.id;
+  var convos = [];
+  var waiting = null;
+  var sending = false;
+
+  function convoLabel(c) {
+    var label = (c.kind === "chat" ? "Chat" : "Code") + " - " + (c.title || "New conversation");
+    if (c.kind === "code") label += " (" + c.device + ":" + c.root + (c.deviceConnected ? "" : ", device offline") + ")";
+    return label;
   }
 
-  // Reopens a saved session: its history replays, and it can continue if its device is connected.
-  function openPast(id) {
-    var info = pastList.filter(function (s) { return s.id === id; })[0];
-    if (!info) return;
+  async function loadConversations() {
+    var res = await fetch("/sessions", { headers: authHeaders() });
+    if (!res.ok) throw new Error(await errorText(res));
+    convos = await res.json();
+    var select = $("past");
+    select.textContent = "";
+    option(select, "", convos.length ? "Conversations (" + convos.length + ")" : "No conversations yet");
+    convos.forEach(function (c) { option(select, c.id, convoLabel(c)); });
+    select.value = session ? session.id : "";
+    $("rename").disabled = !session;
+    $("forget").disabled = !session;
+  }
+
+  function idFromHash() {
+    var m = /^#\/c\/([0-9a-f-]{36})$/.exec(window.location.hash);
+    return m ? m[1] : "";
+  }
+
+  function setHash(id) {
+    window.history.replaceState(null, "", id ? "#/c/" + id : window.location.pathname + window.location.search);
+  }
+
+  // What was typed and not sent is kept for each conversation, so a refresh does not lose it.
+  function draftKey() { return "harness-draft-" + (session ? session.id : "new"); }
+  function saveDraft() {
+    try {
+      if ($("input").value) localStorage.setItem(draftKey(), $("input").value);
+      else localStorage.removeItem(draftKey());
+    } catch (e) {}
+  }
+  function restoreDraft() {
+    var text = "";
+    try { text = localStorage.getItem(draftKey()) || ""; } catch (e) {}
+    $("input").value = text;
+    $("input").style.height = "";
+  }
+
+  function startWaiting(label) {
+    clearWaiting();
+    var el = note("", "note");
+    var started = Date.now();
+    function tick() { el.textContent = "Waiting for " + label + "... " + Math.round((Date.now() - started) / 1000) + "s"; }
+    tick();
+    waiting = { el: el, timer: setInterval(tick, 1000) };
+  }
+
+  function clearWaiting() {
+    if (!waiting) return;
+    clearInterval(waiting.timer);
+    if (waiting.el.parentNode) waiting.el.parentNode.removeChild(waiting.el);
+    waiting = null;
+  }
+
+  // Shows the Chat or Code controls. The model list is reloaded because coding sessions cannot use Claude.
+  async function applyMode(next) {
+    mode = next;
+    $("tab-chat").setAttribute("aria-pressed", String(next === "chat"));
+    $("tab-code").setAttribute("aria-pressed", String(next === "code"));
+    $("codebar").hidden = next !== "code";
+    $("input").placeholder = next === "code" && !session ? "Message (start a session first)" : "Message";
+    await loadModels();
+    if (next === "code") await loadDevices();
+  }
+
+  // Leaves the open conversation (it stays saved) and goes back to an empty one.
+  function closeConversation() {
     endSession();
     $("log").textContent = "";
-    session = { id: info.id, model: info.model, cursor: 0 };
-    note(info.deviceConnected ? "Resumed. Changes ask for your approval." : "The device " + info.device + " is offline, so this session is read-only until it reconnects.");
-    follow(session);
+    setHash("");
+    restoreDraft();
+    loadConversations().catch(function () {});
   }
 
-  async function forgetPast() {
-    var id = $("past").value;
-    if (!id || !window.confirm("Delete this session and its history?")) return;
-    var res = await fetch("/sessions/" + id, { method: "DELETE", headers: authHeaders() });
-    if (!res.ok) { note(await errorText(res), "msg error"); return; }
-    if (session && session.id === id) { endSession(); $("log").textContent = ""; }
-    await loadPast();
+  async function openConversation(id) {
+    var info = convos.filter(function (c) { return c.id === id; })[0];
+    if (!info) {
+      await loadConversations();
+      info = convos.filter(function (c) { return c.id === id; })[0];
+    }
+    if (!info) {
+      note("That conversation no longer exists.", "msg error");
+      setHash("");
+      return;
+    }
+    endSession();
+    $("log").textContent = "";
+    if (info.kind !== mode) await applyMode(info.kind);
+    session = { id: info.id, model: info.model, cursor: 0, kind: info.kind };
+    var known = Array.prototype.some.call($("model").options, function (o) { return o.value === info.model; });
+    if (known) $("model").value = info.model;
+    setHash(info.id);
+    if (info.kind === "code" && !info.deviceConnected) note("The device " + info.device + " is offline, so this conversation is read-only until it reconnects.");
+    follow(session);
+    setBusy(info.busy);
+    restoreDraft();
+    await loadConversations();
+  }
+
+  async function createConversation(body) {
+    var res = await fetch("/sessions", {
+      method: "POST",
+      headers: Object.assign({ "content-type": "application/json" }, authHeaders()),
+      body: JSON.stringify(body)
+    });
+    if (!res.ok) {
+      note(await errorText(res), "msg error");
+      return false;
+    }
+    var info = await res.json();
+    session = { id: info.id, model: info.model, cursor: 0, kind: info.kind };
+    setHash(info.id);
+    follow(session);
+    loadConversations().catch(function () {});
+    return true;
   }
 
   async function startSession() {
     if (!$("device").value || !$("root").value) { note("Pick a device and folder first.", "msg error"); return; }
     endSession();
     $("log").textContent = "";
-    var res = await fetch("/sessions", {
-      method: "POST",
-      headers: Object.assign({ "content-type": "application/json" }, authHeaders()),
-      body: JSON.stringify({ model: $("model").value, device: $("device").value, root: $("root").value })
-    });
-    if (!res.ok) { note(await errorText(res), "msg error"); return; }
-    var info = await res.json();
-    session = { id: info.id, model: info.model, cursor: 0 };
-    note("Working on " + info.device + ":" + info.root + " with " + info.model + ". Changes ask for your approval.");
-    follow(session);
+    if (!(await createConversation({ model: $("model").value, device: $("device").value, root: $("root").value }))) return;
+    note("Working on " + $("device").value + ":" + $("root").value + " with " + session.model + ". Changes ask for your approval.");
     $("input").placeholder = "Message";
     $("input").focus();
-    loadPast().catch(function () {});
   }
 
-  async function sendCode(text) {
-    if (!session) { note("Start a session first.", "msg error"); return; }
+  // A chat starts with its first message; a coding session has to be started on a device first.
+  async function sendText(text) {
+    if (!session) {
+      if (mode === "code") { note("Start a session first.", "msg error"); return; }
+      if (!$("model").value) { note("Pick a model first.", "msg error"); return; }
+      $("log").textContent = "";
+      if (!(await createConversation({ model: $("model").value }))) return;
+    }
+    sending = true;
     setBusy(true);
     var res = await fetch("/sessions/" + session.id + "/messages", {
       method: "POST",
       headers: Object.assign({ "content-type": "application/json" }, authHeaders()),
       body: JSON.stringify({ text: text })
     });
-    if (!res.ok) { setBusy(false); note(await errorText(res), "msg error"); }
-  }
-
-  $("tab-chat").addEventListener("click", function () { if (mode !== "chat") setMode("chat"); });
-  $("tab-code").addEventListener("click", function () { if (mode !== "code") setMode("code"); });
-  $("device").addEventListener("change", fillRoots);
-  $("past").addEventListener("change", function () { if ($("past").value) openPast($("past").value); });
-  $("forget").addEventListener("click", function () { forgetPast().catch(function (err) { note(err.message || "Could not delete.", "msg error"); }); });
-  $("start").addEventListener("click", function () { startSession().catch(function (err) { note(err.message || "Could not start.", "msg error"); }); });
-
-  // Until the first word arrives, show that something is happening and for how long. A model that is not loaded yet is
-  // loaded first, which can take a minute.
-  function startWaiting(el, label) {
-    var started = Date.now();
-    function tick() {
-      el.textContent = "Waiting for " + label + "... " + Math.round((Date.now() - started) / 1000) + "s";
-    }
-    tick();
-    var timer = setInterval(tick, 1000);
-    return function stop() {
-      clearInterval(timer);
-    };
-  }
-
-  async function send(text) {
-    history.push({ role: "user", content: text });
-    addMessage("you", text, "user");
-    var body = addMessage($("model").value, "", undefined, true);
-    var stopWaiting = startWaiting(body, $("model").value);
-    var reply = "";
-    controller = new AbortController();
-    setBusy(true);
-    try {
-      var res = await fetch("/v1/chat/completions", {
-        method: "POST",
-        headers: Object.assign({ "content-type": "application/json" }, authHeaders()),
-        body: JSON.stringify({ model: $("model").value, messages: history, stream: true }),
-        signal: controller.signal
-      });
-      if (res.status === 401) throw new Error("The key was rejected. Sign out and enter it again.");
-      if (!res.ok) throw new Error(await errorText(res));
-      var thought = null;
-      await readStream(res, function (piece) {
-        stopWaiting();
-        if (thought) thought.finish();
-        reply += piece;
-        streamMarkdown(body, reply);
-      }, function (piece) {
-        if (!thought) {
-          stopWaiting();
-          body.textContent = "";
-          thought = makeThought(body.parentNode, body, false);
-        }
-        keepScroll(function () { thought.add(piece); });
-      });
-      if (thought) thought.finish();
-      if (reply) flushMarkdown(body, reply);
-      if (reply) history.push({ role: "assistant", content: reply });
-      else body.textContent = "(empty reply)";
-    } catch (err) {
-      if (err.name === "AbortError") {
-        if (reply) history.push({ role: "assistant", content: reply });
-        else history.pop();
-      } else {
-        history.pop();
-        body.parentNode.classList.add("error");
-        if (body._timer) { clearTimeout(body._timer); body._timer = null; }
-        body.classList.remove("md");
-        body.textContent = (reply ? reply + "\n\n" : "") + (err.message || "Request failed.");
-      }
-    } finally {
-      stopWaiting();
-      controller = null;
+    if (!res.ok) {
+      sending = false;
       setBusy(false);
-      $("input").focus();
+      note(await errorText(res), "msg error");
     }
   }
+
+  $("tab-chat").addEventListener("click", function () { if (mode !== "chat") { closeConversation(); applyMode("chat").catch(function (err) { note(err.message || "Could not load.", "msg error"); }); } });
+  $("tab-code").addEventListener("click", function () { if (mode !== "code") { closeConversation(); applyMode("code").catch(function (err) { note(err.message || "Could not load.", "msg error"); }); } });
+  $("device").addEventListener("change", fillRoots);
+  $("past").addEventListener("change", function () {
+    var id = $("past").value;
+    if (!id) { closeConversation(); return; }
+    openConversation(id).catch(function (err) { note(err.message || "Could not open it.", "msg error"); });
+  });
+  window.addEventListener("hashchange", function () {
+    var id = idFromHash();
+    if (id && (!session || session.id !== id)) openConversation(id).catch(function () {});
+  });
+  $("rename").addEventListener("click", function () {
+    if (!session) return;
+    var current = (convos.filter(function (c) { return c.id === session.id; })[0] || {}).title || "";
+    var title = window.prompt("Rename this conversation", current);
+    if (!title || !title.trim()) return;
+    fetch("/sessions/" + session.id, {
+      method: "PATCH",
+      headers: Object.assign({ "content-type": "application/json" }, authHeaders()),
+      body: JSON.stringify({ title: title.trim() })
+    }).then(function (res) {
+      if (!res.ok) return errorText(res).then(function (m) { note(m, "msg error"); });
+      return loadConversations();
+    }).catch(function (err) { note(err.message || "Could not rename.", "msg error"); });
+  });
+  $("forget").addEventListener("click", function () {
+    if (!session || !window.confirm("Delete this conversation and its history?")) return;
+    fetch("/sessions/" + session.id, { method: "DELETE", headers: authHeaders() }).then(function (res) {
+      if (!res.ok) return errorText(res).then(function (m) { note(m, "msg error"); });
+      try { localStorage.removeItem(draftKey()); } catch (e) {}
+      closeConversation();
+    }).catch(function (err) { note(err.message || "Could not delete.", "msg error"); });
+  });
+  $("start").addEventListener("click", function () { startSession().catch(function (err) { note(err.message || "Could not start.", "msg error"); }); });
 
   $("send").addEventListener("submit", function (ev) {
     ev.preventDefault();
     var text = $("input").value.trim();
-    if (!text || controller || $("go").disabled) return;
+    if (!text || $("go").disabled) return;
+    try { localStorage.removeItem(draftKey()); } catch (e) {}
     $("input").value = "";
     $("input").style.height = "";
-    if (mode === "code") sendCode(text); else send(text);
+    sendText(text).catch(function (err) {
+      sending = false;
+      clearWaiting();
+      setBusy(false);
+      note(err.message || "Could not send.", "msg error");
+    });
   });
 
   $("input").addEventListener("keydown", function (ev) {
@@ -736,6 +772,7 @@ export const WEB_PAGE = String.raw`<!doctype html>
   $("input").addEventListener("input", function () {
     this.style.height = "auto";
     this.style.height = Math.min(this.scrollHeight, window.innerHeight * 0.4) + "px";
+    saveDraft();
   });
 
   show(false);
