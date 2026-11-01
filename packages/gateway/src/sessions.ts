@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { sseData, textOf, type ChatMessage, type LiveSessionEvent, type SessionEvent, type SessionInfo, type Tool, type ToolCall } from "@harness/core";
+import { effortFor, sseData, textOf, type ChatMessage, type Effort, type LiveSessionEvent, type SessionEvent, type SessionInfo, type Tool, type ToolCall } from "@harness/core";
 import { runTurn, systemPrompt, tools as allTools, type StreamHooks, type ToolSpec } from "@harness/tools";
 import type { Registry } from "./registry.js";
 import type { Relay } from "./relay.js";
@@ -12,7 +12,12 @@ import { resolveRoute } from "./routing.js";
 
 export type { SessionEvent, SessionInfo };
 
-export type Complete = (model: string, messages: ChatMessage[], tools: Tool[], signal: AbortSignal, hooks?: StreamHooks) => Promise<ChatMessage>;
+// What can be asked of a model call besides the conversation: how hard it should think, for the models that can be told.
+export interface CallOptions {
+  effort?: Effort;
+}
+
+export type Complete = (model: string, messages: ChatMessage[], tools: Tool[], signal: AbortSignal, hooks?: StreamHooks, options?: CallOptions) => Promise<ChatMessage>;
 
 // Everything needed to bring a session back after a restart. Always taken at a turn boundary, never mid-turn.
 export interface StoredSession {
@@ -23,6 +28,7 @@ export interface StoredSession {
   root: string;
   created: number;
   updated: number;
+  effort?: Effort;
   history: ChatMessage[];
   events: SessionEvent[];
 }
@@ -38,14 +44,16 @@ export interface SessionStore {
 const CLAUDE_CONTEXT = 200_000;
 
 export const createCompleter = (deps: { registry: Registry; relay: Pick<Relay, "request" | "callClaude">; loader: Pick<ModelLoader, "ensure">; claude?: ClaudeState }): Complete => {
-  return async (model, messages, tools, signal, hooks) => {
+  return async (model, messages, tools, signal, hooks, options) => {
     // Claude answers through a device that is logged in to it, in one piece.
     if (isClaudeModel(model)) {
       hooks?.stage?.("waiting", "Claude");
       const claudeStarted = Date.now();
-      const { result, device } = await askClaude({ registry: deps.registry, relay: deps.relay, state: deps.claude ?? new ClaudeState() }, model, messages);
+      const { result, device } = await askClaude({ registry: deps.registry, relay: deps.relay, state: deps.claude ?? new ClaudeState() }, model, messages, { tools, effort: effortFor(model, options?.effort) });
       hooks?.stage?.("writing");
-      hooks?.text?.(result.text);
+      if (result.text) {
+        hooks?.text?.(result.text);
+      }
       // The program's own count where it gave one (cached input included), otherwise an estimate, against a 200k window.
       hooks?.usage?.({
         model,
@@ -56,7 +64,8 @@ export const createCompleter = (deps: { registry: Registry; relay: Pick<Relay, "
         contextLength: CLAUDE_CONTEXT,
         estimated: result.usage === undefined,
       });
-      return { role: "assistant", content: result.text };
+      // With tools offered, Claude may answer with requests for them, which the coding loop runs.
+      return { role: "assistant", content: result.text, ...(result.toolCalls && result.toolCalls.length > 0 ? { tool_calls: result.toolCalls } : {}) };
     }
     hooks?.stage?.("routing", model);
     const route = await resolveRoute({ registry: deps.registry, loader: deps.loader }, { model, messages, tools }, (step) => {
@@ -64,7 +73,7 @@ export const createCompleter = (deps: { registry: Registry; relay: Pick<Relay, "
     });
     hooks?.stage?.("waiting", `${route.model} on ${route.node.nodeId}`);
     const started = Date.now();
-    const res = await deps.relay.request(route.node.nodeId, JSON.stringify({ model: route.model, messages, tools: tools.length > 0 ? tools : undefined, stream: true, stream_options: { include_usage: true } }), signal);
+    const res = await deps.relay.request(route.node.nodeId, JSON.stringify({ model: route.model, messages, tools: tools.length > 0 ? tools : undefined, stream: true, stream_options: { include_usage: true }, reasoning_effort: effortFor(route.model, options?.effort) }), signal);
     const contextLength = route.node.models.find((m) => {
       return m.id === route.model;
     })?.contextLength;
@@ -218,6 +227,8 @@ export class Session {
   updated: number;
   // The model that answers the next message. It can change from one message to the next.
   private current: string;
+  // How hard the model is asked to think, when one has been chosen. Sent only to a model that can be told.
+  effort: Effort | undefined;
   readonly device: string;
   readonly root: string;
   readonly created: number;
@@ -235,7 +246,7 @@ export class Session {
   private compactFailedFor = 0;
 
   constructor(
-    init: Pick<StoredSession, "id" | "title" | "model" | "device" | "root" | "created" | "updated"> & { history: ChatMessage[]; events?: SessionEvent[] },
+    init: Pick<StoredSession, "id" | "title" | "model" | "device" | "root" | "created" | "updated"> & { effort?: Effort; history: ChatMessage[]; events?: SessionEvent[] },
     private deps: SessionDeps,
     private autoApprove = false,
   ) {
@@ -243,6 +254,7 @@ export class Session {
     this.title = init.title;
     this.updated = init.updated;
     this.current = init.model;
+    this.effort = init.effort;
     this.device = init.device;
     this.root = init.root;
     this.created = init.created;
@@ -276,11 +288,12 @@ export class Session {
       kind: this.kind,
       title: this.title,
       deviceConnected: this.kind === "chat" || this.deps.connected(this.device),
+      effort: this.effort,
     };
   }
 
   toStored(): StoredSession {
-    return { id: this.id, title: this.title, model: this.model, device: this.device, root: this.root, created: this.created, updated: this.updated, history: [...this.history], events: [...this.events] };
+    return { id: this.id, title: this.title, model: this.model, device: this.device, root: this.root, created: this.created, updated: this.updated, effort: this.effort, history: [...this.history], events: [...this.events] };
   }
 
   // Replays what has already happened, then follows live. Returns an unsubscribe function.
@@ -315,15 +328,16 @@ export class Session {
   }
 
   // Throws if a turn is running or the device is not connected: a session whose device is away can be read, not continued.
-  send(text: string, model?: string): void {
+  send(text: string, model?: string, effort?: Effort | "default"): void {
     if (this.abort) {
       throw new Error("the session is busy with a turn");
     }
     if (model !== undefined && model !== this.current) {
-      if (this.kind === "code" && isClaudeModel(model)) {
-        throw new Error("Claude models cannot drive a coding session through the gateway yet; pick a local model");
-      }
       this.current = model;
+    }
+    // "default" puts the model back to its own setting.
+    if (effort !== undefined) {
+      this.effort = effort === "default" ? undefined : effort;
     }
     const specs = this.kind === "chat" ? [] : this.deps.resolve(this.device, this.root);
     if (this.title === "") {
@@ -485,7 +499,7 @@ export class Session {
               this.lastRoute = { model: usage.model, device: usage.device };
               this.deps.ledger?.record({ time: Date.now(), conversationId: this.id, ...usage });
             },
-          });
+          }, { effort: this.effort });
         },
         run: async (name, args) => {
           const result = await this.deps.relay.callTool(this.device, this.root, name, args, { session: this.id });
@@ -597,9 +611,6 @@ export class Sessions {
     const root = input.root ?? "";
     let prompt = CHAT_PROMPT;
     if (device !== "") {
-      if (isClaudeModel(input.model)) {
-        throw new Error("Claude models cannot drive a coding session through the gateway yet; pick a local model");
-      }
       this.resolve(device, root);
       const platform = this.opts.registry.live().find((n) => {
         return n.nodeId === device;

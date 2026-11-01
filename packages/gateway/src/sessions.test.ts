@@ -78,10 +78,10 @@ describe("Sessions.create", () => {
     ]);
   });
 
-  it("refuses Claude models, which cannot take client-side tools through the gateway", () => {
+  it("accepts Claude models, which drive the tool loop through requests in the prompt", () => {
     expect(() => {
       return create({ model: "claude:sonnet" });
-    }).toThrow("Claude models");
+    }).not.toThrow();
   });
 
   it("refuses a device that is not connected, a root it does not expose, or one with no tools", () => {

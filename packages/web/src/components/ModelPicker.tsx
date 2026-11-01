@@ -17,17 +17,17 @@ const stateLabel = (m: CatalogueEntry): string => {
 };
 
 // The model that will answer. Choosing one that is not loaded loads it on that device when the first message is sent.
-export const useModels = (excludeClaude: boolean) => {
+export const useModels = () => {
   const catalogue = useCatalogue();
   const local = (catalogue.data?.models ?? []).filter((m) => {
     return m.state === "loaded" || m.state === "loads-on-use";
   });
-  const claude = !excludeClaude && catalogue.data?.claude.available ? catalogue.data.claude.models : [];
+  const claude = catalogue.data?.claude.available ? catalogue.data.claude.models : [];
   return { catalogue, firstUsable: local[0]?.id ?? claude[0] ?? "" };
 };
 
-export const ModelPicker = ({ value, onChange, disabled, excludeClaude, className }: { value: string; onChange: (id: string) => void; disabled?: boolean; excludeClaude?: boolean; className?: string }) => {
-  const { catalogue, firstUsable } = useModels(Boolean(excludeClaude));
+export const ModelPicker = ({ value, onChange, disabled, className }: { value: string; onChange: (id: string) => void; disabled?: boolean; className?: string }) => {
+  const { catalogue, firstUsable } = useModels();
   const data = catalogue.data;
   const groups = new Map<string, CatalogueEntry[]>();
   for (const m of data?.models ?? []) {
@@ -60,7 +60,7 @@ export const ModelPicker = ({ value, onChange, disabled, excludeClaude, classNam
         ? (
             <optgroup label={`Claude (through ${data.claude.device ?? "a device"})`}>
               {data.claude.models.map((id) => {
-                return <option key={id} value={id} disabled={Boolean(excludeClaude)}>{id}</option>;
+                return <option key={id} value={id}>{id}</option>;
               })}
             </optgroup>
           )

@@ -78,6 +78,9 @@ _Avoid_: log, metrics
 Choosing a different model for the next message of a conversation, on any device or Claude. The history goes with it, and each reply is labelled with the model and device that wrote it.
 _Avoid_: handoff, failover
 
+**Effort**:
+How hard a model is asked to think, where it can be told: low, medium, high, and for Claude xhigh and max. Chosen for a conversation next to the model, and ignored by a model that cannot be told.
+
 **Compaction**:
 Replacing a conversation's older turns, in what is sent to the model, with a short summary the model writes, so the conversation can go on. The system prompt and the latest turns are kept, and what the person sees does not change.
 _Avoid_: truncation, trimming

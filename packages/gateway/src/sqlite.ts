@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
-import type { ChatMessage, SessionEvent } from "@harness/core";
+import { EFFORTS, type ChatMessage, type SessionEvent } from "@harness/core";
 import type { SessionStore, StoredSession } from "./sessions.js";
 
 // Each entry upgrades the database by one version. Never edit one that has shipped; add another.
@@ -38,6 +38,8 @@ const MIGRATIONS: string[] = [
    ) STRICT;
    CREATE INDEX usage_time ON usage (time);
    CREATE INDEX usage_conversation ON usage (conversation_id, id);`,
+  // The effort level chosen for a conversation, when one has been.
+  `ALTER TABLE conversations ADD COLUMN effort TEXT;`,
 ];
 
 // Opens (creating if need be) the gateway's database on its data volume, in write-ahead mode so reads never wait for a write,
@@ -78,14 +80,15 @@ interface ConversationRow {
   created: number;
   updated: number;
   history: string;
+  effort: string | null;
 }
 
 // Stores conversations as a row each, with their events appended one row at a time. A turn adds events and never rewrites old ones.
 export const sqliteStore = (db: DatabaseSync): SessionStore & { loadAll(): StoredSession[] } => {
   const upsert = db.prepare(
-    `INSERT INTO conversations (id, kind, title, model, device, root, created, updated, history)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-     ON CONFLICT (id) DO UPDATE SET title = excluded.title, model = excluded.model, updated = excluded.updated, history = excluded.history`,
+    `INSERT INTO conversations (id, kind, title, model, device, root, created, updated, history, effort)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+     ON CONFLICT (id) DO UPDATE SET title = excluded.title, model = excluded.model, updated = excluded.updated, history = excluded.history, effort = excluded.effort`,
   );
   const count = db.prepare("SELECT COUNT(*) AS n FROM events WHERE conversation_id = ?");
   const append = db.prepare("INSERT INTO events (conversation_id, seq, data) VALUES (?, ?, ?)");
@@ -107,6 +110,7 @@ export const sqliteStore = (db: DatabaseSync): SessionStore & { loadAll(): Store
           session.created,
           session.updated,
           JSON.stringify(session.history),
+          session.effort ?? null,
         );
         const have = (count.get(session.id) as { n: number }).n;
         for (let seq = have; seq < session.events.length; seq++) {
@@ -135,6 +139,9 @@ export const sqliteStore = (db: DatabaseSync): SessionStore & { loadAll(): Store
           root: row.root,
           created: row.created,
           updated: row.updated,
+          effort: EFFORTS.find((e) => {
+            return e === row.effort;
+          }),
           history: JSON.parse(row.history) as ChatMessage[],
           events: (events.all(row.id) as unknown as { data: string }[]).map((e) => {
             return JSON.parse(e.data) as SessionEvent;

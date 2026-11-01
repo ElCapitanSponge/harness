@@ -1,4 +1,4 @@
-import type { ChatMessage, ClaudeLimits, ClaudeStatus } from "@harness/core";
+import type { ChatMessage, ClaudeLimits, ClaudeStatus, Effort, Tool } from "@harness/core";
 import type { ClaudeResult } from "@harness/claude";
 import type { Registry } from "./registry.js";
 import type { Relay } from "./relay.js";
@@ -64,7 +64,9 @@ interface AskDeps {
 
 // One Claude request, through a device that is logged in to it. Refuses at once while Claude is limited, notes the plan's
 // windows from each reply, and turns a refusal for hitting a limit into the time it ends.
-export const askClaude = async (deps: AskDeps, model: string, messages: ChatMessage[], body?: string): Promise<{ result: ClaudeResult; device: string }> => {
+// `tools` are the ones Claude may ask for, and `effort` how hard it should think. A caller that already has the whole request as JSON
+// (the OpenAI-style route) passes it as `body` instead.
+export const askClaude = async (deps: AskDeps, model: string, messages: ChatMessage[], options: { tools?: Tool[]; effort?: Effort; body?: string } = {}): Promise<{ result: ClaudeResult; device: string }> => {
   const until = deps.state.limitedUntil();
   if (until !== undefined) {
     throw new ClaudeUnavailableError(until);
@@ -75,7 +77,8 @@ export const askClaude = async (deps: AskDeps, model: string, messages: ChatMess
   if (!device) {
     throw new Error("no connected device is logged in to Claude. Turn Claude on for a device where `claude` is logged in (Devices page, or CLAUDE_ENABLED=1)");
   }
-  const reply = await deps.relay.callClaude(device.nodeId, body ?? JSON.stringify({ model, messages }));
+  const tools = options.tools !== undefined && options.tools.length > 0 ? options.tools : undefined;
+  const reply = await deps.relay.callClaude(device.nodeId, options.body ?? JSON.stringify({ model, messages, tools, effort: options.effort }));
   if (!reply.ok) {
     const refusal = parseRefusal(reply.output);
     if (refusal) {

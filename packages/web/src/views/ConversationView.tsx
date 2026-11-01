@@ -2,7 +2,9 @@ import { Code2, MessageSquare, RotateCcw } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router";
 import { Composer } from "@/components/Composer";
+import type { Effort } from "@harness/core/effort";
 import { ContextMeter } from "@/components/ContextMeter";
+import { EffortPicker } from "@/components/EffortPicker";
 import { ModelPicker } from "@/components/ModelPicker";
 import { ConversationActions } from "@/components/ConversationActions";
 import { Message, StatusLine } from "@/components/Messages";
@@ -20,6 +22,8 @@ const Conversation = ({ id }: { id: string }) => {
   });
   // The model for the next message; until one is picked it is the one the conversation is on.
   const [picked, setPicked] = useState("");
+  // The effort for the next message; until one is chosen it is the one the conversation has.
+  const [pickedEffort, setPickedEffort] = useState<Effort | "default" | undefined>(undefined);
   const scroller = useRef<HTMLDivElement>(null);
   const stuck = useRef(true);
   const last = state.items.at(-1);
@@ -97,7 +101,11 @@ const Conversation = ({ id }: { id: string }) => {
       {offline ? <p className="mx-auto w-full max-w-3xl px-4 pb-2 text-[13px] text-muted-foreground">The device {info.device} is offline, so this conversation is read-only until it reconnects.</p> : null}
       <div className="mx-auto flex w-full max-w-3xl items-center gap-2 px-4 pb-1.5 text-xs text-muted-foreground">
         <span>Next message goes to</span>
-        <ModelPicker className="h-7 w-auto max-w-64 text-xs" value={picked || model} excludeClaude={info?.kind === "code"} disabled={state.busy || !info} onChange={setPicked} />
+        <ModelPicker className="h-7 w-auto max-w-64 text-xs" value={picked || model} disabled={state.busy || !info} onChange={setPicked} />
+        <EffortPicker className="h-7 w-auto max-w-40 text-xs" model={picked || model} value={pickedEffort === "default" ? undefined : (pickedEffort ?? info?.effort)} disabled={state.busy || !info} onChange={(next) => {
+          setPickedEffort(next ?? "default");
+        }}
+        />
       </div>
       <Composer
         draftKey={id}
@@ -105,7 +113,7 @@ const Conversation = ({ id }: { id: string }) => {
         disabled={!info || offline}
         onSend={(text) => {
           stuck.current = true;
-          void send(text, picked || undefined);
+          void send(text, picked || undefined, pickedEffort);
         }}
         onStop={() => {
           void cancel();
