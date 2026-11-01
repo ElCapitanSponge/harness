@@ -13,6 +13,7 @@ export const SETTING_ENV: Record<SettingKey, string> = {
   modelControl: "ALLOW_MODEL_CONTROL",
   claude: "CLAUDE_ENABLED",
   gameProcesses: "GAME_PROCESSES",
+  idleUnloadMinutes: "IDLE_UNLOAD_MINUTES",
 };
 
 const DEFAULTS: DeviceSettings = {
@@ -21,6 +22,7 @@ const DEFAULTS: DeviceSettings = {
   modelControl: false,
   claude: false,
   gameProcesses: ["RocketLeague.exe", "Fortnite.exe", "eldenring.exe", "cs2.exe", "Cyberpunk2077.exe"],
+  idleUnloadMinutes: 20,
 };
 
 const list = (value: string): string[] => {
@@ -36,6 +38,10 @@ const fromEnv = (key: SettingKey, value: string): DeviceSettings[SettingKey] => 
     case "modelControl":
     case "claude":
       return value === "1";
+    case "idleUnloadMinutes": {
+      const minutes = Number(value);
+      return Number.isFinite(minutes) ? Math.min(Math.max(Math.floor(minutes), 0), 1440) : DEFAULTS.idleUnloadMinutes;
+    }
     default:
       return list(value);
   }

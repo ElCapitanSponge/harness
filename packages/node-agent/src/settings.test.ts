@@ -43,7 +43,7 @@ describe("device settings", () => {
     const { settings } = await make();
     const report = settings.report();
     expect(report.settings).toMatchObject({ projectRoots: {}, allowedTools: ["read_file", "list_dir", "grep"], modelControl: false, claude: false });
-    expect(Object.values(report.sources)).toEqual(["default", "default", "default", "default", "default"]);
+    expect(Object.values(report.sources)).toEqual(["default", "default", "default", "default", "default", "default"]);
     expect(report.locked).toEqual([]);
   });
 
@@ -102,6 +102,28 @@ describe("device settings", () => {
     await fs.writeFile(file, JSON.stringify({ claude: "maybe", modelControl: true }));
     const { settings } = await make();
     expect(settings.current()).toMatchObject({ claude: false, modelControl: true });
+  });
+});
+
+describe("the idle unload setting", () => {
+  it("is twenty minutes unless set, can be changed from the page, and is validated", async () => {
+    const { settings } = await make();
+    expect(settings.current().idleUnloadMinutes).toBe(20);
+    expect((await settings.apply({ idleUnloadMinutes: 15 })).ok).toBe(true);
+    expect(settings.current().idleUnloadMinutes).toBe(15);
+    expect((await settings.apply({ idleUnloadMinutes: 0 })).ok).toBe(true);
+    expect(await settings.apply({ idleUnloadMinutes: -1 })).toMatchObject({ ok: false });
+    expect(await settings.apply({ idleUnloadMinutes: 1.5 })).toMatchObject({ ok: false });
+    expect(await settings.apply({ idleUnloadMinutes: 5000 })).toMatchObject({ ok: false });
+    expect(await settings.apply({ idleUnloadMinutes: "soon" })).toMatchObject({ ok: false });
+  });
+
+  it("is fixed by IDLE_UNLOAD_MINUTES when that is set", async () => {
+    const { settings } = await make({ env: { IDLE_UNLOAD_MINUTES: "30" } });
+    expect(settings.current().idleUnloadMinutes).toBe(30);
+    expect(settings.report().locked).toContain("idleUnloadMinutes");
+    expect(await settings.apply({ idleUnloadMinutes: 5 })).toEqual({ ok: false, error: "idleUnloadMinutes is fixed by the IDLE_UNLOAD_MINUTES environment variable on this device" });
+    expect((await make({ env: { IDLE_UNLOAD_MINUTES: "nonsense" } })).settings.current().idleUnloadMinutes).toBe(20);
   });
 });
 

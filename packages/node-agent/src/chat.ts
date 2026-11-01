@@ -2,9 +2,18 @@ import type { RelayRequest, TunnelMessage } from "@harness/core";
 
 type Send = (msg: TunnelMessage) => void;
 
+const modelOf = (body: string): string | undefined => {
+  try {
+    const parsed = JSON.parse(body) as { model?: unknown };
+    return typeof parsed.model === "string" && parsed.model !== "" ? parsed.model : undefined;
+  } catch {
+    return undefined;
+  }
+};
+
 // Answers chat requests relayed from the gateway by calling this device's own model server on localhost
 // and streaming the reply back. It only ever calls the one chat endpoint, whatever the gateway sends.
-export const createChatServer = (opts: { inferenceUrl: string; fetchImpl?: typeof fetch }) => {
+export const createChatServer = (opts: { inferenceUrl: string; fetchImpl?: typeof fetch; activity?: { start(model: string): void; end(model: string): void } }) => {
   const fetchImpl = opts.fetchImpl ?? fetch;
   const inflight = new Map<string, AbortController>();
 
@@ -49,7 +58,16 @@ export const createChatServer = (opts: { inferenceUrl: string; fetchImpl?: typeo
       }
       const controller = new AbortController();
       inflight.set(msg.id, controller);
-      void serve(msg.id, msg.body, send, controller.signal);
+      // The model's use is reported while the request runs, so an idle model can be unloaded and a busy one never is.
+      const model = modelOf(msg.body);
+      if (model) {
+        opts.activity?.start(model);
+      }
+      void serve(msg.id, msg.body, send, controller.signal).finally(() => {
+        if (model) {
+          opts.activity?.end(model);
+        }
+      });
     },
     cancelAll(): void {
       for (const controller of inflight.values()) {

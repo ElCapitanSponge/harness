@@ -13,8 +13,8 @@ const node = (over: Partial<NodeRecord> & { nodeId: string }): NodeRecord => {
 
 const report = (over: Partial<SettingsReport> = {}): SettingsReport => {
   return {
-    settings: { projectRoots: { personal: "C:\\Users\\andre\\personal" }, allowedTools: ["read_file", "list_dir", "grep"], modelControl: true, claude: true, gameProcesses: ["RocketLeague.exe"] },
-    sources: { projectRoots: "file", allowedTools: "default", modelControl: "file", claude: "file", gameProcesses: "default" },
+    settings: { projectRoots: { personal: "C:\\Users\\andre\\personal" }, allowedTools: ["read_file", "list_dir", "grep"], modelControl: true, claude: true, gameProcesses: ["RocketLeague.exe"], idleUnloadMinutes: 20 },
+    sources: { projectRoots: "file", allowedTools: "default", modelControl: "file", claude: "file", gameProcesses: "default", idleUnloadMinutes: "default" },
     locked: [],
     remoteConfig: true,
     tools: [
@@ -67,7 +67,7 @@ export const ReadOnlyDevice: StoryObj = {
 };
 
 export const SettingFixedByTheEnvironment: StoryObj = {
-  parameters: seed([[["nodes"], [node({ nodeId: "anakin" })]], [["settings", "anakin"], report({ locked: ["claude"], sources: { projectRoots: "file", allowedTools: "default", modelControl: "file", claude: "env", gameProcesses: "default" } })]]),
+  parameters: seed([[["nodes"], [node({ nodeId: "anakin" })]], [["settings", "anakin"], report({ locked: ["claude"], sources: { projectRoots: "file", allowedTools: "default", modelControl: "file", claude: "env", gameProcesses: "default", idleUnloadMinutes: "default" } })]]),
   render: () => {
     return <DevicesView />;
   },
