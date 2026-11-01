@@ -6,6 +6,8 @@ import type { Tool } from "@harness/core";
 
 export interface ToolContext {
   cwd: string;
+  // The person's home folder, where their skills and CLAUDE.md are (the real one unless a test says otherwise).
+  home?: string;
 }
 
 // Where a tool acts. "device" tools work on this machine's files and programs; "remote" tools reach out of it, to the web or GitHub.
@@ -20,6 +22,8 @@ export interface ToolSpec {
   level: ToolLevel;
   // A program on the device the tool needs, such as gh. A tool whose program is missing is not offered to the model.
   requires?: string;
+  // Not offered to the model: the gateway runs it for its own use.
+  hidden?: boolean;
   describe(args: Args): string;
   run(args: Args, ctx: ToolContext): Promise<string>;
 }

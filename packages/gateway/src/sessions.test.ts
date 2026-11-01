@@ -1,4 +1,5 @@
-import type { ChatMessage, Heartbeat, ToolCall } from "@harness/core";
+import { textOf, type ChatMessage, type Heartbeat, type ToolCall } from "@harness/core";
+import type { ProjectContext } from "@harness/tools";
 import { beforeEach, describe, expect, it, vi, type Mock } from "vitest";
 import { Registry } from "./registry.js";
 import type { Relay } from "./relay.js";
@@ -474,5 +475,64 @@ describe("Session in Auto mode", () => {
       return e.type === "error";
     })).toMatchObject({ message: expect.stringContaining("every device is busy") as string });
     expect(s.busy).toBe(false);
+  });
+});
+
+describe("Session and the project's skills", () => {
+  const withContext = (context: ProjectContext | undefined): Session => {
+    sessions = new Sessions({ registry, relay, complete, projectContext: async () => {
+      return context;
+    } });
+    registry.upsert(beat({ allowedTools: ["read_file", "skill"] }));
+    return create();
+  };
+  const toolNames = (): string[] => {
+    return (complete.mock.calls[0]?.[2] ?? []).map((t) => {
+      return t.function.name;
+    });
+  };
+
+  it("tells the model about the instructions and the skills it may start, and offers the skill tool", async () => {
+    script({ role: "assistant", content: "ok" });
+    const s = withContext({
+      instructions: [{ source: "AGENTS.md", text: "Use pnpm." }],
+      skills: [{ name: "tdd", description: "Test first.", modelInvocable: true, source: "user" }, { name: "quiet", description: "Hidden.", modelInvocable: false, source: "user" }],
+      skipped: [],
+    });
+    s.send("go");
+    await until(() => {
+      return types(s).includes("done");
+    });
+    const system = textOf(complete.mock.calls[0]?.[1][0]?.content);
+    expect(system).toContain("Use pnpm.");
+    expect(system).toContain("- tdd: Test first.");
+    expect(system).not.toContain("quiet");
+    expect(toolNames()).toContain("skill");
+
+    // A second turn replaces the context instead of adding it again.
+    s.send("again");
+    await until(() => {
+      return complete.mock.calls.length === 2 && !s.busy;
+    });
+    expect(textOf(complete.mock.calls[1]?.[1][0]?.content).split("Use pnpm.")).toHaveLength(2);
+  });
+
+  it("does not offer the skill tool when no skill may be started, or when the device cannot say", async () => {
+    script({ role: "assistant", content: "ok" });
+    const none = withContext({ instructions: [], skills: [{ name: "quiet", description: "Hidden.", modelInvocable: false, source: "user" }], skipped: [] });
+    none.send("go");
+    await until(() => {
+      return types(none).includes("done");
+    });
+    expect(toolNames()).not.toContain("skill");
+
+    complete.mockClear();
+    script({ role: "assistant", content: "ok" });
+    const old = withContext(undefined);
+    old.send("go");
+    await until(() => {
+      return types(old).includes("done");
+    });
+    expect(toolNames()).not.toContain("skill");
   });
 });

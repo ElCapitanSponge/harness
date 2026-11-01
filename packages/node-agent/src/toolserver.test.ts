@@ -159,3 +159,13 @@ describe("a folder that can only be read", () => {
     expect(server.readOnlyNames()).toEqual([]);
   });
 });
+
+describe("the project context tool", () => {
+  it("answers the gateway wherever the device allows any of its own tools, and is not reported as a tool for the model", async () => {
+    expect((await call(["read_file"], "proj", "project_context", {})).ok).toBe(true);
+    const refused = await call(["web_fetch"], "proj", "project_context", {});
+    expect(refused.ok).toBe(false);
+    expect(refused.output).toContain("not allowed");
+    expect(createToolServer({ roots: { proj: dir }, allowed: ["read_file"] }).allowedNames()).not.toContain("project_context");
+  });
+});

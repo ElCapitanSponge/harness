@@ -158,6 +158,8 @@ describe("tool metadata", () => {
       git_write: true,
       jq: false,
       fzf_filter: false,
+      skill: false,
+      project_context: false,
     });
   });
 });
