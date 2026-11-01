@@ -2,13 +2,13 @@
 
 A small TypeScript harness that pools local LLMs (via [LM Studio](https://lmstudio.ai)) and Claude (via the official `claude` CLI) behind a single OpenAI-compatible endpoint.
 
-Each device runs a **node agent** that reports which models it has loaded and whether it is busy (for example, a game is running). The agent dials out to the gateway over a WebSocket (`/tunnel`) and keeps it open, so a device is listed while it is connected and needs no inbound port for registration. A **gateway** keeps a registry of live nodes and routes each request to a suitable idle one. Requests for `claude` go to the Claude CLI instead.
+Each device runs a **node agent** that reports which models it has loaded and whether it is busy (for example, a game is running). The agent dials out to the gateway over a WebSocket (`/tunnel`) and keeps it open. A device is listed while it is connected, and chat requests for its models are relayed down the same connection to its local LM Studio, so the device needs no inbound port or firewall rule. A **gateway** keeps a registry of live nodes and routes each request to a suitable idle one. Requests for `claude` go to the Claude CLI instead.
 
 ```
-            +-------------+        heartbeats         +-------------+
+            +-------------+        tunnel (outbound)  +-------------+
   CLI  -->  |   gateway   | <------------------------ | node agent  |  (one per device)
   apps      |  registry   |                           |  + LM Studio|
-            |  router     | -- /v1/chat/completions ->|             |
+            |  router     | -- chat, relayed -------->|             |
             +------+------+                           +-------------+
                    |
                    +-- claude / claude:<alias> --> `claude -p` (your own login)
@@ -96,7 +96,53 @@ function harness { $env:HARNESS_CWD = (Get-Location).Path; pnpm --silent --dir C
 
 On a device other than the one running the gateway, clone this repo, run `pnpm install`, and create a `.env` in it with `GATEWAY_URL` (for example `http://100.106.71.39:8787`) and `HARNESS_API_KEY`. Local models must support tool calling; if one ignores the tools, try another.
 
+### Working on another device's files
+
+A device can let coding sessions work in folders you choose. The model loop runs on the gateway (and on whichever device has the model loaded), while the tools run on the device that owns the files.
+
+On the device that owns the files, set these before starting its node agent:
+
+```bash
+PROJECT_ROOTS=proj=/home/me/code/proj        # name=path, several separated by ":" (";" on Windows)
+ALLOWED_TOOLS=read_file,list_dir,grep        # the default: read-only. Add write_file,edit_file,run_command to allow changes
+```
+
+Nothing is exposed unless `PROJECT_ROOTS` is set, and only the tools in `ALLOWED_TOOLS` run, whatever the gateway asks for. Then, from any device:
+
+```bash
+harness nodes                                         # the ROOTS column shows what each device exposes
+harness code -d anakin -r proj "why does the build fail?"
+harness tool anakin proj read_file '{"path":"package.json"}'   # run one tool, for debugging
+```
+
+Changes ask `[y/N/a]` here too (`-y` approves everything for the session; unanswered approvals count as no after five minutes). Claude models cannot drive these sessions yet.
+
 Chat apps (LibreChat and friends) can use the same gateway for plain chat. The gateway lists Claude models in `/v1/models` and streams Claude replies, but chat apps have no tools on your files, so use `harness code` for file work.
+
+## Running the node agent as a service (macOS and Linux)
+
+A device appears in the pool while its node agent runs, so it should start by itself. The agent reads `.env` in the repo root (see `.env.example`: `GATEWAY_URL`, `HARNESS_API_KEY`, and optionally `PROJECT_ROOTS`, `ALLOWED_TOOLS`, `CLAUDE_ENABLED`). `deploy/run-agent.sh` starts it for a service manager and tightens `.env` to owner-only.
+
+**Linux (systemd user service)**
+
+```bash
+mkdir -p ~/.config/systemd/user
+cp deploy/linux/harness-agent.service ~/.config/systemd/user/
+systemctl --user daemon-reload
+systemctl --user enable --now harness-agent
+loginctl enable-linger "$USER"      # keep it running when you are not logged in
+journalctl --user -u harness-agent -f
+```
+
+**macOS (launchd agent, starts at login)**
+
+```bash
+sed -e "s#__HARNESS_DIR__#$HOME/personal/harness#g" -e "s#__HOME__#$HOME#g"   deploy/macos/com.harness.agent.plist > ~/Library/LaunchAgents/com.harness.agent.plist
+launchctl bootstrap "gui/$(id -u)" ~/Library/LaunchAgents/com.harness.agent.plist
+tail -f ~/Library/Logs/harness-agent.log
+```
+
+Both assume the repo is at `~/personal/harness`; edit the path if it is elsewhere. These files have not yet been run on a Mac or Linux machine, so check `harness nodes` after starting one.
 
 ## Model names
 
@@ -104,7 +150,7 @@ Chat apps (LibreChat and friends) can use the same gateway for plain chat. The g
 |---|---|
 | a loaded model id, e.g. `qwen3.5-9b` | an idle node that has it loaded |
 | `auto` | any loaded model on an idle node |
-| `claude`, `claude:<alias>` (e.g. `claude:sonnet`) | the `claude` CLI, with no tools enabled |
+| `claude`, `claude:<alias>` (e.g. `claude:sonnet`) | a connected device that is logged in to Claude and runs its agent with `CLAUDE_ENABLED=1`; the `claude` CLI answers with no tools enabled |
 
 If no idle node matches, the gateway returns `503`.
 
@@ -115,11 +161,16 @@ If no idle node matches, the gateway returns `503`.
 | `PORT` | gateway | `8787` |
 | `HOST` | gateway | `127.0.0.1`. Comma-separated listen addresses; `tailscale` means this machine's Tailscale IPv4 address. `0.0.0.0` and `::` are refused |
 | `HARNESS_API_KEY` | gateway, node agent, CLI | unset. Required for the gateway to listen on anything but loopback; clients send it as `Authorization: Bearer` |
-| `CLAUDE_BIN` | gateway | `claude` |
+| `CLAUDE_ENABLED` | node agent | unset. Set to `1` on a device where `claude` is logged in to let it answer Claude requests |
+| `CLAUDE_BIN` | node agent | `claude` |
+| `HARNESS_DATA_DIR` | gateway | `~/.harness/gateway`. Where coding sessions are saved (`/data` in the container, so mount a volume there) |
 | `GATEWAY_URL` | node agent, CLI | `http://localhost:8787` |
 | `INFERENCE_URL` | node agent | `http://localhost:1234` (LM Studio) |
 | `NODE_ID` | node agent | machine hostname |
 | `GAME_PROCESSES` | node agent | comma-separated executable names; a match marks the node busy |
+| `PROJECT_ROOTS` | node agent | unset (no tools exposed). `name=path` entries for folders coding sessions may use |
+| `ALLOWED_TOOLS` | node agent | `read_file,list_dir,grep`. Add `write_file,edit_file,run_command` to allow changes |
+| `AUDIT_LOG` | node agent | `~/.harness/audit.log`. Every tool call the gateway makes on this device, one JSON line each |
 | `LMS_BIN` | CLI | `~/.lmstudio/bin/lms` |
 
 ## Layout
@@ -135,7 +186,7 @@ Routing policy lives in `packages/gateway/src/router.ts`, separate from transpor
 
 ## Notes on Claude usage
 
-The Claude backend only shells out to the official `claude` CLI, so requests use your own login and plan limits. It does not extract or proxy credentials. Usage is shared with everything else on that account.
+The gateway does not run Claude itself. A device that is logged in to the official `claude` CLI answers Claude requests (start its agent with `CLAUDE_ENABLED=1`), so requests use that login and its plan limits. Claude models appear in `/v1/models` only while such a device is connected, and a gateway in a container needs no login. The harness does not extract or proxy credentials. Usage is shared with everything else on that account.
 
 ## Calling the gateway from another device (Tailscale)
 
@@ -169,8 +220,9 @@ Traffic between tailnet devices is already encrypted by Tailscale (WireGuard), s
 
 ## Security
 
-- The gateway refuses to listen on any non-loopback address unless `HARNESS_API_KEY` is set, and never accepts `0.0.0.0` or `::`.
-- With a key set, every route requires `Authorization: Bearer <key>`, including node heartbeats and the `/tunnel` WebSocket.
+- Because the gateway can run tools on every connected device, read [docs/security.md](docs/security.md): what is trusted, the device-side limits (`PROJECT_ROOTS`, `ALLOWED_TOOLS`, the audit log), and a Tailscale ACL to lock it down.
+- The gateway refuses to listen on any non-loopback address unless `HARNESS_API_KEY` is set, and refuses `0.0.0.0` or `::` unless `HARNESS_ALLOW_ANY_INTERFACE=1` (for containers).
+- With a key set, every route requires `Authorization: Bearer <key>`, including the `/tunnel` WebSocket that devices register over.
 - The key lives in `.env`, which is git-ignored. Do not commit it or paste it into chats.
 - The Claude backend uses your own `claude` login, so anyone holding the harness key can spend your Claude plan. Treat the key accordingly.
 

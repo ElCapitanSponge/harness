@@ -1,0 +1,22 @@
+# systemd user service for the harness node agent.
+#
+#   mkdir -p ~/.config/systemd/user
+#   cp deploy/linux/harness-agent.service ~/.config/systemd/user/
+#   systemctl --user daemon-reload
+#   systemctl --user enable --now harness-agent
+#   loginctl enable-linger "$USER"      # keep it running when you are not logged in
+#
+# This assumes the repo is cloned at ~/personal/harness. Edit ExecStart if it lives elsewhere.
+[Unit]
+Description=harness node agent
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=%h/personal/harness/deploy/run-agent.sh
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=default.target
