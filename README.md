@@ -22,7 +22,7 @@ Working, and still being proven out. The gateway, node agents, CLI and web page 
 
 ## Requirements
 
-- Node 22+ and pnpm 10
+- Node 26 (the current LTS) and pnpm 10
 - [LM Studio](https://lmstudio.ai) 0.4+ with its `lms` CLI, for local models
 - The [Claude Code](https://claude.com/claude-code) CLI, logged in (`claude auth login`), for Claude models
 

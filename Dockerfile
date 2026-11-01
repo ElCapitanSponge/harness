@@ -1,7 +1,7 @@
 # Gateway image. No secrets are baked in: pass HARNESS_API_KEY at run time.
 
 # The web app is built here, so the final image carries only its static files.
-FROM node:22-slim AS web
+FROM node:26-slim AS web
 RUN corepack enable
 WORKDIR /app
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
@@ -12,7 +12,7 @@ COPY packages/core packages/core
 COPY packages/web packages/web
 RUN pnpm --filter @harness/web build
 
-FROM node:22-slim
+FROM node:26-slim
 
 ENV NODE_ENV=production
 RUN corepack enable
