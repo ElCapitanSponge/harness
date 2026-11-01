@@ -52,7 +52,7 @@ Open **Devices → Add a device** and copy the command for the machine's operati
 
 With tools on this device set to **Can change**, the model gets `run_command`: one tool that runs a command in the device's own shell, so it can do nearly anything else a session needs (build, test, install packages, move or delete files, git, curl, any installed program) without a separate option for each. It asks first every time, unless you choose "Always allow run_command" for the session.
 
-- **Windows:** PowerShell 7 (`pwsh`) if it is installed, otherwise `cmd.exe`. Windows PowerShell 5 is not used.
+- **Windows:** PowerShell 7 (`pwsh`) if it is installed, otherwise Windows PowerShell 5.1 (`powershell.exe`), otherwise `cmd.exe`. The model is told which, since 5.1 has no `&&` or `||`.
 - **macOS and Linux:** your login shell if it is zsh or bash, otherwise bash, otherwise sh.
 - The agent tells the gateway which shell it has, and the model's instructions name it and its syntax (PowerShell cmdlets and `;`, or `dir`, `findstr` and `&&` in cmd), so it writes commands that will run.
 - Commands run in the project folder, with the exit code and output (both streams) returned, stopped after 120 seconds.

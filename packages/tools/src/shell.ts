@@ -6,7 +6,7 @@ import path from "node:path";
 // that can use the shell can do nearly anything else a coding session needs (build, test, install, move files, git, curl), so this one
 // tool covers what separate tools would, without each needing its own option.
 
-export type ShellName = "PowerShell" | "cmd" | "bash" | "zsh" | "sh";
+export type ShellName = "PowerShell" | "Windows PowerShell" | "cmd" | "bash" | "zsh" | "sh";
 
 export interface ShellInvocation {
   bin: string;
@@ -21,11 +21,12 @@ const hasProgram = (bin: string): boolean => {
   return spawnSync(bin, ["-NoLogo", "-NoProfile", "-Command", "exit 0"], { stdio: "ignore", windowsHide: true }).status === 0;
 };
 
-let windowsShell: "pwsh" | "cmd.exe" | undefined;
+type WindowsBin = "pwsh" | "powershell.exe" | "cmd.exe";
+let windowsShell: WindowsBin | undefined;
 
-// PowerShell 7 (pwsh) if it is installed, otherwise the command prompt that every Windows has.
-const windowsBin = (): "pwsh" | "cmd.exe" => {
-  windowsShell ??= hasProgram("pwsh") ? "pwsh" : "cmd.exe";
+// PowerShell 7 (pwsh) if it is installed, otherwise the Windows PowerShell that comes with Windows, otherwise the command prompt.
+const windowsBin = (): WindowsBin => {
+  windowsShell ??= hasProgram("pwsh") ? "pwsh" : hasProgram("powershell.exe") ? "powershell.exe" : "cmd.exe";
   return windowsShell;
 };
 
@@ -33,10 +34,11 @@ const windowsBin = (): "pwsh" | "cmd.exe" => {
 // accents and symbols are not mangled on the way back.
 export const shellFor = (platform: NodeJS.Platform, command: string, env: NodeJS.ProcessEnv = process.env): ShellInvocation => {
   if (platform === "win32") {
-    if (windowsBin() === "pwsh") {
+    const bin = windowsBin();
+    if (bin !== "cmd.exe") {
       // PowerShell exits with 1 when the last program failed, whatever its own code was; the program's own code is what is wanted.
       const script = `[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; $ErrorActionPreference = 'Continue'; try { $PSStyle.OutputRendering = 'PlainText' } catch { }; $global:LASTEXITCODE = $null\n${command}\nif ($null -ne $LASTEXITCODE -and $LASTEXITCODE -ne 0) { exit $LASTEXITCODE }`;
-      return { bin: "pwsh", args: ["-NoLogo", "-NoProfile", "-NonInteractive", "-Command", script], name: "PowerShell" };
+      return { bin, args: ["-NoLogo", "-NoProfile", "-NonInteractive", "-Command", script], name: bin === "pwsh" ? "PowerShell" : "Windows PowerShell" };
     }
     return { bin: "cmd.exe", args: ["/d", "/s", "/c", `"chcp 65001 >nul & ${command}"`], name: "cmd", verbatim: true };
   }
@@ -61,8 +63,11 @@ export const shellAdvice = (platform: string, shell?: string): string => {
   if (shell === "PowerShell") {
     return "Commands run in PowerShell (pwsh) on Windows: use PowerShell syntax (Get-ChildItem, Select-String, Get-Content, ';' to chain, backslash or forward-slash paths) and do not assume Unix tools such as grep, sed or cat exist.";
   }
+  if (shell === "Windows PowerShell") {
+    return "Commands run in Windows PowerShell 5.1 (not PowerShell 7, which is not installed): use PowerShell syntax (Get-ChildItem, Select-String, Get-Content), chain with ';' (the '&&' and '||' operators and the ternary operator do not exist in 5.1), and do not assume Unix tools such as grep, sed or cat exist.";
+  }
   if (shell === "cmd" || (platform === "win32" && shell === undefined)) {
-    return "Commands run in cmd.exe, the Windows command prompt: use dir, type, findstr, copy, del and '&&' to chain, with backslash paths, and do not assume Unix tools such as grep, sed or cat exist. PowerShell is not installed here.";
+    return "Commands run in cmd.exe, the Windows command prompt: use dir, type, findstr, copy, del and '&&' to chain, with backslash paths, and do not assume Unix tools such as grep, sed or cat exist. Neither PowerShell 7 nor Windows PowerShell is available here.";
   }
   if (platform === "darwin") {
     return `Commands run in ${shell ?? "zsh"} on macOS, so the usual BSD command-line tools are there (sed and date differ from the GNU versions).`;
