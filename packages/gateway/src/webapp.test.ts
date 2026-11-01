@@ -31,7 +31,7 @@ describe("the built web app", () => {
 
   it("serves the page at its own addresses, never cached, under a strict policy", async () => {
     const app = await build();
-    for (const url of ["/", "/c/0b1c2d3e-4f50-4a6b-8c7d-9e0f1a2b3c4d", "/manage/devices"]) {
+    for (const url of ["/", "/c/0b1c2d3e-4f50-4a6b-8c7d-9e0f1a2b3c4d", "/manage/devices", "/manage/skills", "/import"]) {
       const res = await app.request(url);
       expect(res.status).toBe(200);
       expect(res.headers.get("cache-control")).toBe("no-store");

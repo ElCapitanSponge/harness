@@ -1,5 +1,9 @@
 ---
+title: Devices connect out to the gateway
+description: Each node agent opens and holds a connection to the gateway; the gateway never dials a device.
 status: accepted
+sidebar:
+  order: 2
 ---
 
 # Devices connect out to the gateway

@@ -1,3 +1,10 @@
+---
+title: Keeping the gateway up to date on TrueNAS
+description: Pull policy and a cron job that redeploys the gateway when a new image is published
+sidebar:
+  order: 80
+---
+
 # Keeping the gateway up to date on TrueNAS
 
 Every merge to `main` publishes `ghcr.io/elcapitansponge/harness-gateway:latest` after the tests and the image smoke test pass. TrueNAS does not watch the registry, so something has to pull it. Two parts make that automatic.
@@ -8,7 +15,7 @@ In the app's Edit form (or `pull_policy: always` in its YAML), set the pull poli
 
 ## 2. A cron job that redeploys when the image changes
 
-[`deploy/truenas/auto-update.sh`](../deploy/truenas/auto-update.sh) pulls the image and redeploys the app only if the image is new, so nothing restarts when there is nothing to update.
+[`deploy/truenas/auto-update.sh`](../../deploy/truenas/auto-update.sh) pulls the image and redeploys the app only if the image is new, so nothing restarts when there is nothing to update.
 
 1. Copy the script onto the TrueNAS box, for example to `/mnt/<pool>/harness/auto-update.sh`, and make it executable (`chmod +x`).
 2. Open **System > Advanced > Cron Jobs > Add**. Set the command to the script's path, the user to `root`, and the schedule to every 15 minutes (`*/15 * * * *`). Tick **Hide Standard Output** off so the log shows when it redeploys.

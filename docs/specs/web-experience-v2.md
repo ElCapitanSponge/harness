@@ -2,6 +2,8 @@
 title: Web experience v2
 description: A specification for rebuilding the harness web interface after the first real deployment
 status: proposed
+sidebar:
+  order: 1
 ---
 
 # Web experience v2

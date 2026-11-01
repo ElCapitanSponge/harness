@@ -1,5 +1,9 @@
 ---
+title: Auto mode chooses the model by plain rules, and says why
+description: Auto is a choice in the model picker.
 status: accepted
+sidebar:
+  order: 10
 ---
 
 # Auto mode chooses the model by plain rules, and says why

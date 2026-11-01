@@ -1,3 +1,10 @@
+---
+title: Progress while a request is in flight
+description: The stages the status line shows between pressing Send and the first word of a reply
+sidebar:
+  order: 90
+---
+
 # Progress while a request is in flight
 
 From the moment Send is pressed the page shows one status line with a running timer, so a slow model load reads as work in progress and not a hang. The gateway reports each **stage** as a live event on the conversation's event stream (`type: "stage"`), which is never stored or replayed:

@@ -1,3 +1,10 @@
+---
+title: Claude is reached through the official CLI, never through extracted credentials
+description: The Claude backend runs the official claude program on a device where the owner is logged in, and the harness never reads, copies or forwards that login.
+sidebar:
+  order: 1
+---
+
 # Claude is reached through the official CLI, never through extracted credentials
 
 The Claude backend runs the official `claude` program on a device where the owner is logged in, and the harness never reads, copies or forwards that login. We considered calling the API with the subscription's token to avoid spawning a process, and rejected it: it would route subscription credentials through our own service, which is credential handling we do not want to take on. The cost is that Claude only works from a device with a logged-in CLI, so a container needs a device to serve it (built in issue #9: set CLAUDE_ENABLED=1 on that device).

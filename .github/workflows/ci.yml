@@ -20,6 +20,7 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm typecheck
       - run: pnpm lint
+      - run: pnpm docs:check
       - run: pnpm test
       # The stories are tests too (they run in pnpm test); this checks the static Storybook still builds.
       - run: pnpm --filter @harness/web build-storybook

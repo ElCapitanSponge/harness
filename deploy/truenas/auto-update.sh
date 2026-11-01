@@ -2,7 +2,7 @@
 # Keeps the Torii gateway on TrueNAS running the newest published image.
 #
 # Run it from System > Advanced > Cron Jobs (user root, every 15 minutes). It pulls the image and, only if the image
-# changed, redeploys the app, so there is no restart (and no downtime) when nothing is new. See docs/updating.md.
+# changed, redeploys the app, so there is no restart (and no downtime) when nothing is new. See docs/guides/updating.md.
 
 IMAGE="${IMAGE:-ghcr.io/elcapitansponge/harness-gateway:latest}"
 # The app's name as shown on the Apps page.

@@ -1,3 +1,10 @@
+---
+title: Skills and instruction files
+description: How coding sessions find skills and AGENTS.md or CLAUDE.md, the slash menu and the Skills page
+sidebar:
+  order: 60
+---
+
 # Skills and instruction files
 
 A coding session tells the model what the project and its owner have asked for, and which skills it can use. Skills use the Agent Skills layout (a folder with a `SKILL.md`, front matter with a `name` and a `description`, and any files it refers to), so the skills installed for Claude Code, including Matt Pocock's, work unchanged.

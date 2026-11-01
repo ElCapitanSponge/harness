@@ -54,6 +54,7 @@ const mount = (app: Hono, dist: string): void => {
   // The app's own addresses. Everything else under these is the app's router, never an API.
   app.get("/c/:id", page);
   app.get("/manage/:section", page);
+  app.get("/import", page);
 
   app.get("/assets/:name", async (c) => {
     const name = c.req.param("name");
