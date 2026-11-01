@@ -1,3 +1,5 @@
+import { RENDERER_SOURCE } from "./renderer.js";
+
 // A single self-contained page: no external scripts, styles or fonts. It carries no secrets, so it is served
 // without auth; the API key is typed into it and sent only as a header to this same origin.
 export const WEB_PAGE = String.raw`<!doctype html>
@@ -11,11 +13,15 @@ export const WEB_PAGE = String.raw`<!doctype html>
     color-scheme: light dark;
     --bg: #fafaf9; --surface: #ffffff; --text: #1c1917; --muted: #78716c; --line: #e7e5e4;
     --accent: #2563eb; --accent-text: #ffffff; --user: #eff6ff; --error: #b91c1c;
+    --code-bg: #f5f5f4; --tk-k: #7c3aed; --tk-s: #15803d; --tk-c: #78716c; --tk-n: #c2410c; --tk-p: #1d4ed8; --tk-f: #a16207;
+    --diff-add: #dcfce7; --diff-del: #fee2e2; --diff-hunk: #e0e7ff;
   }
   @media (prefers-color-scheme: dark) {
     :root:not([data-theme="light"]) {
       --bg: #151413; --surface: #1f1d1c; --text: #f5f5f4; --muted: #a8a29e; --line: #353230;
       --accent: #60a5fa; --accent-text: #0b1220; --user: #1e293b; --error: #f87171;
+      --code-bg: #12100f; --tk-k: #c4b5fd; --tk-s: #86efac; --tk-c: #a8a29e; --tk-n: #fdba74; --tk-p: #93c5fd; --tk-f: #fde68a;
+      --diff-add: #14532d; --diff-del: #7f1d1d; --diff-hunk: #312e81;
     }
   }
   * { box-sizing: border-box; }
@@ -44,6 +50,30 @@ export const WEB_PAGE = String.raw`<!doctype html>
   .approval .actions { display: flex; gap: 8px; flex-wrap: wrap; }
   .approval.answered .actions { display: none; }
   .note { color: var(--muted); font-size: 14px; }
+  .md { white-space: normal; overflow-wrap: anywhere; }
+  .md > :first-child { margin-top: 0; }
+  .md > :last-child { margin-bottom: 0; }
+  .md p, .md ul, .md ol, .md blockquote, .md .code, .md .table { margin: 0 0 10px; }
+  .md h1, .md h2, .md h3, .md h4 { margin: 14px 0 6px; line-height: 1.25; }
+  .md h1 { font-size: 20px; } .md h2 { font-size: 18px; } .md h3 { font-size: 16px; } .md h4, .md h5, .md h6 { font-size: 15px; }
+  .md ul, .md ol { padding-left: 22px; }
+  .md blockquote { border-left: 3px solid var(--line); padding-left: 12px; color: var(--muted); }
+  .md hr { border: 0; border-top: 1px solid var(--line); margin: 12px 0; }
+  .md a { color: var(--accent); }
+  .md code { background: var(--code-bg); border-radius: 4px; padding: 1px 5px; font: 13px/1.4 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+  .md .table { overflow-x: auto; }
+  .md table { border-collapse: collapse; font-size: 14px; }
+  .md th, .md td { border: 1px solid var(--line); padding: 4px 8px; text-align: left; }
+  .code { border: 1px solid var(--line); border-radius: 8px; overflow: hidden; background: var(--code-bg); }
+  .code-head { display: flex; justify-content: space-between; align-items: center; padding: 4px 8px; font-size: 12px; color: var(--muted); border-bottom: 1px solid var(--line); }
+  .code-head button { padding: 2px 8px; font-size: 12px; }
+  .code pre { margin: 0; padding: 10px 12px; overflow-x: auto; }
+  .code pre code { background: none; padding: 0; font-size: 13px; white-space: pre; }
+  .tk-k { color: var(--tk-k); } .tk-s { color: var(--tk-s); } .tk-c { color: var(--tk-c); font-style: italic; }
+  .tk-n { color: var(--tk-n); } .tk-p { color: var(--tk-p); } .tk-f { color: var(--tk-f); }
+  code.diff { display: block; }
+  code.diff span { display: block; padding: 0 4px; min-width: max-content; }
+  .d-add { background: var(--diff-add); } .d-del { background: var(--diff-del); } .d-hunk { background: var(--diff-hunk); color: var(--muted); } .d-meta { color: var(--muted); }
   .thought { color: var(--muted); font-size: 13px; margin-bottom: 6px; }
   .thought div { white-space: pre-wrap; overflow-wrap: anywhere; }
   .role { font-size: 12px; color: var(--muted); margin-bottom: 2px; }
@@ -90,6 +120,7 @@ export const WEB_PAGE = String.raw`<!doctype html>
     <button id="stop" type="button" hidden>Stop</button>
   </form>
 </div>
+<script>(${RENDERER_SOURCE})(window);</script>
 <script>
 (function () {
   var $ = function (id) { return document.getElementById(id); };
@@ -150,22 +181,71 @@ export const WEB_PAGE = String.raw`<!doctype html>
     };
   }
 
-  async function addMessagePlaceholder() {}
+  // Runs a change to the log and then, only if the reader was already at the bottom, keeps them there. Someone who has
+  // scrolled up to read is not pulled back down by every new token.
+  function keepScroll(change) {
+    var log = $("log");
+    var stuck = log.scrollHeight - log.scrollTop - log.clientHeight < 80;
+    change();
+    if (stuck) log.scrollTop = log.scrollHeight;
+  }
 
-  function addMessage(role, text, cls) {
+  function showMarkdown(el, text) {
+    el.classList.add("md");
+    el.innerHTML = window.harnessRender.markdown(text);
+  }
+
+  // Re-rendering a long reply on every token would be wasteful, so streamed updates are batched a few times a second.
+  function streamMarkdown(el, text) {
+    el._text = text;
+    if (el._timer) return;
+    el._timer = setTimeout(function () {
+      el._timer = null;
+      keepScroll(function () { showMarkdown(el, el._text); });
+    }, 60);
+  }
+
+  function flushMarkdown(el, text) {
+    if (el._timer) { clearTimeout(el._timer); el._timer = null; }
+    keepScroll(function () { showMarkdown(el, text); });
+  }
+
+  function addMessage(role, text, cls, markdown) {
     var box = document.createElement("div");
     box.className = "msg " + (cls || role);
     var label = document.createElement("div");
     label.className = "role";
     label.textContent = role;
     var body = document.createElement("div");
-    body.textContent = text;
+    if (markdown && text) showMarkdown(body, text);
+    else body.textContent = text;
     box.appendChild(label);
     box.appendChild(body);
-    $("log").appendChild(box);
-    $("log").scrollTop = $("log").scrollHeight;
+    keepScroll(function () { $("log").appendChild(box); });
     return body;
   }
+
+  document.addEventListener("click", function (ev) {
+    var button = ev.target && ev.target.closest ? ev.target.closest("button.copy") : null;
+    if (!button) return;
+    var text = button.closest(".code").querySelector("pre").textContent;
+    function done() {
+      button.textContent = "Copied";
+      setTimeout(function () { button.textContent = "Copy"; }, 1500);
+    }
+    function fallback() {
+      var area = document.createElement("textarea");
+      area.value = text;
+      area.style.position = "fixed";
+      area.style.opacity = "0";
+      document.body.appendChild(area);
+      area.select();
+      try { if (document.execCommand("copy")) done(); } catch (e) {}
+      area.remove();
+    }
+    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(done, fallback);
+    else fallback();
+  });
 
   async function errorText(res) {
     try {
@@ -395,16 +475,16 @@ export const WEB_PAGE = String.raw`<!doctype html>
       live.thought.add(event.text);
     } else if (event.type === "text-delta") {
       if (live.thought) live.thought.finish();
-      if (!live.body) live.body = addMessage(session.model, "");
+      if (!live.body) live.body = addMessage(session.model, "", undefined, true);
       live.reply += event.text;
-      live.body.textContent = live.reply;
+      streamMarkdown(live.body, live.reply);
     } else if (event.type === "thinking") {
       // The finished reasoning. If it streamed in live, keep that block; if the session was reopened, show it collapsed.
       if (live.thought) live.thought.set(event.text);
       else makeThought($("log"), null, true).set(event.text);
     } else if (event.type === "text") {
-      if (live.body) live.body.textContent = event.text;
-      else addMessage(session.model, event.text);
+      if (live.body) flushMarkdown(live.body, event.text);
+      else addMessage(session.model, event.text, undefined, true);
       endLive();
     }
     else if (event.type === "tool") { endLive(); note("> " + event.summary, "tool"); }
@@ -533,7 +613,7 @@ export const WEB_PAGE = String.raw`<!doctype html>
   async function send(text) {
     history.push({ role: "user", content: text });
     addMessage("you", text, "user");
-    var body = addMessage($("model").value, "");
+    var body = addMessage($("model").value, "", undefined, true);
     var reply = "";
     controller = new AbortController();
     setBusy(true);
@@ -550,14 +630,13 @@ export const WEB_PAGE = String.raw`<!doctype html>
       await readStream(res, function (piece) {
         if (thought) thought.finish();
         reply += piece;
-        body.textContent = reply;
-        $("log").scrollTop = $("log").scrollHeight;
+        streamMarkdown(body, reply);
       }, function (piece) {
         if (!thought) thought = makeThought(body.parentNode, body, false);
-        thought.add(piece);
-        $("log").scrollTop = $("log").scrollHeight;
+        keepScroll(function () { thought.add(piece); });
       });
       if (thought) thought.finish();
+      if (reply) flushMarkdown(body, reply);
       if (reply) history.push({ role: "assistant", content: reply });
       else body.textContent = "(empty reply)";
     } catch (err) {
@@ -567,6 +646,8 @@ export const WEB_PAGE = String.raw`<!doctype html>
       } else {
         history.pop();
         body.parentNode.classList.add("error");
+        if (body._timer) { clearTimeout(body._timer); body._timer = null; }
+        body.classList.remove("md");
         body.textContent = (reply ? reply + "\n\n" : "") + (err.message || "Request failed.");
       }
     } finally {
