@@ -4,7 +4,7 @@ import type { SessionEvent, StageName } from "@harness/core";
 
 export type Item
   = | { kind: "user"; id: number; text: string }
-    | { kind: "assistant"; id: number; text: string; streaming: boolean }
+    | { kind: "assistant"; id: number; text: string; streaming: boolean; model?: string; device?: string }
     | { kind: "thinking"; id: number; text: string; live: boolean; startedAt: number; seconds: number }
     | { kind: "tool"; id: number; summary: string }
     | { kind: "compaction"; id: number; messages: number; tokensBefore: number; tokensAfter: number; manual: boolean }
@@ -109,10 +109,10 @@ export const applyEvent = (state: ConversationState, event: StreamEvent, now: nu
 
     case "text":
       if (last?.kind === "assistant" && last.streaming) {
-        return replaceLast({ ...last, text: event.text, streaming: false });
+        return replaceLast({ ...last, text: event.text, streaming: false, model: event.model, device: event.device });
       }
       return push(settle(state.items, now), (id) => {
-        return { kind: "assistant", id, text: event.text, streaming: false };
+        return { kind: "assistant", id, text: event.text, streaming: false, model: event.model, device: event.device };
       });
 
     case "compacted":

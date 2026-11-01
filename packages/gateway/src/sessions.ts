@@ -202,6 +202,8 @@ interface SessionDeps {
   connected(device: string): boolean;
   // Called when a turn ends, with the session in a consistent state.
   persist?(session: Session): void;
+  // The context window of a model, in tokens, when it is known: a model that is loaded, or Claude.
+  contextLength?(model: string): number | undefined;
   // Every model call is recorded here, for the usage page and the context meter.
   ledger?: UsageLedger;
   // Compact when the context is this fraction full (0.8 is 80 percent). Zero or absent turns automatic compaction off.
@@ -214,7 +216,8 @@ export class Session {
   readonly id: string;
   title: string;
   updated: number;
-  readonly model: string;
+  // The model that answers the next message. It can change from one message to the next.
+  private current: string;
   readonly device: string;
   readonly root: string;
   readonly created: number;
@@ -226,6 +229,8 @@ export class Session {
   private always = new Set<string>();
   // When the history was last compacted and how big it was after, so the meter can show that before the next reply.
   compaction: { time: number; tokensAfter: number } | undefined;
+  // Which model on which device made the latest call, to label the reply that follows.
+  private lastRoute: { model: string; device: string } | undefined;
   // The call whose size last made automatic compaction fail, so one failure does not repeat on every message.
   private compactFailedFor = 0;
 
@@ -237,12 +242,16 @@ export class Session {
     this.id = init.id;
     this.title = init.title;
     this.updated = init.updated;
-    this.model = init.model;
+    this.current = init.model;
     this.device = init.device;
     this.root = init.root;
     this.created = init.created;
     this.history = init.history;
     this.events = init.events ?? [];
+  }
+
+  get model(): string {
+    return this.current;
   }
 
   // A chat has no device and no tools; a code conversation has both.
@@ -306,9 +315,15 @@ export class Session {
   }
 
   // Throws if a turn is running or the device is not connected: a session whose device is away can be read, not continued.
-  send(text: string): void {
+  send(text: string, model?: string): void {
     if (this.abort) {
       throw new Error("the session is busy with a turn");
+    }
+    if (model !== undefined && model !== this.current) {
+      if (this.kind === "code" && isClaudeModel(model)) {
+        throw new Error("Claude models cannot drive a coding session through the gateway yet; pick a local model");
+      }
+      this.current = model;
     }
     const specs = this.kind === "chat" ? [] : this.deps.resolve(this.device, this.root);
     if (this.title === "") {
@@ -418,10 +433,23 @@ export class Session {
   private compactionDue(): number | undefined {
     const at = this.deps.compactAt ?? 0;
     const last = this.deps.ledger?.forConversation(this.id).last;
-    if (at <= 0 || !last?.contextLength || last.time <= this.compactFailedFor || (this.compaction && this.compaction.time >= last.time)) {
+    // The window of the model that is about to answer, which may not be the one that answered last.
+    const window = this.deps.contextLength?.(this.model) ?? last?.contextLength;
+    if (at <= 0 || !last || !window || last.time <= this.compactFailedFor || (this.compaction && this.compaction.time >= last.time)) {
       return undefined;
     }
-    return (last.promptTokens + last.completionTokens) / last.contextLength >= at ? last.time : undefined;
+    // After a change of model the last call's size says nothing about the new window, so the history is measured instead.
+    const used = last.model === this.model ? last.promptTokens + last.completionTokens : historyTokens(this.history);
+    return used / window >= at ? last.time : undefined;
+  }
+
+  // Says so before the call, in words, when the conversation cannot fit the model that is about to answer.
+  private checkFits(): void {
+    const window = this.deps.contextLength?.(this.model);
+    const used = historyTokens(this.history);
+    if (window !== undefined && used > window * 0.95) {
+      throw new Error(`This conversation is about ${String(used)} tokens, more than ${this.model} can hold (${String(window)}). Compact it, or pick a model with a larger window.`);
+    }
   }
 
   private async run(abort: AbortController, specs: ToolSpec[]): Promise<void> {
@@ -435,6 +463,7 @@ export class Session {
     }
     const mark = this.history.length - 1;
     try {
+      this.checkFits();
       const outcome = await runTurn(this.history, {
         tools: specs,
         complete: async (messages, tools) => {
@@ -453,6 +482,7 @@ export class Session {
               this.emitLive({ type: "stage", stage, detail });
             },
             usage: (usage) => {
+              this.lastRoute = { model: usage.model, device: usage.device };
               this.deps.ledger?.record({ time: Date.now(), conversationId: this.id, ...usage });
             },
           });
@@ -469,7 +499,7 @@ export class Session {
           this.emit({ type: "thinking", text: text.length > MAX_STORED_THOUGHT ? text.slice(0, MAX_STORED_THOUGHT) + "... (shortened)" : text });
         },
         onText: (text) => {
-          this.emit({ type: "text", text });
+          this.emit({ type: "text", text, model: this.lastRoute?.model ?? this.model, device: this.lastRoute?.device });
         },
         onTool: (summary) => {
           this.emit({ type: "tool", summary });
@@ -516,6 +546,16 @@ export class Sessions {
         });
       },
       // A session that was deleted while its last turn was still ending must not be written back.
+      contextLength: (model) => {
+        if (isClaudeModel(model)) {
+          return CLAUDE_CONTEXT;
+        }
+        return opts.registry.live().flatMap((n) => {
+          return n.models;
+        }).find((m) => {
+          return m.id === model && m.loaded && m.contextLength !== undefined;
+        })?.contextLength;
+      },
       persist: (session) => {
         return this.sessions.has(session.id) && void opts.store?.save(session.toStored()).catch((err: unknown) => {
           console.warn(`[gateway] could not save session ${session.id}: ${err instanceof Error ? err.message : String(err)}`);

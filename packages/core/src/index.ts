@@ -168,13 +168,14 @@ export const SessionCreate = z.object({
   autoApprove: z.boolean().optional(),
 });
 export const SessionApproval = z.object({ approve: z.boolean(), always: z.boolean().optional() });
-export const SessionMessage = z.object({ text: z.string().min(1) });
+// `model` picks the model for this message and those after it, so one conversation can move between models, devices and Claude.
+export const SessionMessage = z.object({ text: z.string().min(1), model: z.string().min(1).optional() });
 export const SessionRename = z.object({ title: z.string().trim().min(1).max(120) });
 
 // What happens in a coding session, in order. Sent to clients as server-sent events.
 export type SessionEvent
   = | { type: "user"; text: string }
-    | { type: "text"; text: string }
+    | { type: "text"; text: string; model?: string; device?: string }
     | { type: "thinking"; text: string }
     | { type: "tool"; summary: string }
     | { type: "approval"; id: string; tool: string; summary: string }
