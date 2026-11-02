@@ -1,6 +1,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import type { FileChange, Tool } from "@harness/core";
+import type { BrowserHost, Screenshot } from "./browser-tools.js";
 
 // What every tool shares: its shape, argument reading, output limits, and keeping paths inside the project folder.
 
@@ -10,6 +11,9 @@ export interface ToolContext {
   session?: string;
   // Folders of skills to look in as well as the usual ones.
   skillFolders?: string[];
+  // The agent browser, when the owner has turned it on, and where a screenshot goes (to the person, never to the model).
+  browser?: BrowserHost;
+  image?: (shot: Screenshot) => void;
   // Called with what a write or edit changed, for the person to see. It does not go back to the model.
   report?: (change: FileChange) => void;
   // The person's home folder, where their skills and CLAUDE.md are (the real one unless a test says otherwise).
@@ -28,6 +32,8 @@ export interface ToolSpec {
   level: ToolLevel;
   // A program on the device the tool needs, such as gh. A tool whose program is missing is not offered to the model.
   requires?: string;
+  // A tool the owner has to opt in to, with its own switch, whatever the tool groups allow.
+  optIn?: "browser";
   // Not offered to the model: the gateway runs it for its own use.
   hidden?: boolean;
   describe(args: Args): string;

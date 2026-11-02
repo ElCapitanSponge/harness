@@ -105,7 +105,8 @@ const reasoningOf = (message: ChatMessage): string => {
 // If the user declines an action the turn ends there, so a model cannot keep retrying it.
 export const runTurn = async (history: ChatMessage[], deps: AgentDeps): Promise<{ stopped: boolean; declined?: boolean }> => {
   const defs = (deps.tools ?? allTools).filter((t) => {
-    return t.hidden !== true;
+    // The tools nobody asked for are not offered: hidden ones, and opt-in ones (the browser) when no list was given.
+    return t.hidden !== true && (deps.tools !== undefined || t.optIn === undefined);
   }).map((t) => {
     return t.def;
   });

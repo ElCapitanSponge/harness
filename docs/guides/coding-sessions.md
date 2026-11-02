@@ -84,6 +84,7 @@ In a coding session, the panel button in the header opens **This session** besid
 
 - **Plan.** The model can keep a short plan with the `plan` tool, marking each step to do, in progress or done as it works. The plan shows live and is saved with the conversation. The tool needs no approval and touches nothing: the gateway keeps the plan and no device is asked.
 - **Running in the background.** Commands started with `run_command`'s `background` option (a dev server, a long build), with their state. The panel refreshes every few seconds while it is open.
+- **Screenshots.** What the agent browser saw, newest first, with each page's address ([The agent browser](browser.md)).
 - **Files.** Every file the session changed or created, newest first, with lines added and removed. Opening one shows its diff. When a file is written or edited, the device works out the diff and sends it beside the result; the model is only told the result (such as `wrote 120 characters to a.txt`), never the diff. A binary or very large file (over 5,000 lines, or a diff over 60,000 characters) is listed with a note instead of a diff.
 
 Both are stored as events of the conversation, so reopening it shows the panel as it was.

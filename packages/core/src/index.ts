@@ -128,6 +128,10 @@ export type FileChange = z.infer<typeof FileChange>;
 export const PlanStep = z.object({ text: z.string().min(1).max(300), status: z.enum(["pending", "in_progress", "done"]) });
 export type PlanStep = z.infer<typeof PlanStep>;
 
+// A picture a tool produced for the person (a screenshot): shown in the side panel, never given to the model.
+export const ToolImage = z.object({ mediaType: z.enum(["image/png", "image/jpeg"]), data: z.string(), url: z.string() });
+export type ToolImage = z.infer<typeof ToolImage>;
+
 // Messages a device sends over its outbound tunnel to the gateway: its state, and replies to relayed requests.
 export const TunnelMessage = z.discriminatedUnion("type", [
   z.object({ type: z.literal("heartbeat"), heartbeat: Heartbeat }),
@@ -136,7 +140,7 @@ export const TunnelMessage = z.discriminatedUnion("type", [
   z.object({ type: z.literal("end"), id: z.string() }),
   z.object({ type: z.literal("fail"), id: z.string(), message: z.string() }),
   // The single reply to a tool call or a Claude request.
-  z.object({ type: z.literal("tool-result"), id: z.string(), ok: z.boolean(), output: z.string(), change: FileChange.optional() }),
+  z.object({ type: z.literal("tool-result"), id: z.string(), ok: z.boolean(), output: z.string(), change: FileChange.optional(), image: ToolImage.optional() }),
 ]);
 export type TunnelMessage = z.infer<typeof TunnelMessage>;
 
@@ -187,11 +191,14 @@ export const DeviceSettings = z.object({
   // Programs (a call, a meeting) that keep the device working but only with small models, and how large "small" is, in gigabytes.
   limitedProcesses: z.array(z.string().min(1)),
   limitedMaxGb: z.number().min(1).max(512),
+  // Lets coding sessions use a throwaway headless browser on this device (see docs/adr/0011-...), and optionally the only hosts it may visit.
+  browser: z.boolean(),
+  browserHosts: z.array(z.string().min(1)),
   // Folders of skills to look in as well as the usual ones (~/.claude/skills, ~/.agents/skills, and the project's own).
   skillFolders: z.array(z.string().min(1)),
 });
 export type DeviceSettings = z.infer<typeof DeviceSettings>;
-export const SETTING_KEYS = ["projectRoots", "readOnlyRoots", "onDeviceTools", "remoteTools", "modelControl", "claude", "gameProcesses", "idleUnloadMinutes", "limitedProcesses", "limitedMaxGb", "skillFolders"] as const;
+export const SETTING_KEYS = ["projectRoots", "readOnlyRoots", "onDeviceTools", "remoteTools", "modelControl", "claude", "gameProcesses", "idleUnloadMinutes", "limitedProcesses", "limitedMaxGb", "browser", "browserHosts", "skillFolders"] as const;
 export type SettingKey = (typeof SETTING_KEYS)[number];
 
 // A device's answer about its settings: what is in effect, where each value came from, which are fixed by an
@@ -257,6 +264,8 @@ export type SessionEvent
     | { type: "thinking"; text: string }
     // A file a write or edit changed, with its diff. Shown in the side panel, never sent to the model.
     | { type: "change"; change: FileChange }
+    // A screenshot the agent browser took. Shown in the side panel, never sent to the model.
+    | { type: "screenshot"; shot: ToolImage }
     // The model's plan as it stands.
     | { type: "plan"; steps: PlanStep[] }
     // The start of a conversation brought in from another tool. Nothing was sent to a model.

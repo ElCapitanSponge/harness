@@ -1,4 +1,4 @@
-import type { FileChange, ImageAttachment, PlanStep, SessionEvent, StageName } from "@harness/core";
+import type { FileChange, ImageAttachment, PlanStep, ToolImage, SessionEvent, StageName } from "@harness/core";
 
 // What the page shows for a conversation, built up from the gateway's events. Kept free of React so it can be tested.
 
@@ -30,6 +30,8 @@ export interface ConversationState {
   // events when a conversation is reopened.
   changes: ChangedFile[];
   plan: PlanStep[];
+  // Screenshots the agent browser took, newest first.
+  shots: ToolImage[];
   // A turn is running: from the person's message until it is done, cancelled or has failed.
   busy: boolean;
   // How many stored events have been seen, so a dropped connection resumes where it left off.
@@ -41,7 +43,7 @@ export interface ConversationState {
 }
 
 export const emptyConversation = (): ConversationState => {
-  return { items: [], changes: [], plan: [], busy: false, cursor: 0, next: 1 };
+  return { items: [], changes: [], plan: [], shots: [], busy: false, cursor: 0, next: 1 };
 };
 
 export type StreamEvent = SessionEvent | { type: "thinking-delta"; text: string } | { type: "text-delta"; text: string } | { type: "stage"; stage: StageName; detail?: string };
@@ -153,6 +155,9 @@ export const applyEvent = (state: ConversationState, event: StreamEvent, now: nu
         return f.path !== c.path;
       })] };
     }
+
+    case "screenshot":
+      return { ...state, cursor, shots: [event.shot, ...state.shots] };
 
     case "plan":
       return { ...state, cursor, plan: event.steps };

@@ -30,6 +30,7 @@ Use:
 - [Claude](guides/claude.md)
 - [Devices and their settings](guides/devices.md)
 - [Developer tools](guides/dev-tools.md)
+- [The agent browser](guides/browser.md)
 - [Skills and instruction files](guides/skills.md)
 - [Importing and exporting conversations](guides/importing.md)
 - [Usage, context and compaction](guides/usage.md)

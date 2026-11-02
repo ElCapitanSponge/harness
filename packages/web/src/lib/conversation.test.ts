@@ -187,3 +187,14 @@ describe("a sub-agent", () => {
     expect(done.items[0]).toMatchObject({ status: "done", result: "found it", n: 1, of: 8 });
   });
 });
+
+describe("a screenshot from the agent browser", () => {
+  it("is kept for the side panel, newest first, and is not an item in the thread", () => {
+    const state = run([{ type: "screenshot", shot: { mediaType: "image/png", data: "AAAA", url: "https://a.example/" } }, { type: "screenshot", shot: { mediaType: "image/png", data: "BBBB", url: "https://b.example/" } }]);
+    expect(state.shots.map((s) => {
+      return s.url;
+    })).toEqual(["https://b.example/", "https://a.example/"]);
+    expect(state.items).toEqual([]);
+    expect(state.cursor).toBe(2);
+  });
+});

@@ -18,6 +18,8 @@ export const SETTING_ENV: Record<SettingKey, string> = {
   idleUnloadMinutes: "IDLE_UNLOAD_MINUTES",
   limitedProcesses: "LIMITED_PROCESSES",
   limitedMaxGb: "LIMITED_MAX_GB",
+  browser: "ALLOW_BROWSER",
+  browserHosts: "BROWSER_HOSTS",
   skillFolders: "SKILL_FOLDERS",
 };
 
@@ -34,6 +36,9 @@ const DEFAULTS: DeviceSettings = {
   // Calls and meetings: the device keeps working, but only with models up to this size.
   limitedProcesses: ["ms-teams.exe", "Teams.exe"],
   limitedMaxGb: 8,
+  // The agent browser is off until the owner turns it on.
+  browser: false,
+  browserHosts: [],
   skillFolders: [],
 };
 
@@ -74,6 +79,7 @@ const fromEnv = (key: SettingKey, value: string): DeviceSettings[SettingKey] => 
       return parseRoots(value);
     case "modelControl":
     case "claude":
+    case "browser":
       return value === "1";
     case "idleUnloadMinutes": {
       const minutes = Number(value);
@@ -207,7 +213,19 @@ export const createSettings = async (opts: SettingsOptions) => {
   // The tools to offer: the old list if one is set, otherwise what the two groups allow.
   const toolNames = (): string[] => {
     const now = resolve();
-    return legacyTools() ?? toolNamesFor(now.onDeviceTools, now.remoteTools);
+    const legacy = legacyTools();
+    if (legacy) {
+      return legacy;
+    }
+    // The browser tools have a switch of their own and are not part of either group.
+    const browser = now.browser
+      ? allTools.filter((t) => {
+          return t.optIn === "browser";
+        }).map((t) => {
+          return t.def.function.name;
+        })
+      : [];
+    return [...toolNamesFor(now.onDeviceTools, now.remoteTools), ...browser];
   };
 
   const report = (): SettingsReport => {

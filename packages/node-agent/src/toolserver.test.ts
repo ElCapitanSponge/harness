@@ -181,3 +181,48 @@ describe("what a write changed", () => {
     expect(JSON.stringify(result?.type === "tool-result" ? result.output : "")).not.toContain("@@");
   });
 });
+
+describe("the agent browser through the tool server", () => {
+  const browser = {
+    open: () => {
+      return Promise.resolve({ url: "https://example.com/", title: "Example", text: "Hello" });
+    },
+    read: () => {
+      return Promise.resolve({ url: "https://example.com/", title: "Example", text: "Hello" });
+    },
+    click: () => {
+      return Promise.resolve({ url: "https://example.com/", title: "Example", text: "Hello" });
+    },
+    type: () => {
+      return Promise.resolve({ url: "https://example.com/", title: "Example", text: "Hello" });
+    },
+    screenshot: () => {
+      return Promise.resolve({ mediaType: "image/png" as const, data: "AAAA", url: "https://example.com/" });
+    },
+    close: () => {
+      return Promise.resolve();
+    },
+  };
+  const send = async (allowed: string[], available: boolean, name: string, args: Record<string, unknown>): Promise<TunnelMessage | undefined> => {
+    const server = createToolServer({ roots: { proj: dir }, allowed, browser: () => {
+      return available ? browser : undefined;
+    } });
+    let result: TunnelMessage | undefined;
+    await server.handle({ type: "tool", id: "t1", root: "proj", name, args }, (m) => {
+      return (result = m);
+    });
+    return result;
+  };
+
+  it("sends a screenshot beside the result for the person, and the result carries no picture", async () => {
+    const result = await send(["browser_screenshot"], true, "browser_screenshot", {});
+    expect(result).toMatchObject({ type: "tool-result", ok: true, image: { mediaType: "image/png", data: "AAAA", url: "https://example.com/" } });
+    expect(result?.type === "tool-result" ? result.output : "").not.toContain("AAAA");
+  });
+
+  it("refuses a browser tool the device has not allowed, and has no browser unless the setting is on", async () => {
+    expect(await send(["read_file"], true, "browser_open", { url: "https://example.com" })).toMatchObject({ ok: false, output: expect.stringContaining("not allowed") as string });
+    expect(await send(["browser_open"], false, "browser_open", { url: "https://example.com" })).toMatchObject({ ok: false, output: expect.stringContaining("not available on this device") as string });
+    expect(await send(["browser_open"], true, "browser_open", { url: "https://example.com" })).toMatchObject({ ok: true });
+  });
+});
