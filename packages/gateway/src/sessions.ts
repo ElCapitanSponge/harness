@@ -69,12 +69,13 @@ export const createCompleter = (deps: { registry: Registry; relay: Pick<Relay, "
       }
       // The program's own count where it gave one (cached input included), otherwise an estimate, against a 200k window.
       hooks?.usage?.({
-        model,
+        // The model the program says answered, so the reply is labelled with it; the requested name when it said nothing.
+        model: result.reportedModel ?? model,
         device,
         promptTokens: result.usage?.inputTokens ?? estimateTokens(JSON.stringify(messages)),
         completionTokens: result.usage?.outputTokens ?? estimateTokens(result.text),
         durationMs: Date.now() - claudeStarted,
-        contextLength: CLAUDE_CONTEXT,
+        contextLength: result.contextWindow ?? CLAUDE_CONTEXT,
         estimated: result.usage === undefined,
       });
       // With tools offered, Claude may answer with requests for them, which the coding loop runs.
@@ -1076,7 +1077,7 @@ export class Sessions {
       // A session that was deleted while its last turn was still ending must not be written back.
       contextLength: (model) => {
         if (isClaudeModel(model)) {
-          return CLAUDE_CONTEXT;
+          return opts.claude?.contextWindow() ?? CLAUDE_CONTEXT;
         }
         return opts.registry.live().flatMap((n) => {
           return n.models;

@@ -21,6 +21,8 @@ export class ClaudeState {
   private limits?: ClaudeLimits;
   private device?: string;
   private until = 0;
+  private model?: string;
+  private window?: number;
   readonly conversations = new ClaudeConversations();
 
   observe(device: string, limits: ClaudeLimits | undefined): void {
@@ -30,6 +32,24 @@ export class ClaudeState {
       // A reply that worked ends any earlier refusal.
       this.until = 0;
     }
+  }
+
+  // The model the program said it used for the latest reply, so the page can show it beside Claude. Nothing is kept when it named none.
+  observeModel(model: string | undefined, contextWindow: number | undefined): void {
+    if (model !== undefined) {
+      this.model = model;
+      this.window = contextWindow;
+    }
+  }
+
+  // The window of that model, if it was reported.
+  contextWindow(): number | undefined {
+    return this.window;
+  }
+
+  // The model last reported, if any.
+  reportedModel(): string | undefined {
+    return this.model;
   }
 
   markLimited(device: string, limits: ClaudeLimits): void {
@@ -54,6 +74,8 @@ export class ClaudeState {
       sevenDay: this.limits?.sevenDay,
       usingOverage: this.limits?.usingOverage,
       observedAt: this.limits?.observedAt,
+      model: this.model,
+      contextWindow: this.window,
     };
   }
 }
@@ -149,6 +171,7 @@ export const askClaude = async (deps: AskDeps, model: string, messages: ChatMess
     deps.state.conversations.remember(options.conversation, device.nodeId, model, messages, result.continuation);
   }
   deps.state.observe(device.nodeId, result.limits);
+  deps.state.observeModel(result.reportedModel, result.contextWindow);
   return { result, device: device.nodeId };
 };
 

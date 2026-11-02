@@ -45,6 +45,11 @@ const CopyButton = ({ text }: { text: string }) => {
   );
 };
 
+// A reply from Claude with no model chosen is recorded under the bare name when the program did not say which model answered.
+export const modelLabel = (name: string): string => {
+  return name === "claude" ? "Claude (model not reported)" : name;
+};
+
 const Thinking = ({ item }: { item: Extract<Item, { kind: "thinking" }> }) => {
   const elapsed = useElapsed(item.startedAt, item.live);
   const label = item.live ? `Thinking... ${String(elapsed)}s` : item.seconds > 0 ? `Thought for ${String(item.seconds)}s` : "Thinking";
@@ -144,7 +149,7 @@ export const Message = ({ item, model, onAnswer, onReply }: { item: Item; model:
           </div>
           <div className="min-w-0 flex-1 pr-10 group relative">
             <CopyButton text={item.text} />
-            <div className="mb-0.5 text-xs font-semibold text-muted-foreground">{item.model ?? model}{item.device ? <span className="font-normal"> on {item.device}</span> : null}{item.reason ? <span className="font-normal"> - Auto: {item.reason}</span> : null}</div>
+            <div className="mb-0.5 text-xs font-semibold text-muted-foreground">{modelLabel(item.model ?? model)}{item.device ? <span className="font-normal"> on {item.device}</span> : null}{item.reason ? <span className="font-normal"> - Auto: {item.reason}</span> : null}</div>
             <Markdown text={item.text} />
             {item.streaming ? <span className="ml-0.5 inline-block h-4 w-1.5 animate-pulse bg-primary align-middle" aria-hidden /> : null}
           </div>

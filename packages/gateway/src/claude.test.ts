@@ -24,6 +24,21 @@ describe("what the gateway knows of the Claude plan", () => {
     expect(state.status(NOW)).toMatchObject({ readable: true, available: true, device: "mac", fiveHour: { utilization: 0.4 }, sevenDay: { utilization: 0.47 }, usingOverage: false });
   });
 
+  it("remembers the model the program said it used, with its window, and invents none", () => {
+    const state = new ClaudeState();
+    expect(state.status(NOW).model).toBeUndefined();
+    state.observeModel(undefined, undefined);
+    expect(state.status(NOW).model).toBeUndefined();
+    state.observeModel("claude-sonnet-5-5", 1_000_000);
+    expect(state.status(NOW)).toMatchObject({ model: "claude-sonnet-5-5", contextWindow: 1_000_000 });
+    // A later reply that names no model leaves what was known; one that names another model replaces it.
+    state.observeModel(undefined, undefined);
+    expect(state.reportedModel()).toBe("claude-sonnet-5-5");
+    state.observeModel("claude-opus-5", undefined);
+    expect(state.status(NOW)).toMatchObject({ model: "claude-opus-5" });
+    expect(state.contextWindow()).toBeUndefined();
+  });
+
   it("is unavailable until the reset time, then comes back by itself", () => {
     const state = new ClaudeState();
     state.markLimited("mac", limits({ status: "rejected", limitedUntil: NOW + 3_600_000 }));
