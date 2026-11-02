@@ -132,6 +132,12 @@ In a coding session, type `@` in the message box to search the project's files, 
 
 Choosing a file puts `@path` in your message and adds the file's text below it in a code block, the same as **Add files as context**, so the model has it without asking. Text only, up to 200 KB; a binary or larger file is refused with a reason, and a long file is added shortened with a note. Names starting with a dot are listed only once you type a dot. Nothing outside the project folder is offered (`..` and absolute paths list nothing), and the list is not offered in a chat with no project. An `@` inside a word, such as an email address, is left alone, and a message that starts with `/` gets the skills list instead.
 
+## Actions in the thread
+
+The model's tool calls are folded, as its thinking is. Each run of tool activity between two messages becomes one **Actions** group with a one-line count, such as "Read 4 files, ran 2 commands, modified 1 file", and a count of any that failed. The group is open and shows a working mark while it runs, and folds when it ends. Click its heading to open or close it; that choice is kept while the page is open.
+
+Inside, each call is one line. A command or a file read expands to what it returned (shortened at 4,000 characters; the model was given all of it). A change to a file is a **Modified** row with the file name, and expanding it shows the same diff as the session panel. An approval or a question ends the group and is shown outside it, so it is never hidden in a fold. Reopened and imported conversations are grouped the same way; calls stored before tool names were kept are counted as other actions and show no output.
+
 ## The session panel
 
 In a coding session, the panel button in the header opens **This session** beside the conversation (a drawer over it on a phone). It shows:

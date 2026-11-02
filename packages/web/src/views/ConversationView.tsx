@@ -137,7 +137,7 @@ const Conversation = ({ id }: { id: string }) => {
   }, [state.items, state.busy]);
 
   // The status line shows until words start to arrive, and again between a tool and the next call.
-  const waiting = state.busy && state.since !== undefined && (last === undefined || last.kind === "user" || last.kind === "tool" || (last.kind === "thinking" && !last.live) || (last.kind === "assistant" && !last.streaming));
+  const waiting = state.busy && state.since !== undefined && (last === undefined || last.kind === "user" || last.kind === "actions" || (last.kind === "thinking" && !last.live) || (last.kind === "assistant" && !last.streaming));
   const lastUser = state.items.findLast((i) => {
     return i.kind === "user";
   });

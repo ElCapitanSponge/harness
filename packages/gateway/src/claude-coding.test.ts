@@ -57,7 +57,7 @@ describe("Claude driving a coding session", () => {
       return types(code).includes("done");
     });
 
-    expect(types(code)).toEqual(["user", "text", "tool", "text", "done"]);
+    expect(types(code)).toEqual(["user", "text", "tool", "tool-output", "text", "done"]);
     expect(callTool).toHaveBeenCalledWith("pc", "proj", "read_file", { path: "package.json" }, expect.anything());
     // Claude was offered the tools, and saw the result of the call it asked for.
     expect(sent[0]?.tools?.map((t) => {

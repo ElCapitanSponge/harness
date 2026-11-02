@@ -51,7 +51,7 @@ describe("runTurn", () => {
 
     expect(await runTurn(h, d)).toEqual({ stopped: false });
     expect(d.onText).toHaveBeenCalledWith("It says hello.");
-    expect(d.onTool).toHaveBeenCalledWith("read a.txt");
+    expect(d.onTool).toHaveBeenCalledWith("read a.txt", "read_file");
     expect(h.map((m) => {
       return m.role;
     })).toEqual(["system", "user", "assistant", "tool", "assistant"]);

@@ -47,6 +47,41 @@ describe("a conversation built from events", () => {
     expect(run([{ type: "user", text: "q" }, { type: "tool", summary: "read a.ts" }]).busy).toBe(true);
   });
 
+  it("folds a run of tool calls into one group that a reply, an approval or the end of the turn closes", () => {
+    const mid = run([
+      { type: "user", text: "q" },
+      { type: "tool", summary: "read a.ts", name: "read_file" },
+      { type: "tool-output", name: "read_file", output: "1\tx" },
+      { type: "thinking", text: "hm" },
+      { type: "tool", summary: "run ls", name: "run_command" },
+    ]);
+    expect(kinds(mid)).toEqual(["user", "actions", "thinking"]);
+    expect(mid.items[1]).toMatchObject({ live: true, entries: [{ summary: "read a.ts", output: "1\tx" }, { summary: "run ls" }] });
+
+    const done = run([{ type: "text", text: "ok" }, { type: "tool", summary: "read b.ts", name: "read_file" }, { type: "approval", id: "a", tool: "write_file", summary: "w" }], mid);
+    expect(kinds(done)).toEqual(["user", "actions", "thinking", "assistant", "actions", "approval"]);
+    expect(done.items[1]).toMatchObject({ live: false });
+    expect(done.items[4]).toMatchObject({ live: false, entries: [{ summary: "read b.ts" }] });
+  });
+
+  it("attaches a file change to the write that made it, and keeps output with the right call", () => {
+    const state = run([
+      { type: "user", text: "q" },
+      { type: "tool", summary: "write a.ts", name: "write_file" },
+      { type: "change", change: { path: "a.ts", created: true, added: 1, removed: 0, patch: "@@\n+x" } },
+      { type: "tool-output", name: "write_file", output: "wrote" },
+      { type: "done", stopped: false },
+    ]);
+    expect(state.items[1]).toMatchObject({ live: false, entries: [{ name: "write_file", output: "wrote", change: { path: "a.ts", patch: "@@\n+x" } }] });
+    expect(state.changes).toHaveLength(1);
+  });
+
+  it("still groups a conversation stored before tool names were kept", () => {
+    const state = run([{ type: "user", text: "q" }, { type: "tool", summary: "read a.ts" }, { type: "tool", summary: "read b.ts" }, { type: "done", stopped: false }]);
+    expect(kinds(state)).toEqual(["user", "actions"]);
+    expect(state.items[1]).toMatchObject({ live: false, entries: [{ summary: "read a.ts" }, { summary: "read b.ts" }] });
+  });
+
   it("tracks an approval from asked to answered", () => {
     const asked = run([{ type: "user", text: "q" }, { type: "approval", id: "a1", tool: "write_file", summary: "write x" }]);
     expect(asked.items[1]).toMatchObject({ kind: "approval", status: "pending" });
