@@ -680,3 +680,16 @@ describe("permission modes and remembered rules over HTTP", () => {
     expect((await build().request("/rules/1", { method: "DELETE" })).status).toBe(404);
   });
 });
+
+describe("which device the browser is on, behind a container network", () => {
+  it("does not match when the caller and every device show as the container network's gateway", async () => {
+    registry.upsert(beat({ nodeId: "anakin" }), "172.0.13.1");
+    const app = createApp({ registry, relay: relay as never, loader: { ensure: loaderEnsure }, sessions: new Sessions({ registry, relay: relay as never, complete: (async () => {
+      return { role: "assistant", content: "ok" };
+    }) as never }), trustProxy: true, interfaces: () => {
+      return [{ address: "172.0.13.5", netmask: "255.255.255.0", family: "IPv4", internal: false }];
+    } });
+    const res = await app.request("/whoami", { headers: { "x-forwarded-for": "172.0.13.1" } });
+    expect(await res.json()).toEqual({ address: "172.0.13.1", devices: [], likelyBehindPortPublishing: true });
+  });
+});

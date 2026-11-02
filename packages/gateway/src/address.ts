@@ -20,6 +20,35 @@ export const looksLikeContainerNetwork = (address: string | undefined): boolean 
   return address !== undefined && /^172\.(1[6-9]|2\d|3[01])\./.test(address);
 };
 
+export interface Interface {
+  address: string;
+  netmask: string;
+  family: string;
+  internal: boolean;
+}
+
+const toNumber = (ip: string): number => {
+  return ip.split(".").reduce((n, part) => {
+    return n * 256 + Number(part);
+  }, 0);
+};
+
+// True when the address is on a container network the gateway itself is attached to (an interface of its own in the 172.x range that
+// contains the address). Port publishing hides every browser behind the address of that network's gateway, so such an address says
+// nothing about which machine the browser is on: a device that connected from it is no more the browser's than any other.
+export const onOwnContainerNetwork = (address: string | undefined, interfaces: Interface[]): boolean => {
+  if (address === undefined || !/^\d+\.\d+\.\d+\.\d+$/.test(address)) {
+    return false;
+  }
+  return interfaces.some((i) => {
+    if (i.internal || i.family !== "IPv4" || !i.address.startsWith("172.")) {
+      return false;
+    }
+    const mask = toNumber(i.netmask);
+    return (toNumber(address) & mask) === (toNumber(i.address) & mask);
+  });
+};
+
 // The address the request came from. Behind a trusted reverse proxy it is the first one the proxy reports; otherwise the connection's.
 export const callerAddress = (connection: string | undefined, forwardedFor: string | undefined, trustProxy: boolean): string | undefined => {
   const forwarded = trustProxy ? forwardedFor?.split(",")[0] : undefined;

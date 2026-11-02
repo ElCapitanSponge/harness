@@ -11,7 +11,8 @@ import { RouteError, resolveRoute } from "./routing.js";
 import type { UsageLedger } from "./ledger.js";
 import { ClaudeState, ClaudeUnavailableError, askClaude } from "./claude.js";
 import type { PermissionRule } from "./sqlite.js";
-import { callerAddress, looksLikeContainerNetwork } from "./address.js";
+import os from "node:os";
+import { callerAddress, looksLikeContainerNetwork, onOwnContainerNetwork, type Interface } from "./address.js";
 import { LibraryConflict, LibraryError, type Library } from "./library.js";
 import type { Sessions } from "./sessions.js";
 import { parseImportFile, toMarkdown } from "./transcripts.js";
@@ -28,6 +29,8 @@ export interface AppDeps {
   rules?: { list(): PermissionRule[]; remove(id: number): boolean };
   // Believe X-Forwarded-For (set only behind a reverse proxy you run), so a browser's real address is seen.
   trustProxy?: boolean;
+  // The gateway's own network interfaces, to tell a container network from a real one (replaced in tests).
+  interfaces?: () => Interface[];
   // Every model call, for the usage routes. Without it the routes report nothing.
   ledger?: UsageLedger;
   // What is known of the Claude plan: its windows, and whether Claude is limited right now.
@@ -37,7 +40,11 @@ export interface AppDeps {
   mountWeb?: (app: Hono) => void;
 }
 
-export const createApp = ({ registry, apiKey, relay, sessions, library, rules, trustProxy = false, ledger, claude = new ClaudeState(), loader, mountWeb }: AppDeps): Hono => {
+export const createApp = ({ registry, apiKey, relay, sessions, library, rules, trustProxy = false, interfaces = (): Interface[] => {
+  return Object.values(os.networkInterfaces()).flatMap((list) => {
+    return list ?? [];
+  });
+}, ledger, claude = new ClaudeState(), loader, mountWeb }: AppDeps): Hono => {
   const app = new Hono();
 
   // The page holds no secrets and must load before a key can be typed, so it is registered ahead of the auth middleware.
@@ -419,12 +426,17 @@ export const createApp = ({ registry, apiKey, relay, sessions, library, rules, t
   app.get("/whoami", (c) => {
     const env = c.env as { incoming?: { socket?: { remoteAddress?: string } } } | undefined;
     const address = callerAddress(env?.incoming?.socket?.remoteAddress, c.req.header("x-forwarded-for"), trustProxy);
-    const devices = registry.live().filter((n) => {
-      return n.kind === "local" && address !== undefined && n.address === address;
-    }).map((n) => {
-      return n.nodeId;
-    });
-    return c.json({ address, devices, likelyBehindPortPublishing: devices.length === 0 && looksLikeContainerNetwork(address) });
+    // Behind a container's port publishing every browser (and every device) shows as the container network's gateway, so a match would
+    // be a coincidence of the NAT: say nothing, and let the person choose.
+    const hidden = onOwnContainerNetwork(address, interfaces());
+    const devices = hidden
+      ? []
+      : registry.live().filter((n) => {
+          return n.kind === "local" && address !== undefined && n.address === address;
+        }).map((n) => {
+          return n.nodeId;
+        });
+    return c.json({ address, devices, likelyBehindPortPublishing: hidden || (devices.length === 0 && looksLikeContainerNetwork(address)) });
   });
 
   // The gateway's skill library: list, add (a zip or the files of a folder), export as a zip, remove.
