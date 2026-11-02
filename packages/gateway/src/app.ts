@@ -1,5 +1,5 @@
 import { toOpenAIResponse, toSse } from "@harness/claude";
-import { ChatRequest, DeviceToolRequest, ModelLoad, ModelUnload, ImportParse, SessionApproval, SessionCreate, SessionImport, SessionMessage, SessionRename, flattenError } from "@harness/core";
+import { ChatRequest, DeviceToolRequest, ModelLoad, ModelUnload, ImportParse, SessionAnswer, SessionApproval, SessionCreate, SessionImport, SessionMessage, SessionRename, flattenError } from "@harness/core";
 import { findTool, type ProjectContext } from "@harness/tools";
 import { Hono, type Context } from "hono";
 import { bearerAuth } from "./auth.js";
@@ -251,6 +251,23 @@ export const createApp = ({ registry, apiKey, relay, sessions, ledger, claude = 
       return c.json({ error: { message: (err as Error).message } }, 409);
     }
     return c.json(session.info(), 202);
+  });
+
+  app.post("/sessions/:id/questions/:questionId", async (c) => {
+    const session = sessions.get(c.req.param("id"));
+    if (!session) {
+      return c.json({ error: { message: "no such session" } }, 404);
+    }
+    const parsed = SessionAnswer.safeParse(await c.req.json().catch(() => {
+      return undefined;
+    }));
+    if (!parsed.success) {
+      return c.json({ error: flattenError(parsed.error) }, 400);
+    }
+    if (!session.answerQuestion(c.req.param("questionId"), parsed.data.answer)) {
+      return c.json({ error: { message: "no such question (already answered or timed out)" } }, 404);
+    }
+    return c.json({ ok: true });
   });
 
   app.post("/sessions/:id/approvals/:approvalId", async (c) => {

@@ -19,7 +19,7 @@ import { parseSlash } from "@/lib/skills";
 const Conversation = ({ id }: { id: string }) => {
   const navigate = useNavigate();
   const sessions = useSessions();
-  const { state, send, cancel, answer } = useConversation(id);
+  const { state, send, cancel, answer, reply } = useConversation(id);
   const info = sessions.data?.find((s) => {
     return s.id === id;
   });
@@ -99,6 +99,8 @@ const Conversation = ({ id }: { id: string }) => {
               return (
                 <Message key={item.id} item={item} model={model} onAnswer={(approvalId, approve, always) => {
                   void answer(approvalId, approve, always);
+                }} onReply={(questionId, text) => {
+                  void reply(questionId, text);
                 }}
                 />
               );

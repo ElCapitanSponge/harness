@@ -97,5 +97,11 @@ export const useConversation = (id: string) => {
     });
   };
 
-  return { state, send, cancel, answer };
+  const reply = async (questionId: string, text: string): Promise<void> => {
+    await api<unknown>(`/sessions/${id}/questions/${questionId}`, { method: "POST", body: { answer: text } }).catch(() => {
+      return undefined;
+    });
+  };
+
+  return { state, send, cancel, answer, reply };
 };

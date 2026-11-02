@@ -62,7 +62,7 @@ describe("Claude driving a coding session", () => {
     // Claude was offered the tools, and saw the result of the call it asked for.
     expect(sent[0]?.tools?.map((t) => {
       return t.function.name;
-    })).toEqual(["read_file", "plan"]);
+    })).toEqual(["read_file", "plan", "ask"]);
     expect(sent[1]?.messages.map((m) => {
       return m.role;
     })).toEqual(["system", "user", "assistant", "tool"]);

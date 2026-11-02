@@ -192,7 +192,7 @@ describe("a coding session over the tunnel", () => {
       // The model was only offered the read-only tools this device allows.
       expect(((requests[0]?.tools ?? []) as { function: { name: string } }[]).map((t) => {
         return t.function.name;
-      }).sort()).toEqual(["list_dir", "plan", "read_file"]);
+      }).sort()).toEqual(["ask", "list_dir", "plan", "read_file"]);
     } finally {
       await fs.rm(root, { recursive: true, force: true });
     }

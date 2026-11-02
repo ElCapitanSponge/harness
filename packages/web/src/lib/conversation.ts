@@ -10,6 +10,7 @@ export type Item
     | { kind: "skill"; id: number; name: string; arguments: string; text: string }
     | { kind: "compaction"; id: number; messages: number; tokensBefore: number; tokensAfter: number; manual: boolean }
     | { kind: "approval"; id: number; approvalId: string; tool: string; summary: string; status: "pending" | "allowed" | "declined" }
+    | { kind: "question"; id: number; questionId: string; question: string; options: string[]; status: "pending" | "answered" | "unanswered"; answer?: string }
     | { kind: "note"; id: number; text: string; tone: "info" | "error" };
 
 // A file the session changed, for the side panel: totals over every write and edit, and each one's diff in order.
@@ -186,6 +187,20 @@ export const applyEvent = (state: ConversationState, event: StreamEvent, now: nu
         cursor,
         items: state.items.map((item) => {
           return item.kind === "approval" && item.approvalId === event.id ? { ...item, status: event.approved ? "allowed" : "declined" } : item;
+        }),
+      };
+
+    case "question":
+      return push(settle(state.items, now), (id) => {
+        return { kind: "question", id, questionId: event.id, question: event.question, options: event.options, status: "pending" };
+      });
+
+    case "question-resolved":
+      return {
+        ...state,
+        cursor,
+        items: state.items.map((item) => {
+          return item.kind === "question" && item.questionId === event.id ? { ...item, status: event.answer === undefined ? "unanswered" : "answered", answer: event.answer } : item;
         }),
       };
 
