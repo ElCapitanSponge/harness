@@ -49,6 +49,7 @@ Settings marked "page" can be changed from the Devices page on a device started 
 | `CLAUDE_BIN` | `claude` | no | The Claude program to run. |
 | `GAME_PROCESSES` | unset | yes | Comma-separated executable names; a match marks the device busy. |
 | `IDLE_UNLOAD_MINUTES` | `20` | yes | Unload a model Torii used after this long idle. `0` never. |
+| `SKILL_FOLDERS` | unset | yes | Comma-separated full paths of folders of skills to look in as well as the usual ones ([Skills](../guides/skills.md)). |
 | `WEB_FETCH_ALLOW_LOCAL` | unset | no | `1` lets `web_fetch` reach local-network addresses ([Developer tools](../guides/dev-tools.md)). |
 
 ## Command line

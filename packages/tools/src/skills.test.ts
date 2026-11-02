@@ -192,3 +192,25 @@ describe("a skill the person starts", () => {
     expect(findTool("start_skill")?.hidden).toBe(true);
   });
 });
+
+describe("extra skill folders", () => {
+  it("are searched as well as the usual ones, and their skills count as the owner's", async () => {
+    const extra = path.join(base, "more-skills");
+    await skill(extra, "extra-one", "name: extra-one\ndescription: From a folder the owner added.");
+    await skill(path.join(home, ".claude", "skills"), "usual", "name: usual\ndescription: From the usual place.");
+    const { skills } = await discoverSkills(root, home, [extra]);
+    expect(skills.map((s) => {
+      return `${s.name}:${s.source}`;
+    })).toEqual(["extra-one:user", "usual:user"]);
+    expect((await discoverSkills(root, home)).skills.map((s) => {
+      return s.name;
+    })).toEqual(["usual"]);
+
+    // The skill tool and the context it reports see them too, through the folders the device passes.
+    const tool = findTool("skill");
+    expect(await tool?.run({ name: "extra-one" }, { cwd: root, home, skillFolders: [extra] })).toContain("Do the thing.");
+    expect((await projectContext(root, home, [extra])).skills.map((s) => {
+      return s.name;
+    })).toContain("extra-one");
+  });
+});

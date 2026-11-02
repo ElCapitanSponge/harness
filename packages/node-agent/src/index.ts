@@ -35,7 +35,9 @@ const settings = await createSettings({
 });
 const now = settings.current();
 
-const tools = createToolServer({ roots: now.projectRoots, allowed: settings.tools(), readOnly: now.readOnlyRoots, audit, installed });
+const tools = createToolServer({ roots: now.projectRoots, allowed: settings.tools(), readOnly: now.readOnlyRoots, audit, installed, skillFolders: () => {
+  return settings.current().skillFolders;
+} });
 
 // Models nobody has used for a while are unloaded, so the graphics card is free for whatever else this machine is doing.
 const idle = createIdleUnloader({

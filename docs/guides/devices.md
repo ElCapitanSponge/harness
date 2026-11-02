@@ -20,6 +20,7 @@ Each device decides what the gateway may do on it. The **Devices** button on the
 | Model control | `ALLOW_MODEL_CONTROL` | Lets the gateway load and unload models in this device's LM Studio. |
 | Claude | `CLAUDE_ENABLED` | Answers Claude requests with this device's logged-in `claude` CLI. |
 | Idle unload | `IDLE_UNLOAD_MINUTES` | Unload a model nobody has used for this many minutes (default 20, 0 never), so the graphics card is free for whatever else the machine is doing. |
+| Skill folders | `SKILL_FOLDERS` | More folders to look for skills in (full paths, which must exist), as well as `~/.claude/skills`, `~/.agents/skills` and the project's own. See [Skills](skills.md). |
 | Game programs | `GAME_PROCESSES` | Programs that mark the device busy so the GPU is left alone. |
 
 The device name, gateway address and inference server address need a new process, so they are not changed from the page.

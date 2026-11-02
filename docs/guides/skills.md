@@ -20,7 +20,7 @@ An older device that cannot answer leaves the session exactly as it was.
 
 ## Where skills are found
 
-`~/.claude/skills` and `~/.agents/skills` on the device, then `.claude/skills` and `.agents/skills` in the project root. A project's skill replaces the person's of the same name. A folder with no `SKILL.md` is not a skill and is ignored. A `SKILL.md` that cannot be used (no front matter, no description, a name that is not letters, digits and hyphens, too large) is skipped with the reason, and the rest still load.
+`~/.claude/skills` and `~/.agents/skills` on the device, then `.claude/skills` and `.agents/skills` in the project root. Folders added in the **Skill folders** setting of the Devices page (or `SKILL_FOLDERS`) are searched too, after those two and before the project's, and their skills count as yours. A project's skill replaces the person's of the same name. A folder with no `SKILL.md` is not a skill and is ignored. A `SKILL.md` that cannot be used (no front matter, no description, a name that is not letters, digits and hyphens, too large) is skipped with the reason, and the rest still load.
 
 ## The skill tool
 
@@ -40,4 +40,4 @@ Send `/name the rest` and the rest becomes the skill's arguments. The gateway lo
 
 ## Not built yet
 
-Importing and exporting skills and the gateway's own skill library (so chats with no device have skills), a setting for the skill folders, sub-agents and the ask-the-person tool are the rest of [#53](https://github.com/ElCapitanSponge/harness/issues/53).
+Importing and exporting skills and the gateway's own skill library (so chats with no device have skills) are the rest of [#53](https://github.com/ElCapitanSponge/harness/issues/53). Sub-agents and the ask tool are in [Coding sessions](coding-sessions.md).

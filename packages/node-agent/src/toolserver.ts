@@ -26,7 +26,7 @@ export const parseRoots = (value: string | undefined): Record<string, string> =>
 
 // Runs the tools the gateway asks for, only inside the project roots this device chose to expose and only the
 // tools in `allowed`. Anything else is refused here, whatever the gateway sends.
-export const createToolServer = (opts: { roots: Record<string, string>; allowed: string[]; readOnly?: string[]; audit?: (entry: AuditEntry) => void; installed?: (program: string) => boolean }) => {
+export const createToolServer = (opts: { roots: Record<string, string>; allowed: string[]; readOnly?: string[]; skillFolders?: () => string[]; audit?: (entry: AuditEntry) => void; installed?: (program: string) => boolean }) => {
   // A tool whose program is not on this device is neither offered nor run.
   const usable = (name: string): boolean => {
     const program = findTool(name)?.requires;
@@ -99,7 +99,7 @@ export const createToolServer = (opts: { roots: Record<string, string>; allowed:
       try {
         // What a write or edit changed goes beside the result, for the person; the model only gets the result.
         let change: FileChange | undefined;
-        const output = truncate(await tool.run(msg.args, { cwd, session: msg.session, report: (c) => {
+        const output = truncate(await tool.run(msg.args, { cwd, session: msg.session, skillFolders: opts.skillFolders?.(), report: (c) => {
           change = c;
         } }));
         finish(true, output, "ok", summary, change);
