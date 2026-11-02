@@ -88,7 +88,7 @@ const Sidebar = ({ onNavigate }: { onNavigate: () => void }) => {
             setCollapsed.mutate({ device: group.device, root: group.root, collapsed: value });
           }}
           onNew={(group) => {
-            void navigate(`/?device=${encodeURIComponent(group.device)}&root=${encodeURIComponent(group.root)}`);
+            void navigate(group.kind === "project" ? `/?device=${encodeURIComponent(group.device)}&root=${encodeURIComponent(group.root)}` : "/");
             onNavigate();
           }}
           onNavigate={onNavigate}

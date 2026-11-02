@@ -1,4 +1,4 @@
-import { Bot, Brain, ChevronRight, CircleHelp, GitBranch, Layers, Sparkles, Loader2, Wrench } from "lucide-react";
+import { Bot, Brain, ChevronRight, CircleHelp, GitBranch, Layers, Sparkles, Loader2, Wrench, Copy } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Link } from "react-router";
 import { ApprovalCard, type Answer } from "@/components/ApprovalCard";
@@ -26,6 +26,23 @@ const useElapsed = (startedAt: number, running: boolean): number => {
     };
   }, [running]);
   return Math.max(0, Math.round((now - startedAt) / 1000));
+};
+
+// Copies a message's text; hidden until the surrounding `group` is hovered or the button has focus.
+const CopyButton = ({ text }: { text: string }) => {
+  return (
+    <button
+      type="button"
+      title="Copy message"
+      aria-label="Copy message"
+      className="absolute right-1 top-1 rounded bg-muted/70 p-1 text-muted-foreground opacity-0 transition-opacity hover:text-foreground focus-visible:opacity-100 group-hover:opacity-100"
+      onClick={() => {
+        void navigator.clipboard.writeText(text);
+      }}
+    >
+      <Copy className="size-3" />
+    </button>
+  );
 };
 
 const Thinking = ({ item }: { item: Extract<Item, { kind: "thinking" }> }) => {
@@ -103,7 +120,8 @@ export const Message = ({ item, model, onAnswer, onReply }: { item: Item; model:
     case "user":
       return (
         <div className="flex min-w-0 justify-end">
-          <div className="min-w-0 max-w-[85%] rounded-xl bg-accent px-4 py-2 text-accent-foreground">
+          <div className="min-w-0 max-w-[85%] rounded-xl bg-accent px-4 py-2 text-accent-foreground group relative">
+            <CopyButton text={item.text} />
             {item.images?.length
               ? (
                   <div className="mb-2 flex flex-wrap gap-2">
@@ -124,7 +142,8 @@ export const Message = ({ item, model, onAnswer, onReply }: { item: Item; model:
           <div className="mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground">
             <Bot className="size-4" />
           </div>
-          <div className="min-w-0 flex-1 pr-10">
+          <div className="min-w-0 flex-1 pr-10 group relative">
+            <CopyButton text={item.text} />
             <div className="mb-0.5 text-xs font-semibold text-muted-foreground">{item.model ?? model}{item.device ? <span className="font-normal"> on {item.device}</span> : null}{item.reason ? <span className="font-normal"> - Auto: {item.reason}</span> : null}</div>
             <Markdown text={item.text} />
             {item.streaming ? <span className="ml-0.5 inline-block h-4 w-1.5 animate-pulse bg-primary align-middle" aria-hidden /> : null}
