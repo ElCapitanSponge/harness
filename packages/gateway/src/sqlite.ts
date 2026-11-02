@@ -53,6 +53,12 @@ const MIGRATIONS: string[] = [
      created INTEGER NOT NULL,
      UNIQUE (device, root, tool)
    ) STRICT;`,
+  // The project groups the person has collapsed in the sidebar, kept here so every client shows the same.
+  `CREATE TABLE collapsed_groups (
+     device TEXT NOT NULL,
+     root TEXT NOT NULL,
+     PRIMARY KEY (device, root)
+   ) STRICT;`,
 ];
 
 // Opens (creating if need be) the gateway's database on its data volume, in write-ahead mode so reads never wait for a write,
@@ -207,6 +213,30 @@ export const sqliteRules = (db: DatabaseSync) => {
     },
     remove: (id: number): boolean => {
       return Number(remove.run(id).changes) > 0;
+    },
+  };
+};
+
+// Which project groups are collapsed in the sidebar. A project is a folder on a device; a chat with no project has neither.
+export interface ProjectGroup {
+  device: string;
+  root: string;
+}
+
+export const sqliteGroups = (db: DatabaseSync) => {
+  const all = db.prepare("SELECT device, root FROM collapsed_groups ORDER BY device, root");
+  const insert = db.prepare("INSERT OR IGNORE INTO collapsed_groups (device, root) VALUES (?, ?)");
+  const remove = db.prepare("DELETE FROM collapsed_groups WHERE device = ? AND root = ?");
+  return {
+    list: (): ProjectGroup[] => {
+      return all.all() as unknown as ProjectGroup[];
+    },
+    set: (device: string, root: string, collapsed: boolean): void => {
+      if (collapsed) {
+        insert.run(device, root);
+      } else {
+        remove.run(device, root);
+      }
     },
   };
 };

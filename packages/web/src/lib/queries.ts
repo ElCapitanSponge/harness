@@ -84,6 +84,33 @@ export const useRemoveLibrarySkill = () => {
   });
 };
 
+// The project groups collapsed in the sidebar, kept on the gateway so every client agrees.
+export interface CollapsedGroup {
+  device: string;
+  root: string;
+}
+
+export const useCollapsedGroups = () => {
+  return useQuery({
+    queryKey: ["collapsed-groups"],
+    queryFn: () => {
+      return api<CollapsedGroup[]>("/sidebar/collapsed");
+    },
+  });
+};
+
+export const useSetCollapsed = () => {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (input: CollapsedGroup & { collapsed: boolean }) => {
+      return api<unknown>("/sidebar/collapsed", { method: "PUT", body: input });
+    },
+    onSuccess: () => {
+      void client.invalidateQueries({ queryKey: ["collapsed-groups"] });
+    },
+  });
+};
+
 // The tools remembered as always allowed in a project.
 export const useRules = () => {
   return useQuery({

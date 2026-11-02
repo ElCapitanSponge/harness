@@ -34,6 +34,8 @@ With `HARNESS_API_KEY` set, every route except the web page itself needs `Author
 
 | Route | What it does |
 | --- | --- |
+| `GET /sidebar/collapsed` | The project groups collapsed in the sidebar, as `{ device, root }`. |
+| `PUT /sidebar/collapsed` | Collapse or expand one: `{ device, root, collapsed }`. |
 | `GET /rules` | The tools remembered as always allowed in a folder on a device. |
 | `DELETE /rules/:id` | Remove one. |
 

@@ -27,6 +27,8 @@ export interface AppDeps {
   library?: Library;
   // The tools the person said to always allow in a folder on a device. Without it the rules routes answer empty.
   rules?: { list(): PermissionRule[]; remove(id: number): boolean };
+  // The project groups the person collapsed in the sidebar. Without it the routes answer empty and remember nothing.
+  groups?: { list(): { device: string; root: string }[]; set(device: string, root: string, collapsed: boolean): void };
   // Believe X-Forwarded-For (set only behind a reverse proxy you run), so a browser's real address is seen.
   trustProxy?: boolean;
   // The gateway's own network interfaces, to tell a container network from a real one (replaced in tests).
@@ -40,7 +42,7 @@ export interface AppDeps {
   mountWeb?: (app: Hono) => void;
 }
 
-export const createApp = ({ registry, apiKey, relay, sessions, library, rules, trustProxy = false, interfaces = (): Interface[] => {
+export const createApp = ({ registry, apiKey, relay, sessions, library, rules, groups, trustProxy = false, interfaces = (): Interface[] => {
   return Object.values(os.networkInterfaces()).flatMap((list) => {
     return list ?? [];
   });
@@ -304,6 +306,22 @@ export const createApp = ({ registry, apiKey, relay, sessions, library, rules, t
       return c.json({ error: { message: (err as Error).message } }, 403);
     }
     return c.json(session.info());
+  });
+
+  // Which project groups are collapsed in the sidebar, kept here so the browser and the desktop app agree.
+  app.get("/sidebar/collapsed", (c) => {
+    return c.json(groups?.list() ?? []);
+  });
+
+  app.put("/sidebar/collapsed", async (c) => {
+    const body = await c.req.json().catch(() => {
+      return undefined;
+    }) as { device?: unknown; root?: unknown; collapsed?: unknown } | undefined;
+    if (typeof body?.device !== "string" || typeof body.root !== "string" || typeof body.collapsed !== "boolean") {
+      return c.json({ error: { message: "device, root and collapsed are required" } }, 400);
+    }
+    groups?.set(body.device, body.root, body.collapsed);
+    return c.json({ ok: true });
   });
 
   // The tools remembered as always allowed in a folder on a device, and removing one.
