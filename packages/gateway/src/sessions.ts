@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { effortFor, noImagesReason, sseData, supportsImages, type ImageAttachment, textOf, type ChatMessage, type Effort, type NodeRecord, type LiveSessionEvent, type SessionEvent, type SessionInfo, type Tool, type ToolCall } from "@harness/core";
-import { MAX_SUBAGENTS, MAX_SUBAGENT_DEPTH, agentTool, askTool, contextPrompt, planTool, readQuestion, readPlan, readSubagentTask, runTurn, systemPrompt, type ProjectContext, tools as allTools, type StreamHooks, type ToolSpec } from "@harness/tools";
+import { MAX_SUBAGENTS, MAX_SUBAGENT_DEPTH, agentTool, askTool, contextPrompt, planTool, readQuestion, readPlan, readSubagentTask, runTurn, systemPrompt, type ProjectContext, type SkillSummary, tools as allTools, type StreamHooks, type ToolSpec } from "@harness/tools";
 import type { Registry } from "./registry.js";
 import type { Relay } from "./relay.js";
 import type { ModelLoader } from "./loader.js";
@@ -213,6 +213,11 @@ interface SessionDeps {
   relay: Pick<Relay, "callTool">;
   // What the device says about the project's instructions and skills; without it the session tells the model nothing of them.
   projectContext?(device: string, root: string, session: string): Promise<ProjectContext | undefined>;
+  // The gateway's own skills, available in every conversation, including chats.
+  library?: {
+    list(): Promise<SkillSummary[]>;
+    text(name: string, args: Record<string, unknown>, options?: { byPerson?: boolean }): Promise<string>;
+  };
   // Starts a child conversation for a sub-agent on the same device and folder.
   spawn?(parent: Session, input: { task: string; model: string; tools: string[] | undefined }): Session;
   // The text of a skill the person started, with its arguments filled in. Throws if the device cannot load it.
@@ -373,8 +378,8 @@ export class Session {
     if (this.abort) {
       throw new Error("the session is busy with a turn");
     }
-    if (skill && (this.kind === "chat" || !this.deps.startSkill)) {
-      throw new Error("skills run in a coding session, on a device");
+    if (skill && !(this.kind === "code" ? this.deps.startSkill !== undefined || this.deps.library !== undefined : this.deps.library !== undefined)) {
+      throw new Error("skills run in a coding session, on a device, or in a chat with the gateway's skill library");
     }
     this.starting = skill;
     this.attached = images ?? [];
@@ -651,38 +656,85 @@ export class Session {
     this.emitLive({ type: "stage", stage: "routing", detail: result.chosen.reason });
   }
 
-  // Asks the device for the project's instruction files and skills, and puts them in the system prompt (replacing what an earlier
-  // turn put there). An older device that cannot answer, or any failure, leaves the session as it was. The skill tool is only
-  // offered when there is a skill the model may use.
-  private async learnProject(specs: ToolSpec[]): Promise<ToolSpec[]> {
-    if (!this.deps.projectContext) {
-      return specs;
-    }
+  // Tells the model what it can draw on: the project's instruction files and skills as the device reports them, and the skills in the
+  // gateway's library (a device's skill of the same name wins). They go in the system prompt, replacing what an earlier turn put
+  // there. An older device that cannot answer, or any failure, adds nothing. The skill tool is only offered when there is a skill the
+  // model may use.
+  private async learn(specs: ToolSpec[]): Promise<ToolSpec[]> {
     let context: ProjectContext | undefined;
-    try {
-      context = await this.deps.projectContext(this.device, this.root, this.id);
-    } catch {
-      context = undefined;
+    if (this.kind === "code" && this.deps.projectContext) {
+      try {
+        context = await this.deps.projectContext(this.device, this.root, this.id);
+      } catch {
+        context = undefined;
+      }
     }
-    if (!context || !Array.isArray(context.skills) || !Array.isArray(context.instructions)) {
-      return specs.filter((s) => {
-        return s.def.function.name !== "skill";
-      });
-    }
+    const fromDevice = context !== undefined && Array.isArray(context.skills) && Array.isArray(context.instructions) ? context : undefined;
+    const library = this.deps.library
+      ? await this.deps.library.list().catch((): SkillSummary[] => {
+          return [];
+        })
+      : [];
+    const onDevice = new Set((fromDevice?.skills ?? []).map((s) => {
+      return s.name;
+    }));
+    const extra = library.filter((s) => {
+      return !onDevice.has(s.name);
+    });
+    const skills = [...(fromDevice?.skills ?? []), ...extra];
     const first = this.history[0];
-    if (first?.role === "system" && typeof first.content === "string") {
+    if ((fromDevice || extra.length > 0) && first?.role === "system" && typeof first.content === "string") {
       const base = first.content.split(CONTEXT_MARK)[0] ?? first.content;
-      const extra = contextPrompt(context);
-      first.content = extra === "" ? base : `${base}${CONTEXT_MARK}${extra}`;
+      const text = contextPrompt({ instructions: fromDevice?.instructions ?? [], skills, skipped: [] });
+      first.content = text === "" ? base : `${base}${CONTEXT_MARK}${text}`;
     }
-    const usable = context.skills.some((s) => {
+    const usable = skills.some((s) => {
       return s.modelInvocable;
     });
-    return usable
-      ? specs
-      : specs.filter((s) => {
-          return s.def.function.name !== "skill";
-        });
+    const without = specs.filter((s) => {
+      return s.def.function.name !== "skill";
+    });
+    const skillSpec = allTools.find((t) => {
+      return t.def.function.name === "skill";
+    });
+    return usable && skillSpec ? [...without, skillSpec] : without;
+  }
+
+  // The skill tool: the device's skill of that name, or else one from the gateway's library. A chat has only the library.
+  private async useSkill(args: Record<string, unknown>): Promise<string> {
+    const name = typeof args.name === "string" ? args.name : "";
+    if (this.kind === "code") {
+      const result = await this.deps.relay.callTool(this.device, this.root, "skill", args, { session: this.id });
+      if (result.ok) {
+        return result.output;
+      }
+      if (!this.deps.library || !result.output.includes("no skill named")) {
+        throw new Error(result.output);
+      }
+    }
+    if (!this.deps.library) {
+      throw new Error(`there is no skill named "${name}"`);
+    }
+    const text = await this.deps.library.text(name, args);
+    return this.kind === "chat" && typeof args.file !== "string" ? `${text}\n\n(This conversation has no device, so you cannot read or change files or run commands. Do what can be done in text, and say what needs a device.)` : text;
+  }
+
+  // The instructions of a skill the person started: from the device, or else from the gateway's library.
+  private async startedSkillText(name: string, args: string): Promise<string> {
+    if (this.kind === "code" && this.deps.startSkill) {
+      try {
+        return await this.deps.startSkill(this.device, this.root, this.id, name, args);
+      } catch (err) {
+        if (!this.deps.library || !(err instanceof Error && err.message.includes("no skill named"))) {
+          throw err;
+        }
+      }
+    }
+    if (!this.deps.library) {
+      throw new Error(`there is no skill named "${name}"`);
+    }
+    const text = await this.deps.library.text(name, { arguments: args }, { byPerson: true });
+    return this.kind === "chat" ? `${text}\n\n(This conversation has no device, so you cannot read or change files or run commands. Do what can be done in text, and say what needs a device.)` : text;
   }
 
   // Puts the message's pictures into the request if the model that will answer can read them; otherwise leaves them out and says so.
@@ -707,11 +759,11 @@ export class Session {
     const skill = this.starting;
     this.starting = undefined;
     const last = this.history.at(-1);
-    if (!skill || !this.deps.startSkill || last?.role !== "user") {
+    if (!skill || last?.role !== "user") {
       return;
     }
     const args = skill.arguments?.trim() ?? "";
-    const text = await this.deps.startSkill(this.device, this.root, this.id, skill.name, args);
+    const text = await this.startedSkillText(skill.name, args);
     const typed = typeof last.content === "string" ? last.content : "";
     last.content = `${typed}\n\nThe person started the skill "${skill.name}". Follow its instructions:\n\n${text}`;
     this.emit({ type: "skill", name: skill.name, arguments: args, text });
@@ -724,8 +776,8 @@ export class Session {
     });
     try {
       this.decide();
-      if (this.kind === "code" && this.deps.projectContext) {
-        specs = await this.learnProject(specs);
+      if (this.deps.projectContext ?? this.deps.library) {
+        specs = await this.learn(specs);
       }
       if (this.starting) {
         await this.runStartedSkill();
@@ -779,6 +831,9 @@ export class Session {
           }
           if (name === "agent") {
             return this.runSubagent(args);
+          }
+          if (name === "skill") {
+            return this.useSkill(args);
           }
           // The plan is the session's own, kept here and shown in the side panel; it touches no device.
           if (name === "plan") {
@@ -852,7 +907,7 @@ export class Sessions {
   private deps: SessionDeps;
 
   constructor(
-    private opts: { registry: Registry; relay: Pick<Relay, "callTool">; complete: Complete; store?: SessionStore; stored?: StoredSession[]; ledger?: UsageLedger; compactAt?: number; claude?: ClaudeState; autoPrefs?: AutoPrefs; projectContext?: SessionDeps["projectContext"]; startSkill?: SessionDeps["startSkill"] },
+    private opts: { registry: Registry; relay: Pick<Relay, "callTool">; complete: Complete; store?: SessionStore; stored?: StoredSession[]; ledger?: UsageLedger; compactAt?: number; claude?: ClaudeState; autoPrefs?: AutoPrefs; projectContext?: SessionDeps["projectContext"]; startSkill?: SessionDeps["startSkill"]; library?: SessionDeps["library"] },
   ) {
     this.deps = {
       relay: opts.relay,
@@ -861,6 +916,7 @@ export class Sessions {
         return this.spawnChild(parent, input);
       },
       startSkill: opts.startSkill,
+      library: opts.library,
       complete: opts.complete,
       ledger: opts.ledger,
       compactAt: opts.compactAt,

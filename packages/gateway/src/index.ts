@@ -14,6 +14,7 @@ import { parseList } from "./auto.js";
 import { ClaudeState } from "./claude.js";
 import { Sessions, createCompleter } from "./sessions.js";
 import { importLegacySessions } from "./legacy.js";
+import { createLibrary } from "./library.js";
 import { sqliteLedger } from "./ledger.js";
 import { openDatabase, sqliteStore } from "./sqlite.js";
 import { attachTunnel } from "./tunnel.js";
@@ -31,6 +32,8 @@ const db = openDatabase(path.join(dataDir, "harness.db"));
 const store = sqliteStore(db);
 const ledger = sqliteLedger(db);
 const claude = new ClaudeState();
+// The gateway's own skills, kept beside the database so they are available in every conversation, including chats.
+const library = createLibrary(path.join(dataDir, "skills"));
 const imported = await importLegacySessions(path.join(dataDir, "sessions"), store);
 if (imported > 0) {
   console.log(`[gateway] moved ${imported} saved conversation${imported === 1 ? "" : "s"} into the database`);
@@ -51,6 +54,7 @@ const sessions = new Sessions({
   registry,
   relay,
   claude,
+  library,
   // The project's instruction files and skills, as the device finds them at the start of each turn; an older device just says no.
   projectContext: async (device, root, session) => {
     const result = await relay.callTool(device, root, "project_context", {}, { session });
@@ -79,6 +83,7 @@ const app = createApp({
   registry,
   relay,
   sessions,
+  library,
   ledger,
   claude,
   loader,

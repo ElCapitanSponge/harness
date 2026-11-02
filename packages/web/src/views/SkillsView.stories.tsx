@@ -26,7 +26,7 @@ const folders: SkillsFolder[] = [
 ];
 
 export const SkillsByDevice: StoryObj = {
-  parameters: seed([[["skills", "", ""], folders]]),
+  parameters: seed([[["skills", "", ""], folders], [["library"], [{ name: "wizard", description: "Walk through steps only you can do.", length: 1500, modelInvocable: true, source: "library", files: 3, bytes: 4096 }]]]),
   render: () => {
     return <SkillsView />;
   },
@@ -44,7 +44,7 @@ export const SkillsByDevice: StoryObj = {
 };
 
 export const NoDevices: StoryObj = {
-  parameters: seed([[["skills", "", ""], []]]),
+  parameters: seed([[["skills", "", ""], []], [["library"], []]]),
   render: () => {
     return <SkillsView />;
   },

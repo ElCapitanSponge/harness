@@ -1,5 +1,5 @@
 import { toOpenAIResponse, toSse } from "@harness/claude";
-import { ChatRequest, DeviceToolRequest, ModelLoad, ModelUnload, ImportParse, SessionAnswer, SessionApproval, SessionCreate, SessionImport, SessionMessage, SessionRename, flattenError } from "@harness/core";
+import { ChatRequest, DeviceToolRequest, ModelLoad, ModelUnload, ImportParse, LibraryImport, SessionAnswer, SessionApproval, SessionCreate, SessionImport, SessionMessage, SessionRename, flattenError } from "@harness/core";
 import { findTool, type ProjectContext } from "@harness/tools";
 import { Hono, type Context } from "hono";
 import { bearerAuth } from "./auth.js";
@@ -10,6 +10,7 @@ import { CLAUDE_MODEL_IDS, catalogue, isClaudeModel } from "./router.js";
 import { RouteError, resolveRoute } from "./routing.js";
 import type { UsageLedger } from "./ledger.js";
 import { ClaudeState, ClaudeUnavailableError, askClaude } from "./claude.js";
+import { LibraryConflict, LibraryError, type Library } from "./library.js";
 import type { Sessions } from "./sessions.js";
 import { parseImportFile, toMarkdown } from "./transcripts.js";
 import { WEB_PAGE } from "./web.js";
@@ -19,6 +20,8 @@ export interface AppDeps {
   apiKey?: string;
   relay: Pick<Relay, "request" | "callTool" | "callClaude" | "callModel" | "callSettings">;
   sessions: Sessions;
+  // The gateway's own skills, available in every conversation. Without it the library routes answer 404.
+  library?: Library;
   // Every model call, for the usage routes. Without it the routes report nothing.
   ledger?: UsageLedger;
   // What is known of the Claude plan: its windows, and whether Claude is limited right now.
@@ -28,7 +31,7 @@ export interface AppDeps {
   mountWeb?: (app: Hono) => void;
 }
 
-export const createApp = ({ registry, apiKey, relay, sessions, ledger, claude = new ClaudeState(), loader, mountWeb }: AppDeps): Hono => {
+export const createApp = ({ registry, apiKey, relay, sessions, library, ledger, claude = new ClaudeState(), loader, mountWeb }: AppDeps): Hono => {
   const app = new Hono();
 
   // The page holds no secrets and must load before a key can be typed, so it is registered ahead of the auth middleware.
@@ -371,6 +374,56 @@ export const createApp = ({ registry, apiKey, relay, sessions, ledger, claude = 
       },
     });
     return new Response(stream, { headers: { "content-type": "text/event-stream", "cache-control": "no-store" } });
+  });
+
+  // The gateway's skill library: list, add (a zip or the files of a folder), export as a zip, remove.
+  app.get("/library/skills", async (c) => {
+    return c.json(library ? await library.list() : []);
+  });
+
+  app.post("/library/skills", async (c) => {
+    const parsed = LibraryImport.safeParse(await c.req.json().catch(() => {
+      return undefined;
+    }));
+    if (!library) {
+      return c.json({ error: { message: "this gateway has no skill library" } }, 404);
+    }
+    if (!parsed.success) {
+      return c.json({ error: flattenError(parsed.error) }, 400);
+    }
+    try {
+      const options = { overwrite: parsed.data.overwrite };
+      const skill = parsed.data.zip !== undefined
+        ? await library.addZip(new Uint8Array(Buffer.from(parsed.data.zip, "base64")), options)
+        : await library.add(new Map((parsed.data.files ?? []).map((f) => {
+            return [f.path, new Uint8Array(Buffer.from(f.data, "base64"))] as const;
+          })), options);
+      return c.json(skill, 201);
+    } catch (err) {
+      if (err instanceof LibraryError) {
+        return c.json({ error: { message: err.message } }, err instanceof LibraryConflict ? 409 : 422);
+      }
+      throw err;
+    }
+  });
+
+  app.get("/library/skills/:name/export", async (c) => {
+    try {
+      const zip = await library?.exportZip(c.req.param("name"));
+      if (!zip) {
+        return c.json({ error: { message: "this gateway has no skill library" } }, 404);
+      }
+      return c.body(zip.slice().buffer, 200, { "content-type": "application/zip", "content-disposition": `attachment; filename="${c.req.param("name").replace(/[^\w-]+/g, "")}.zip"` });
+    } catch (err) {
+      return c.json({ error: { message: err instanceof Error ? err.message : String(err) } }, 404);
+    }
+  });
+
+  app.delete("/library/skills/:name", async (c) => {
+    if (!(await library?.remove(c.req.param("name")))) {
+      return c.json({ error: { message: "no such skill in the library" } }, 404);
+    }
+    return c.json({ ok: true });
   });
 
   // The skills and instruction files each device finds in each project folder it exposes, for the composer's slash menu and the skills

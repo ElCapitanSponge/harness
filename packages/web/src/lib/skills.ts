@@ -34,3 +34,17 @@ export const parseSlash = (text: string, skills: SkillInfo[]): { name: string; a
   }
   return { name, arguments: (match[2] ?? "").trim() };
 };
+
+// The skills a conversation can run: the device's, then the gateway library's that the device does not have. A chat has only the
+// library's. Nothing at all (undefined) while neither has loaded.
+export const withLibrary = (device: SkillInfo[] | undefined, library: SkillInfo[] | undefined): SkillInfo[] | undefined => {
+  if (device === undefined && library === undefined) {
+    return undefined;
+  }
+  const have = new Set((device ?? []).map((s) => {
+    return s.name;
+  }));
+  return [...(device ?? []), ...(library ?? []).filter((s) => {
+    return !have.has(s.name);
+  })];
+};

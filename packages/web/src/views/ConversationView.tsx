@@ -13,8 +13,8 @@ import { SidePanel } from "@/components/SidePanel";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/fields";
 import { useConversation } from "@/lib/useConversation";
-import { useSessions, useSessionTasks, useSkills } from "@/lib/queries";
-import { parseSlash } from "@/lib/skills";
+import { useLibrary, useSessions, useSessionTasks, useSkills } from "@/lib/queries";
+import { parseSlash, withLibrary } from "@/lib/skills";
 
 const Conversation = ({ id }: { id: string }) => {
   const navigate = useNavigate();
@@ -28,7 +28,8 @@ const Conversation = ({ id }: { id: string }) => {
   // The effort for the next message; until one is chosen it is the one the conversation has.
   const [pickedEffort, setPickedEffort] = useState<Effort | "default" | undefined>(undefined);
   const folder = useSkills(info?.kind === "code" ? { device: info.device, root: info.root } : undefined);
-  const skills = info?.kind === "code" ? folder.data?.[0]?.skills : undefined;
+  const library = useLibrary();
+  const skills = withLibrary(info?.kind === "code" ? folder.data?.[0]?.skills : undefined, library.data);
   const [panel, setPanel] = useState(false);
   const tasks = useSessionTasks(id, panel && info?.kind === "code");
   const scroller = useRef<HTMLDivElement>(null);

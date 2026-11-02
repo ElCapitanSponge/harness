@@ -1,6 +1,7 @@
 import { FileText, Sparkles, TriangleAlert } from "lucide-react";
 import { useSkills } from "@/lib/queries";
 import type { SkillsFolder } from "@/lib/types";
+import { LibraryPanel } from "@/components/LibraryPanel";
 import { Badge } from "@/components/ui/fields";
 
 const size = (characters: number): string => {
@@ -90,8 +91,9 @@ export const SkillsView = () => {
       <div className="mx-auto grid max-w-3xl grid-cols-[minmax(0,1fr)] gap-4 px-4 py-6">
         <div>
           <h1 className="text-xl font-semibold">Skills</h1>
-          <p className="text-muted-foreground">What each device offers in each project folder. Type / in a coding conversation to run one; the model can start the others itself.</p>
+          <p className="text-muted-foreground">The gateway's library, and what each device offers in each project folder. Type / in a conversation to run one; the model can start the others itself.</p>
         </div>
+        <LibraryPanel />
         {skills.isPending ? <p className="text-muted-foreground">Loading...</p> : null}
         {skills.isError ? <p className="text-destructive" role="alert">Could not load the skills.</p> : null}
         {skills.data?.length === 0 ? <p className="text-muted-foreground">No device with a project folder is connected.</p> : null}

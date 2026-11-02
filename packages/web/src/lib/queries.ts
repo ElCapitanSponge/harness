@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "./api";
-import type { Catalogue, ClaudeStatus, ConversationUsage, NodeRecord, BackgroundTask, SessionInfo, SettingsReport, SkillsFolder, UsageSummary } from "./types";
+import type { Catalogue, ClaudeStatus, ConversationUsage, NodeRecord, BackgroundTask, LibrarySkill, SessionInfo, SettingsReport, SkillsFolder, UsageSummary } from "./types";
 
 // Every model on every device, and whether Claude is reachable. Refreshed so a device that connects shows up.
 export const useCatalogue = () => {
@@ -45,6 +45,41 @@ export const useSessionTasks = (id: string, enabled: boolean) => {
     },
     enabled,
     refetchInterval: 3000,
+  });
+};
+
+// The skills in the gateway's own library, available in every conversation including chats.
+export const useLibrary = () => {
+  return useQuery({
+    queryKey: ["library"],
+    queryFn: () => {
+      return api<LibrarySkill[]>("/library/skills");
+    },
+    staleTime: 30_000,
+  });
+};
+
+export const useAddLibrarySkill = () => {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (body: { zip: string; overwrite?: boolean } | { files: { path: string; data: string }[]; overwrite?: boolean }) => {
+      return api<LibrarySkill>("/library/skills", { method: "POST", body });
+    },
+    onSuccess: () => {
+      void client.invalidateQueries({ queryKey: ["library"] });
+    },
+  });
+};
+
+export const useRemoveLibrarySkill = () => {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (name: string) => {
+      return api<unknown>(`/library/skills/${encodeURIComponent(name)}`, { method: "DELETE" });
+    },
+    onSuccess: () => {
+      void client.invalidateQueries({ queryKey: ["library"] });
+    },
   });
 };
 

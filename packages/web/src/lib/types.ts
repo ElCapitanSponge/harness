@@ -50,6 +50,12 @@ export interface BackgroundTask {
   startedAt: number;
 }
 
+// A skill in the gateway's own library, with how many files it has and how big they are together.
+export interface LibrarySkill extends SkillInfo {
+  files: number;
+  bytes: number;
+}
+
 export type CatalogueState = "loaded" | "loads-on-use" | "cannot-load" | "busy";
 
 export interface CatalogueEntry {

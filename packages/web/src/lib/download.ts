@@ -15,3 +15,19 @@ export const downloadExport = async (id: string, title: string): Promise<void> =
   link.remove();
   URL.revokeObjectURL(url);
 };
+
+// A skill from the gateway's library as a zip, handed to the browser to save.
+export const downloadSkill = async (name: string): Promise<void> => {
+  const res = await fetch(`/library/skills/${encodeURIComponent(name)}/export`, { headers: authHeaders() });
+  if (!res.ok) {
+    throw new ApiError(res.status, "could not export");
+  }
+  const url = URL.createObjectURL(await res.blob());
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `${name}.zip`;
+  document.body.append(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+};
