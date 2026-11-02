@@ -1,6 +1,7 @@
-import { Bot, Brain, ChevronRight, Layers, Sparkles, Loader2, ShieldQuestion, Wrench } from "lucide-react";
+import { Bot, Brain, ChevronRight, CircleHelp, Layers, Sparkles, Loader2, ShieldQuestion, Wrench } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/fields";
 import { Markdown } from "@/components/Markdown";
 import type { ConversationState, Item } from "@/lib/conversation";
 import { compact as compactTokens } from "@/lib/format";
@@ -41,7 +42,61 @@ const Thinking = ({ item }: { item: Extract<Item, { kind: "thinking" }> }) => {
   );
 };
 
-export const Message = ({ item, model, onAnswer }: { item: Item; model: string; onAnswer: (approvalId: string, approve: boolean, always: boolean) => void }) => {
+// A question the model put to the person: the likely answers as buttons, and a box for their own words.
+const Question = ({ item, onReply }: { item: Extract<Item, { kind: "question" }>; onReply?: (questionId: string, answer: string) => void }) => {
+  const [text, setText] = useState("");
+  const pending = item.status === "pending";
+  return (
+    <div className="px-10">
+      <div className={cn("grid gap-2 rounded-lg border border-primary bg-card p-3 shadow-card", !pending && "border-border opacity-80 shadow-none")} role="group" aria-label="Question">
+        <div className="flex items-center gap-2 text-xs font-semibold text-muted-foreground">
+          <CircleHelp className="size-4 text-primary" />
+          Question
+        </div>
+        <div className="[overflow-wrap:anywhere]">{item.question}</div>
+        {pending
+          ? (
+              <>
+                {item.options.length > 0
+                  ? (
+                      <div className="flex flex-wrap gap-2">
+                        {item.options.map((o) => {
+                          return (
+                            <Button key={o} onClick={() => {
+                              onReply?.(item.questionId, o);
+                            }}
+                            >
+                              {o}
+                            </Button>
+                          );
+                        })}
+                      </div>
+                    )
+                  : null}
+                <form
+                  className="flex gap-2"
+                  onSubmit={(ev) => {
+                    ev.preventDefault();
+                    if (text.trim()) {
+                      onReply?.(item.questionId, text.trim());
+                    }
+                  }}
+                >
+                  <Input aria-label="Your answer" placeholder="Or answer in your own words" value={text} onChange={(ev) => {
+                    setText(ev.target.value);
+                  }}
+                  />
+                  <Button type="submit" variant="primary" disabled={!text.trim()}>Answer</Button>
+                </form>
+              </>
+            )
+          : <div className="text-[13px] text-muted-foreground">{item.status === "answered" ? `You answered: ${item.answer ?? ""}` : "Nobody answered."}</div>}
+      </div>
+    </div>
+  );
+};
+
+export const Message = ({ item, model, onAnswer, onReply }: { item: Item; model: string; onAnswer: (approvalId: string, approve: boolean, always: boolean) => void; onReply?: (questionId: string, answer: string) => void }) => {
   switch (item.kind) {
     case "user":
       return (
@@ -155,6 +210,9 @@ export const Message = ({ item, model, onAnswer }: { item: Item; model: string; 
           </div>
         </div>
       );
+
+    case "question":
+      return <Question item={item} onReply={onReply} />;
 
     case "note":
       return (

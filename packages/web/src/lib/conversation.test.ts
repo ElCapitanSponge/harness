@@ -164,3 +164,14 @@ describe("images and notices", () => {
     expect(state.items[1]).toMatchObject({ tone: "info", text: "qwen cannot read images" });
   });
 });
+
+describe("a question for the person", () => {
+  it("is pending until answered, then shows the answer, or that nobody answered", () => {
+    const asked = run([{ type: "question", id: "q1", question: "Which?", options: ["A", "B"] }]);
+    expect(asked.items[0]).toMatchObject({ kind: "question", status: "pending", options: ["A", "B"] });
+    const answered = run([{ type: "question-resolved", id: "q1", answer: "A" }], asked);
+    expect(answered.items[0]).toMatchObject({ status: "answered", answer: "A" });
+    const nobody = run([{ type: "question-resolved", id: "q1" }], asked);
+    expect(nobody.items[0]).toMatchObject({ status: "unanswered" });
+  });
+});

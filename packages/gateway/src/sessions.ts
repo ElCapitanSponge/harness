@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { effortFor, noImagesReason, sseData, supportsImages, type ImageAttachment, textOf, type ChatMessage, type Effort, type NodeRecord, type LiveSessionEvent, type SessionEvent, type SessionInfo, type Tool, type ToolCall } from "@harness/core";
-import { contextPrompt, planTool, readPlan, runTurn, systemPrompt, type ProjectContext, tools as allTools, type StreamHooks, type ToolSpec } from "@harness/tools";
+import { askTool, contextPrompt, planTool, readQuestion, readPlan, runTurn, systemPrompt, type ProjectContext, tools as allTools, type StreamHooks, type ToolSpec } from "@harness/tools";
 import type { Registry } from "./registry.js";
 import type { Relay } from "./relay.js";
 import type { ModelLoader } from "./loader.js";
@@ -196,6 +196,7 @@ export const assembleStream = async (res: Response, hooks?: StreamHooks, onUsage
 };
 
 const APPROVAL_TIMEOUT_MS = 5 * 60_000;
+const QUESTION_TIMEOUT_MS = 10 * 60_000;
 
 // A conversation is named after what it started with, until the person renames it.
 const titleFrom = (text: string): string => {
@@ -245,6 +246,7 @@ export class Session {
   private history: ChatMessage[];
   private abort: AbortController | undefined;
   private approvals = new Map<string, (approved: boolean, always?: boolean) => void>();
+  private questions = new Map<string, (answer: string | undefined) => void>();
   private always = new Set<string>();
   // When the history was last compacted and how big it was after, so the meter can show that before the next reply.
   compaction: { time: number; tokensAfter: number } | undefined;
@@ -382,6 +384,42 @@ export class Session {
     for (const settle of this.approvals.values()) {
       settle(false);
     }
+    for (const settle of this.questions.values()) {
+      settle(undefined);
+    }
+  }
+
+  // Answers a pending question. Returns false if there is none by that id (already answered or timed out).
+  answerQuestion(id: string, answer: string): boolean {
+    const settle = this.questions.get(id);
+    if (!settle) {
+      return false;
+    }
+    settle(answer);
+    return true;
+  }
+
+  // Puts a question to the person and waits. Nobody watching, no answer in ten minutes, or a cancel, is "nobody answered".
+  private ask(args: Record<string, unknown>): Promise<string> {
+    const { question, options } = readQuestion(args);
+    const nobody = "Nobody answered. Do not guess: stop and tell the person what you need to know.";
+    if (this.listeners.size === 0) {
+      return Promise.resolve(nobody);
+    }
+    const id = randomUUID();
+    return new Promise<string>((resolve) => {
+      const settle = (answer: string | undefined): void => {
+        clearTimeout(timer);
+        this.questions.delete(id);
+        this.emit({ type: "question-resolved", id, ...(answer === undefined ? {} : { answer }) });
+        resolve(answer === undefined ? nobody : `The person answered: ${answer}`);
+      };
+      const timer = setTimeout(() => {
+        settle(undefined);
+      }, QUESTION_TIMEOUT_MS);
+      this.questions.set(id, settle);
+      this.emit({ type: "question", id, question, options });
+    });
   }
 
   // Answers a pending approval. Returns false if there is no such approval (already answered or timed out).
@@ -589,7 +627,7 @@ export class Session {
   }
 
   private async run(abort: AbortController, offered: ToolSpec[]): Promise<void> {
-    let specs = this.kind === "code" ? [...offered, planTool] : offered;
+    let specs = this.kind === "code" ? [...offered, planTool, askTool] : offered;
     try {
       this.decide();
       if (this.kind === "code" && this.deps.projectContext) {
@@ -642,6 +680,9 @@ export class Session {
           }, { effort: this.effort });
         },
         run: async (name, args) => {
+          if (name === "ask") {
+            return this.ask(args);
+          }
           // The plan is the session's own, kept here and shown in the side panel; it touches no device.
           if (name === "plan") {
             const steps = readPlan(args);

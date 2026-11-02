@@ -224,6 +224,7 @@ export const SessionImport = z.object({
 });
 // Text or a file's content to be split into turns, for the person to check before importing.
 export const ImportParse = z.object({ name: z.string().optional(), content: z.string().min(1) });
+export const SessionAnswer = z.object({ answer: z.string().trim().min(1).max(4000) });
 export const SessionRename = z.object({ title: z.string().trim().min(1).max(120) });
 
 // What happens in a coding session, in order. Sent to clients as server-sent events.
@@ -244,6 +245,9 @@ export type SessionEvent
     | { type: "tool"; summary: string }
     | { type: "approval"; id: string; tool: string; summary: string }
     | { type: "approval-resolved"; id: string; approved: boolean }
+    // A question the model put to the person, and what they answered (absent if nobody did).
+    | { type: "question"; id: string; question: string; options: string[] }
+    | { type: "question-resolved"; id: string; answer?: string }
     | { type: "compacted"; messages: number; tokensBefore: number; tokensAfter: number; manual: boolean }
     | { type: "done"; stopped: boolean; declined?: boolean }
     | { type: "cancelled" }

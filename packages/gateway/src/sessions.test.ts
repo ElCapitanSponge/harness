@@ -132,7 +132,7 @@ describe("Session turns", () => {
     const offered = (complete.mock.calls[0]![2] as { function: { name: string } }[]).map((t) => {
       return t.function.name;
     }).sort();
-    expect(offered).toEqual(["grep", "list_dir", "plan", "read_file"]);
+    expect(offered).toEqual(["ask", "grep", "list_dir", "plan", "read_file"]);
   });
 
   it("puts the project root and device platform in the system prompt", async () => {
@@ -715,5 +715,112 @@ describe("Session with images", () => {
     const big = { role: "user", content: [{ type: "text", text: "x" }, { type: "image_url", image_url: { url: `data:image/png;base64,${"A".repeat(4_000_000)}` } }] } as ChatMessage;
     expect(historyTokens([big])).toBeLessThan(1100);
     expect(historyTokens([big])).toBeGreaterThanOrEqual(1000);
+  });
+});
+
+describe("Session asking the person a question", () => {
+  const asks = (args: Record<string, unknown>) => {
+    return { role: "assistant" as const, content: null, tool_calls: [call("1", "ask", args)] };
+  };
+  const pendingQuestion = (s: Session) => {
+    return s.events.find((e): e is Extract<SessionEvent, { type: "question" }> => {
+      return e.type === "question";
+    });
+  };
+
+  it("shows the question with its options, waits for the answer, and gives it to the model", async () => {
+    let toolReply = "";
+    complete.mockImplementationOnce(async () => {
+      return asks({ question: "Which database?", options: ["SQLite", "Postgres"] });
+    }).mockImplementationOnce(async (_m, messages) => {
+      toolReply = textOf(messages.at(-1)?.content);
+      return { role: "assistant", content: "ok" };
+    });
+    const s = create();
+    s.subscribe(() => {
+      return undefined;
+    }, s.events.length);
+    s.send("set up storage");
+    await until(() => {
+      return pendingQuestion(s) !== undefined;
+    });
+    expect(pendingQuestion(s)).toMatchObject({ question: "Which database?", options: ["SQLite", "Postgres"] });
+
+    expect(s.answerQuestion(pendingQuestion(s)?.id ?? "", "SQLite")).toBe(true);
+    await until(() => {
+      return types(s).includes("done");
+    });
+    expect(toolReply).toBe("The person answered: SQLite");
+    expect(s.events.find((e) => {
+      return e.type === "question-resolved";
+    })).toMatchObject({ answer: "SQLite" });
+    expect(relay.callTool).not.toHaveBeenCalled();
+    expect(s.answerQuestion(pendingQuestion(s)?.id ?? "", "again")).toBe(false);
+  });
+
+  it("says nobody answered, without waiting, when no one is watching the conversation", async () => {
+    let toolReply = "";
+    complete.mockImplementationOnce(async () => {
+      return asks({ question: "Which database?" });
+    }).mockImplementationOnce(async (_m, messages) => {
+      toolReply = textOf(messages.at(-1)?.content);
+      return { role: "assistant", content: "I need to know which database." };
+    });
+    const s = create();
+    s.send("set up storage");
+    await until(() => {
+      return types(s).includes("done");
+    });
+    expect(toolReply).toContain("Nobody answered. Do not guess");
+    expect(types(s)).not.toContain("question");
+  });
+
+  it("tells the model what is wrong with a question it got wrong", async () => {
+    let toolReply = "";
+    complete.mockImplementationOnce(async () => {
+      return asks({ question: "", options: "yes" });
+    }).mockImplementationOnce(async (_m, messages) => {
+      toolReply = textOf(messages.at(-1)?.content);
+      return { role: "assistant", content: "ok" };
+    });
+    const s = create();
+    s.send("go");
+    await until(() => {
+      return types(s).includes("done");
+    });
+    expect(toolReply).toContain("must be the question to ask");
+  });
+
+  it("is not offered in a chat", async () => {
+    script({ role: "assistant", content: "hi" });
+    const chat = sessions.create({ model: "qwen" });
+    chat.send("hello");
+    await until(() => {
+      return types(chat).includes("done");
+    });
+    expect(complete.mock.calls[0]?.[2]).toEqual([]);
+  });
+});
+
+describe("Session question cancelled or unanswered", () => {
+  it("counts a cancel as nobody answering, and records that", async () => {
+    complete.mockImplementationOnce(async () => {
+      return { role: "assistant", content: null, tool_calls: [call("1", "ask", { question: "Sure?" })] };
+    });
+    const s = create();
+    s.subscribe(() => {
+      return undefined;
+    }, 0);
+    s.send("go");
+    await until(() => {
+      return types(s).includes("question");
+    });
+    s.cancel();
+    await until(() => {
+      return !s.busy;
+    });
+    expect(s.events.find((e) => {
+      return e.type === "question-resolved";
+    })).toEqual({ type: "question-resolved", id: expect.any(String) as string });
   });
 });

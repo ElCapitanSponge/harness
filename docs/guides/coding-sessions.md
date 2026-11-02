@@ -77,6 +77,10 @@ Both are stored as events of the conversation, so reopening it shows the panel a
 
 Messages can carry images for models that can read them; see [Images](models.md#images).
 
+## Questions from the model
+
+In a coding session the model has an `ask` tool for a decision only you can make. The page shows a card with the question, the likely answers as buttons and a box for your own words; the answer goes back to the model as the tool's result. It needs no approval and touches no device: the gateway asks you itself. If nobody is watching the conversation, you cancel, or ten minutes pass, the model is told that nobody answered and not to guess, so it stops and says what it needs to know. The question and the answer are stored with the conversation.
+
 ## Commands in the background
 
 With tools on the device set to **Can change**, `run_command` takes `background: true`. It asks first, like any command, then starts the command and returns a task id at once instead of waiting. The model can read the latest output with `task_output` (`id`, `lines`) and stop the task, and everything it started, with `task_stop`. Tasks belong to the session that started them: another session cannot read or stop them, up to 8 run at once, the last 20 finished ones are kept, and the last 200,000 characters of output. They are stopped when the session is deleted and when the agent exits. They run in the device's shell and are not sandboxed, exactly like `run_command`.

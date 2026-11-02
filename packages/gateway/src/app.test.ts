@@ -513,3 +513,14 @@ describe("background tasks of a session", () => {
     expect(await (await app.request(`/sessions/${code.id}/tasks`)).json()).toEqual([]);
   });
 });
+
+describe("answering a question", () => {
+  it("refuses an answer for a session or question that is not there, and an empty answer", async () => {
+    registry.upsert(beat({ roots: ["proj"], allowedTools: ["read_file"] }));
+    const app = build();
+    expect((await app.request("/sessions/nope/questions/q", json({ answer: "yes" }))).status).toBe(404);
+    const code = await (await app.request("/sessions", json({ model: "qwen", device: "pc", root: "proj" }))).json() as { id: string };
+    expect((await app.request(`/sessions/${code.id}/questions/q`, json({ answer: "yes" }))).status).toBe(404);
+    expect((await app.request(`/sessions/${code.id}/questions/q`, json({ answer: "  " }))).status).toBe(400);
+  });
+});

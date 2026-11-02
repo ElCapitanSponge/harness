@@ -25,6 +25,9 @@ Bringing a conversation from another tool in as a saved conversation, marked wit
 **Session panel**:
 The panel beside a coding session showing the model's plan and the files it changed, with their diffs. See docs/guides/coding-sessions.md.
 
+**Question**:
+A decision the model puts to the person with the ask tool, shown as a card with options and a box for their own words. With nobody to answer, the model is told so and must not guess. See docs/guides/coding-sessions.md.
+
 **Gateway**:
 The single always-on service that every client talks to. It knows which devices are connected, routes each request, and serves the web page.
 _Avoid_: server, hub, proxy
