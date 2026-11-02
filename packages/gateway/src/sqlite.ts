@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
-import { EFFORTS, type ChatMessage, type SessionEvent } from "@harness/core";
+import { EFFORTS, PERMISSION_MODES, type ChatMessage, type SessionEvent } from "@harness/core";
 import type { SessionStore, StoredSession } from "./sessions.js";
 
 // Each entry upgrades the database by one version. Never edit one that has shipped; add another.
@@ -43,6 +43,16 @@ const MIGRATIONS: string[] = [
   // The conversation that started this one as a sub-agent, and how deep it is.
   `ALTER TABLE conversations ADD COLUMN parent TEXT;
    ALTER TABLE conversations ADD COLUMN depth INTEGER NOT NULL DEFAULT 0;`,
+  // How a conversation treats changes, and the tools the person said to always allow in a folder on a device.
+  `ALTER TABLE conversations ADD COLUMN mode TEXT;
+   CREATE TABLE rules (
+     id INTEGER PRIMARY KEY AUTOINCREMENT,
+     device TEXT NOT NULL,
+     root TEXT NOT NULL,
+     tool TEXT NOT NULL,
+     created INTEGER NOT NULL,
+     UNIQUE (device, root, tool)
+   ) STRICT;`,
 ];
 
 // Opens (creating if need be) the gateway's database on its data volume, in write-ahead mode so reads never wait for a write,
@@ -86,14 +96,15 @@ interface ConversationRow {
   effort: string | null;
   parent: string | null;
   depth: number;
+  mode: string | null;
 }
 
 // Stores conversations as a row each, with their events appended one row at a time. A turn adds events and never rewrites old ones.
 export const sqliteStore = (db: DatabaseSync): SessionStore & { loadAll(): StoredSession[] } => {
   const upsert = db.prepare(
-    `INSERT INTO conversations (id, kind, title, model, device, root, created, updated, history, effort, parent, depth)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-     ON CONFLICT (id) DO UPDATE SET title = excluded.title, model = excluded.model, updated = excluded.updated, history = excluded.history, effort = excluded.effort`,
+    `INSERT INTO conversations (id, kind, title, model, device, root, created, updated, history, effort, parent, depth, mode)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+     ON CONFLICT (id) DO UPDATE SET title = excluded.title, model = excluded.model, updated = excluded.updated, history = excluded.history, effort = excluded.effort, mode = excluded.mode`,
   );
   const count = db.prepare("SELECT COUNT(*) AS n FROM events WHERE conversation_id = ?");
   const append = db.prepare("INSERT INTO events (conversation_id, seq, data) VALUES (?, ?, ?)");
@@ -118,6 +129,7 @@ export const sqliteStore = (db: DatabaseSync): SessionStore & { loadAll(): Store
           session.effort ?? null,
           session.parent ?? null,
           session.depth ?? 0,
+          session.mode ?? null,
         );
         const have = (count.get(session.id) as { n: number }).n;
         for (let seq = have; seq < session.events.length; seq++) {
@@ -150,6 +162,13 @@ export const sqliteStore = (db: DatabaseSync): SessionStore & { loadAll(): Store
             return e === row.effort;
           }),
           ...(row.parent ? { parent: row.parent } : {}),
+          ...(PERMISSION_MODES.find((m) => {
+            return m === row.mode;
+          })
+            ? { mode: PERMISSION_MODES.find((m) => {
+                return m === row.mode;
+              }) }
+            : {}),
           ...(row.depth > 0 ? { depth: row.depth } : {}),
           history: JSON.parse(row.history) as ChatMessage[],
           events: (events.all(row.id) as unknown as { data: string }[]).map((e) => {
@@ -157,6 +176,37 @@ export const sqliteStore = (db: DatabaseSync): SessionStore & { loadAll(): Store
           }),
         };
       });
+    },
+  };
+};
+
+export interface PermissionRule {
+  id: number;
+  device: string;
+  root: string;
+  tool: string;
+  created: number;
+}
+
+// The tools the person said to always allow in a folder on a device ("allow always in this project"), kept so they are not asked again,
+// listed so they can be reviewed, and removable. The device's own allow list still has the last word.
+export const sqliteRules = (db: DatabaseSync) => {
+  const find = db.prepare("SELECT id FROM rules WHERE device = ? AND root = ? AND tool = ?");
+  const insert = db.prepare("INSERT OR IGNORE INTO rules (device, root, tool, created) VALUES (?, ?, ?, ?)");
+  const all = db.prepare("SELECT id, device, root, tool, created FROM rules ORDER BY created DESC, id DESC");
+  const remove = db.prepare("DELETE FROM rules WHERE id = ?");
+  return {
+    has: (device: string, root: string, tool: string): boolean => {
+      return find.get(device, root, tool) !== undefined;
+    },
+    add: (device: string, root: string, tool: string): void => {
+      insert.run(device, root, tool, Date.now());
+    },
+    list: (): PermissionRule[] => {
+      return all.all() as unknown as PermissionRule[];
+    },
+    remove: (id: number): boolean => {
+      return Number(remove.run(id).changes) > 0;
     },
   };
 };

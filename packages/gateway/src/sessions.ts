@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
-import { effortFor, noImagesReason, sseData, supportsImages, type ImageAttachment, textOf, type ChatMessage, type Effort, type NodeRecord, type LiveSessionEvent, type SessionEvent, type SessionInfo, type Tool, type ToolCall } from "@harness/core";
-import { MAX_SUBAGENTS, MAX_SUBAGENT_DEPTH, agentTool, askTool, contextPrompt, planTool, readQuestion, readPlan, readSubagentTask, runTurn, systemPrompt, type ProjectContext, type SkillSummary, tools as allTools, type StreamHooks, type ToolSpec } from "@harness/tools";
+import { effortFor, noImagesReason, type ApprovalPreview, type PermissionMode, sseData, supportsImages, type ImageAttachment, textOf, type ChatMessage, type Effort, type NodeRecord, type LiveSessionEvent, type SessionEvent, type SessionInfo, type Tool, type ToolCall } from "@harness/core";
+import { MAX_SUBAGENTS, MAX_SUBAGENT_DEPTH, agentTool, askTool, contextPrompt, fileChange, planTool, planToolForPlanMode, readQuestion, readPlan, readSubagentTask, runTurn, systemPrompt, type ProjectContext, type SkillSummary, tools as allTools, type StreamHooks, type ToolSpec } from "@harness/tools";
 import type { Registry } from "./registry.js";
 import type { Relay } from "./relay.js";
 import type { ModelLoader } from "./loader.js";
@@ -31,6 +31,8 @@ export interface StoredSession {
   created: number;
   updated: number;
   effort?: Effort;
+  // How changes are treated: ask (the default), edits, plan or bypass.
+  mode?: PermissionMode;
   // The conversation that started this one as a sub-agent, and how deep it is (0 for an ordinary conversation).
   parent?: string;
   depth?: number;
@@ -218,6 +220,13 @@ interface SessionDeps {
     list(): Promise<SkillSummary[]>;
     text(name: string, args: Record<string, unknown>, options?: { byPerson?: boolean }): Promise<string>;
   };
+  // Rules remembered for a folder on a device: a tool the person said to always allow there.
+  rules?: {
+    has(device: string, root: string, tool: string): boolean;
+    add(device: string, root: string, tool: string): void;
+  };
+  // Whether a conversation may be set to run without asking (the owner can turn it off for the gateway).
+  allowBypass?: boolean;
   // Starts a child conversation for a sub-agent on the same device and folder.
   spawn?(parent: Session, input: { task: string; model: string; tools: string[] | undefined }): Session;
   // The text of a skill the person started, with its arguments filled in. Throws if the device cannot load it.
@@ -255,7 +264,7 @@ export class Session {
   private listeners = new Set<(event: SessionEvent | LiveSessionEvent) => void>();
   private history: ChatMessage[];
   private abort: AbortController | undefined;
-  private approvals = new Map<string, (approved: boolean, always?: boolean) => void>();
+  private approvals = new Map<string, (approved: boolean, always?: boolean | "project", reason?: string) => void>();
   private questions = new Map<string, (answer: string | undefined) => void>();
   // Sub-agents: the conversation that started this one (if any) and how deep it is; the ones this conversation has started; the tools
   // it may use at most (a sub-agent is given a subset of its parent's); and the names it was offered at its last turn.
@@ -266,8 +275,12 @@ export class Session {
   private restrict: string[] | undefined;
   private offered: string[] = [];
   // A sub-agent's approvals and questions go to the person through the conversation that started it.
-  private delegate: { approve: (tool: string, summary: string) => Promise<boolean>; ask: (args: Record<string, unknown>) => Promise<string> } | undefined;
+  private delegate: { approve: (tool: string, summary: string, args?: Record<string, unknown>) => Promise<boolean>; ask: (args: Record<string, unknown>) => Promise<string> } | undefined;
   private always = new Set<string>();
+  // How changes are treated in this conversation.
+  private mode: PermissionMode;
+  // Why the person declined the last action, if they said, so the model is told.
+  private declined: string | undefined;
   // When the history was last compacted and how big it was after, so the meter can show that before the next reply.
   compaction: { time: number; tokensAfter: number } | undefined;
   // Which model on which device made the latest call, to label the reply that follows.
@@ -282,10 +295,11 @@ export class Session {
   private compactFailedFor = 0;
 
   constructor(
-    init: Pick<StoredSession, "id" | "title" | "model" | "device" | "root" | "created" | "updated"> & { parent?: string; depth?: number; effort?: Effort; history: ChatMessage[]; events?: SessionEvent[] },
+    init: Pick<StoredSession, "id" | "title" | "model" | "device" | "root" | "created" | "updated"> & { mode?: PermissionMode; parent?: string; depth?: number; effort?: Effort; history: ChatMessage[]; events?: SessionEvent[] },
     private deps: SessionDeps,
-    private autoApprove = false,
+    autoApprove = false,
   ) {
+    this.mode = init.mode ?? (autoApprove ? "bypass" : "ask");
     this.id = init.id;
     this.parent = init.parent;
     this.depth = init.depth ?? 0;
@@ -333,13 +347,14 @@ export class Session {
       title: this.title,
       deviceConnected: this.kind === "chat" || this.deps.connected(this.device),
       effort: this.effort,
+      mode: this.mode,
       ...(this.parent ? { parent: this.parent } : {}),
       chosen: this.current === "auto" && this.chosen ? { model: this.chosen.model, device: this.chosen.device, reason: this.chosen.reason } : undefined,
     };
   }
 
   toStored(): StoredSession {
-    return { id: this.id, title: this.title, model: this.model, device: this.device, root: this.root, created: this.created, updated: this.updated, effort: this.effort, ...(this.parent ? { parent: this.parent } : {}), depth: this.depth, history: [...this.history], events: [...this.events] };
+    return { id: this.id, title: this.title, model: this.model, device: this.device, root: this.root, created: this.created, updated: this.updated, effort: this.effort, mode: this.mode, ...(this.parent ? { parent: this.parent } : {}), depth: this.depth, history: [...this.history], events: [...this.events] };
   }
 
   // Replays what has already happened, then follows live. Returns an unsubscribe function.
@@ -516,41 +531,70 @@ export class Session {
   }
 
   // Answers a pending approval. Returns false if there is no such approval (already answered or timed out).
-  answer(approvalId: string, approved: boolean, always = false): boolean {
+  answer(approvalId: string, approved: boolean, always: boolean | "project" = false, reason?: string): boolean {
     const settle = this.approvals.get(approvalId);
     if (!settle) {
       return false;
     }
-    settle(approved, always);
+    settle(approved, always, reason);
     return true;
   }
 
-  // Changes need an answer from whoever is driving the session. No answer in five minutes counts as no.
-  private approve = (tool: string, summary: string): Promise<boolean> => {
-    if (this.delegate) {
-      return this.delegate.approve(tool, summary);
+  get permission(): PermissionMode {
+    return this.mode;
+  }
+
+  // Changes how this conversation treats changes, from the next one on. Running without asking can be switched off for the whole gateway.
+  setMode(mode: PermissionMode): void {
+    if (mode === "bypass" && this.deps.allowBypass === false) {
+      throw new Error("running without asking is turned off on this gateway");
     }
-    if (this.autoApprove || this.always.has(tool)) {
+    if (mode !== this.mode) {
+      this.mode = mode;
+      this.emit({ type: "mode", mode });
+      this.updated = Date.now();
+      this.deps.persist?.(this);
+    }
+  }
+
+  // Changes need an answer from whoever is driving the session, unless the mode, a choice made earlier in this conversation or a rule
+  // remembered for this folder says yes. No answer in five minutes counts as no. The device's own allow list is checked after this,
+  // whatever is said here.
+  private approve = (tool: string, summary: string, args?: Record<string, unknown>): Promise<boolean> => {
+    if (this.delegate) {
+      return this.delegate.approve(tool, summary, args);
+    }
+    if (this.mode === "bypass" || this.always.has(tool) || (this.mode === "edits" && (tool === "write_file" || tool === "edit_file")) || (this.deps.rules?.has(this.device, this.root, tool) ?? false)) {
       return Promise.resolve(true);
     }
+    return this.askToApprove(tool, summary, previewOf(tool, args, this.device, this.root));
+  };
+
+  // Puts an approval card to the person and waits for the answer.
+  private askToApprove(tool: string, summary: string, preview?: ApprovalPreview, sticky = true): Promise<boolean> {
     const id = randomUUID();
+    this.declined = undefined;
     return new Promise<boolean>((resolve) => {
-      const settle = (approved: boolean, always = false): void => {
+      const settle = (approved: boolean, always: boolean | "project" = false, reason?: string): void => {
         clearTimeout(timer);
         this.approvals.delete(id);
-        if (approved && always) {
+        if (approved && sticky && always === true) {
           this.always.add(tool);
         }
-        this.emit({ type: "approval-resolved", id, approved });
+        if (approved && sticky && always === "project") {
+          this.deps.rules?.add(this.device, this.root, tool);
+        }
+        this.declined = approved ? undefined : reason;
+        this.emit({ type: "approval-resolved", id, approved, ...(reason ? { reason } : {}) });
         resolve(approved);
       };
       const timer = setTimeout(() => {
         settle(false);
       }, APPROVAL_TIMEOUT_MS);
       this.approvals.set(id, settle);
-      this.emit({ type: "approval", id, tool, summary });
+      this.emit({ type: "approval", id, tool, summary, ...(preview ? { preview } : {}) });
     });
-  };
+  }
 
   // Replaces the older turns with a summary the model writes, so the conversation can go on. The system prompt and the most
   // recent turns stay as they were. Refused while a turn is running.
@@ -770,7 +814,7 @@ export class Session {
   }
 
   private async run(abort: AbortController, offered: ToolSpec[]): Promise<void> {
-    let specs = this.kind === "code" ? [...offered, planTool, askTool, ...(this.depth < MAX_SUBAGENT_DEPTH && (this.restrict?.includes("agent") ?? true) ? [agentTool] : [])] : offered;
+    let specs = this.kind === "code" ? [...offered, this.mode === "plan" ? planToolForPlanMode() : planTool, askTool, ...(this.depth < MAX_SUBAGENT_DEPTH && (this.restrict?.includes("agent") ?? true) ? [agentTool] : [])] : offered;
     this.offered = specs.map((s) => {
       return s.def.function.name;
     });
@@ -802,8 +846,14 @@ export class Session {
     const mark = this.history.length - 1;
     try {
       this.checkFits();
+      // In plan mode only the tools that read are offered, until the person approves the plan; then the whole list.
+      const full = specs;
+      const inUse = this.mode === "plan" ? full.filter(readsOnly) : [...full];
       const outcome = await runTurn(this.history, {
-        tools: specs,
+        tools: inUse,
+        declineReason: () => {
+          return this.declined;
+        },
         complete: async (messages, tools) => {
           // A cancel that arrived while a tool was running must stop the turn before the next model call.
           if (abort.signal.aborted) {
@@ -839,6 +889,17 @@ export class Session {
           if (name === "plan") {
             const steps = readPlan(args);
             this.emit({ type: "plan", steps });
+            if (this.mode === "plan") {
+              const approved = await this.askToApprove("plan", "Approve this plan? The model stays read-only until you do.", { kind: "file", title: "The plan", text: steps.map((s, i) => {
+                return `${String(i + 1)}. ${s.text}`;
+              }).join("\n") }, false);
+              if (!approved) {
+                return `The person did not approve the plan${this.declined ? `: ${this.declined}` : ""}. Revise it, or ask what they want.`;
+              }
+              this.setMode("ask");
+              inUse.splice(0, inUse.length, ...full);
+              return "The plan is approved. You can now make changes; each change still asks the person as usual.";
+            }
             return `plan saved: ${String(steps.filter((s) => {
               return s.status === "done";
             }).length)} of ${String(steps.length)} steps done`;
@@ -880,6 +941,35 @@ export class Session {
   }
 }
 
+// In plan mode the model is offered what only reads, and the plan and question tools.
+const readsOnly = (spec: ToolSpec): boolean => {
+  return spec.level === "read" || spec.def.function.name === "plan" || spec.def.function.name === "ask";
+};
+
+// What an approval card shows beyond the summary, worked out from the call itself: the diff of an edit, the whole command with where it
+// runs, or the start of a file that is about to be written.
+const previewOf = (tool: string, args: Record<string, unknown> | undefined, device: string, root: string): ApprovalPreview | undefined => {
+  if (!args) {
+    return undefined;
+  }
+  const text = (key: string): string => {
+    const v = args[key];
+    return typeof v === "string" ? v : "";
+  };
+  if (tool === "run_command") {
+    return { kind: "command", title: `${args.background === true ? "Runs in the background" : "Runs"} in ${device}:${root}`, text: text("command") };
+  }
+  if (tool === "edit_file") {
+    const change = fileChange(text("path"), text("old_string"), text("new_string"));
+    return { kind: "diff", title: text("path"), text: change.patch ?? "(no difference)" };
+  }
+  if (tool === "write_file") {
+    const lines = text("content").split("\n");
+    return { kind: "file", title: `${text("path")} (${String(text("content").length)} characters)`, text: lines.slice(0, 40).join("\n") + (lines.length > 40 ? `\n... ${String(lines.length - 40)} more lines` : "") };
+  }
+  return undefined;
+};
+
 // A model that cannot read images is sent the conversation with each picture replaced by a note, so an image sent earlier to a model
 // that could see it does not break a later turn on one that cannot.
 const withoutImages = (messages: ChatMessage[]): ChatMessage[] => {
@@ -910,7 +1000,7 @@ export class Sessions {
   private deps: SessionDeps;
 
   constructor(
-    private opts: { registry: Registry; relay: Pick<Relay, "callTool">; complete: Complete; store?: SessionStore; stored?: StoredSession[]; ledger?: UsageLedger; compactAt?: number; claude?: ClaudeState; autoPrefs?: AutoPrefs; projectContext?: SessionDeps["projectContext"]; startSkill?: SessionDeps["startSkill"]; library?: SessionDeps["library"] },
+    private opts: { registry: Registry; relay: Pick<Relay, "callTool">; complete: Complete; store?: SessionStore; stored?: StoredSession[]; ledger?: UsageLedger; compactAt?: number; claude?: ClaudeState; autoPrefs?: AutoPrefs; rules?: SessionDeps["rules"]; allowBypass?: boolean; projectContext?: SessionDeps["projectContext"]; startSkill?: SessionDeps["startSkill"]; library?: SessionDeps["library"] },
   ) {
     this.deps = {
       relay: opts.relay,
@@ -920,6 +1010,8 @@ export class Sessions {
       },
       startSkill: opts.startSkill,
       library: opts.library,
+      rules: opts.rules,
+      allowBypass: opts.allowBypass,
       complete: opts.complete,
       ledger: opts.ledger,
       compactAt: opts.compactAt,
@@ -987,7 +1079,11 @@ export class Sessions {
     return specs;
   }
 
-  create(input: { model: string; device?: string; root?: string; autoApprove?: boolean }): Session {
+  create(input: { model: string; device?: string; root?: string; autoApprove?: boolean; mode?: PermissionMode }): Session {
+    const mode: PermissionMode = input.mode ?? (input.autoApprove === true ? "bypass" : "ask");
+    if (mode === "bypass" && this.opts.allowBypass === false) {
+      throw new Error("running without asking is turned off on this gateway");
+    }
     if ((input.device === undefined) !== (input.root === undefined)) {
       throw new Error("a coding session needs both a device and a project root; a chat needs neither");
     }
@@ -1010,9 +1106,9 @@ export class Sessions {
     }
     const now = Date.now();
     const session = new Session(
-      { id: randomUUID(), title: "", model: input.model, device, root, created: now, updated: now, history: [{ role: "system", content: prompt }] },
+      { id: randomUUID(), title: "", model: input.model, device, root, created: now, updated: now, mode, history: [{ role: "system", content: prompt }] },
       this.deps,
-      input.autoApprove ?? false,
+      false,
     );
     this.sessions.set(session.id, session);
     this.deps.persist?.(session);

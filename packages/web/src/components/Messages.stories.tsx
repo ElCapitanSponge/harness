@@ -93,8 +93,10 @@ export const ApprovalWaiting: Story = {
     const canvas = within(canvasElement);
     await userEvent.click(canvas.getByRole("button", { name: "Allow" }));
     await expect(args.onAnswer).toHaveBeenCalledWith("a1", true, false);
-    await userEvent.click(canvas.getByRole("button", { name: /always allow write_file/i }));
+    await userEvent.click(canvas.getByRole("button", { name: /allow write_file for this conversation/i }));
     await expect(args.onAnswer).toHaveBeenCalledWith("a1", true, true);
+    await userEvent.click(canvas.getByRole("button", { name: /allow write_file always in this project/i }));
+    await expect(args.onAnswer).toHaveBeenCalledWith("a1", true, "project");
     await userEvent.click(canvas.getByRole("button", { name: "Decline" }));
     await expect(args.onAnswer).toHaveBeenCalledWith("a1", false, false);
   },

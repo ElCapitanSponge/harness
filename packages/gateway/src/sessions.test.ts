@@ -76,7 +76,7 @@ describe("Sessions.create", () => {
     const s = create();
     expect(sessions.get(s.id)).toBe(s);
     expect(sessions.list()).toEqual([
-      { id: s.id, model: "qwen", device: "pc", root: "proj", busy: false, events: 0, created: expect.any(Number) as number, updated: expect.any(Number) as number, kind: "code", title: "", deviceConnected: true },
+      { id: s.id, model: "qwen", device: "pc", root: "proj", busy: false, events: 0, created: expect.any(Number) as number, updated: expect.any(Number) as number, kind: "code", title: "", deviceConnected: true, mode: "ask" },
     ]);
   });
 
@@ -1171,5 +1171,300 @@ describe("Session and screenshots", () => {
     })).toEqual({ type: "screenshot", shot: { mediaType: "image/png", data: "SECRETPIXELS", url: "https://example.com/" } });
     expect(shown[1]).toContain("the person can see it");
     expect(shown[1]).not.toContain("SECRETPIXELS");
+  });
+});
+
+describe("Permission modes", () => {
+  const writeCall = call("w", "write_file", { path: "n.txt", content: "x" });
+  const editCall = call("e", "edit_file", { path: "n.txt", old_string: "a", new_string: "b" });
+  const runCall = call("r", "run_command", { command: "pnpm test" });
+  const allowAll = () => {
+    registry.upsert(beat({ allowedTools: ["read_file", "write_file", "edit_file", "run_command"] }));
+  };
+  const asked = (s: Session) => {
+    return s.events.filter((e): e is Extract<SessionEvent, { type: "approval" }> => {
+      return e.type === "approval";
+    });
+  };
+  const run = async (s: Session, calls: ToolCall[], finish: (s: Session) => void = () => {
+    return undefined;
+  }): Promise<void> => {
+    let first = true;
+    complete.mockImplementation(async () => {
+      if (first) {
+        first = false;
+        return { role: "assistant", content: null, tool_calls: calls };
+      }
+      return { role: "assistant", content: "done" };
+    });
+    s.send("go");
+    finish(s);
+    await until(() => {
+      return types(s).includes("done") || types(s).includes("error");
+    });
+  };
+
+  it("asks before every change by default", async () => {
+    allowAll();
+    const s = sessions.create({ model: "qwen", device: "pc", root: "proj" });
+    expect(s.permission).toBe("ask");
+    expect(s.info().mode).toBe("ask");
+    await run(s, [writeCall], () => {
+      void until(() => {
+        return asked(s).length === 1;
+      }).then(() => {
+        s.answer(asked(s)[0]?.id ?? "", true);
+      });
+    });
+    expect(asked(s)).toHaveLength(1);
+  });
+
+  it("accepts file edits without asking in edits mode, but still asks before a command", async () => {
+    allowAll();
+    const s = sessions.create({ model: "qwen", device: "pc", root: "proj", mode: "edits" });
+    await run(s, [writeCall, editCall, runCall], () => {
+      void until(() => {
+        return asked(s).length === 1;
+      }).then(() => {
+        s.answer(asked(s)[0]?.id ?? "", true);
+      });
+    });
+    expect(asked(s).map((a) => {
+      return a.tool;
+    })).toEqual(["run_command"]);
+    expect(relay.callTool).toHaveBeenCalledTimes(3);
+  });
+
+  it("asks nothing in bypass mode, and a device that does not allow the tool still refuses it", async () => {
+    registry.upsert(beat({ allowedTools: ["read_file", "write_file"] }));
+    const s = sessions.create({ model: "qwen", device: "pc", root: "proj", mode: "bypass" });
+    relay.callTool.mockImplementation(async (_d, _r, name) => {
+      return name === "write_file" ? { ok: true, output: "written" } : { ok: false, output: `tool "${name}" is not allowed on this device` };
+    });
+    await run(s, [writeCall]);
+    expect(asked(s)).toEqual([]);
+    expect(relay.callTool).toHaveBeenCalled();
+    // The gateway never offers a tool the device did not report, so the model cannot even ask for run_command here.
+    expect(complete.mock.calls[0]?.[2].map((t) => {
+      return t.function.name;
+    })).not.toContain("run_command");
+  });
+
+  it("treats a session started with autoApprove as running without asking", () => {
+    allowAll();
+    expect(sessions.create({ model: "qwen", device: "pc", root: "proj", autoApprove: true }).permission).toBe("bypass");
+  });
+
+  it("changes mode, records it as an event, and refuses running without asking when the gateway turns it off", () => {
+    allowAll();
+    const s = sessions.create({ model: "qwen", device: "pc", root: "proj" });
+    s.setMode("edits");
+    expect(s.permission).toBe("edits");
+    expect(s.events).toEqual([{ type: "mode", mode: "edits" }]);
+    s.setMode("edits");
+    expect(s.events).toHaveLength(1);
+
+    sessions = new Sessions({ registry, relay, complete, allowBypass: false });
+    const strict = sessions.create({ model: "qwen", device: "pc", root: "proj" });
+    expect(() => {
+      strict.setMode("bypass");
+    }).toThrow("turned off");
+    expect(() => {
+      sessions.create({ model: "qwen", device: "pc", root: "proj", mode: "bypass" });
+    }).toThrow("turned off");
+    expect(() => {
+      sessions.create({ model: "qwen", device: "pc", root: "proj", autoApprove: true });
+    }).toThrow("turned off");
+  });
+
+  it("shows what will happen on the approval: the diff of an edit, the whole command with where it runs, the start of a new file", async () => {
+    allowAll();
+    const s = sessions.create({ model: "qwen", device: "pc", root: "proj" });
+    complete.mockImplementationOnce(async () => {
+      return { role: "assistant", content: null, tool_calls: [call("e", "edit_file", { path: "a.ts", old_string: "const a = 1;", new_string: "const a = 2;" }), call("r", "run_command", { command: "pnpm test --run", background: true }), call("w", "write_file", { path: "b.txt", content: "one\ntwo" })] };
+    }).mockImplementation(async () => {
+      return { role: "assistant", content: "done" };
+    });
+    s.send("go");
+    for (let i = 1; i <= 3; i++) {
+      await until(() => {
+        return asked(s).length === i;
+      });
+      s.answer(asked(s)[i - 1]?.id ?? "", true);
+    }
+    await until(() => {
+      return types(s).includes("done");
+    });
+    const [edit, command, file] = asked(s);
+    expect(edit?.preview).toEqual({ kind: "diff", title: "a.ts", text: expect.stringContaining("-const a = 1;") as string });
+    expect(edit?.preview?.text).toContain("+const a = 2;");
+    expect(command?.preview).toEqual({ kind: "command", title: "Runs in the background in pc:proj", text: "pnpm test --run" });
+    expect(file?.preview).toEqual({ kind: "file", title: "b.txt (7 characters)", text: "one\ntwo" });
+  });
+
+  it("allows a tool for the conversation or always in this project, and remembers the project rule", async () => {
+    allowAll();
+    const remembered = new Set<string>();
+    const rules = { has: (d: string, r: string, t: string) => {
+      return remembered.has(`${d}/${r}/${t}`);
+    }, add: (d: string, r: string, t: string) => {
+      remembered.add(`${d}/${r}/${t}`);
+    } };
+    sessions = new Sessions({ registry, relay, complete, rules });
+    const s = sessions.create({ model: "qwen", device: "pc", root: "proj" });
+    await run(s, [runCall], () => {
+      void until(() => {
+        return asked(s).length === 1;
+      }).then(() => {
+        s.answer(asked(s)[0]?.id ?? "", true, "project");
+      });
+    });
+    expect(remembered).toEqual(new Set(["pc/proj/run_command"]));
+
+    // A later conversation in the same project is not asked.
+    const later = sessions.create({ model: "qwen", device: "pc", root: "proj" });
+    await run(later, [runCall]);
+    expect(asked(later)).toEqual([]);
+
+    // Another project is.
+    registry.upsert(beat({ roots: ["proj", "other"], allowedTools: ["read_file", "write_file", "edit_file", "run_command"] }));
+    const other = sessions.create({ model: "qwen", device: "pc", root: "other" });
+    await run(other, [runCall], () => {
+      void until(() => {
+        return asked(other).length === 1;
+      }).then(() => {
+        other.answer(asked(other)[0]?.id ?? "", false);
+      });
+    });
+    expect(asked(other)).toHaveLength(1);
+  });
+
+  it("sends the reason for a decline back to the model", async () => {
+    allowAll();
+    const s = sessions.create({ model: "qwen", device: "pc", root: "proj" });
+    let told = "";
+    let calls = 0;
+    complete.mockImplementation(async (_m, messages) => {
+      calls++;
+      if (calls === 1) {
+        return { role: "assistant", content: null, tool_calls: [runCall] };
+      }
+      told = textOf(messages.findLast((m) => {
+        return m.role === "tool";
+      })?.content);
+      return { role: "assistant", content: "ok" };
+    });
+    s.send("go");
+    await until(() => {
+      return asked(s).length === 1;
+    });
+    s.answer(asked(s)[0]?.id ?? "", false, false, "use pnpm test:unit instead");
+    await until(() => {
+      return !s.busy;
+    });
+    expect(s.events.find((e) => {
+      return e.type === "approval-resolved";
+    })).toMatchObject({ approved: false, reason: "use pnpm test:unit instead" });
+    // The turn ends at a decline (ADR 0006); the reason is in what the model is shown next time.
+    s.send("what now?");
+    await until(() => {
+      return told !== "";
+    });
+    expect(told).toContain("The user said: use pnpm test:unit instead");
+  });
+});
+
+describe("Plan first", () => {
+  const plan = (steps: { text: string; status: string }[]) => {
+    return { role: "assistant" as const, content: null, tool_calls: [call("p", "plan", { steps })] };
+  };
+  const steps = [{ text: "read the tests", status: "done" }, { text: "fix the bug", status: "pending" }];
+  const namesAt = (n: number): string[] => {
+    return (complete.mock.calls[n]?.[2] ?? []).map((t) => {
+      return t.function.name;
+    });
+  };
+  const approvals = (s: Session) => {
+    return s.events.filter((e): e is Extract<SessionEvent, { type: "approval" }> => {
+      return e.type === "approval";
+    });
+  };
+
+  it("offers only what reads until the plan is approved, then everything, within the same turn", async () => {
+    registry.upsert(beat({ allowedTools: ["read_file", "write_file", "run_command"] }));
+    complete.mockImplementationOnce(async () => {
+      return plan(steps);
+    }).mockImplementation(async () => {
+      return { role: "assistant", content: "ok" };
+    });
+    const s = sessions.create({ model: "qwen", device: "pc", root: "proj", mode: "plan" });
+    s.send("fix it");
+    await until(() => {
+      return approvals(s).length === 1;
+    });
+    expect(approvals(s)[0]).toMatchObject({ tool: "plan", preview: { kind: "file", title: "The plan", text: "1. read the tests\n2. fix the bug" } });
+    expect(namesAt(0)).toEqual(expect.arrayContaining(["read_file", "plan", "ask"]));
+    expect(namesAt(0)).not.toContain("write_file");
+    expect(namesAt(0)).not.toContain("run_command");
+
+    s.answer(approvals(s)[0]?.id ?? "", true);
+    await until(() => {
+      return types(s).includes("done");
+    });
+    expect(s.permission).toBe("ask");
+    expect(s.events).toContainEqual({ type: "mode", mode: "ask" });
+    expect(namesAt(1)).toEqual(expect.arrayContaining(["write_file", "run_command"]));
+  });
+
+  it("tells the model why the plan was not approved and stays read-only", async () => {
+    registry.upsert(beat({ allowedTools: ["read_file", "write_file"] }));
+    let told = "";
+    let step = 0;
+    complete.mockImplementation(async (_m, messages) => {
+      step++;
+      if (step === 1) {
+        return plan(steps);
+      }
+      told = textOf(messages.findLast((m) => {
+        return m.role === "tool";
+      })?.content);
+      return { role: "assistant", content: "I will revise it." };
+    });
+    const s = sessions.create({ model: "qwen", device: "pc", root: "proj", mode: "plan" });
+    s.send("fix it");
+    await until(() => {
+      return approvals(s).length === 1;
+    });
+    s.answer(approvals(s)[0]?.id ?? "", false, false, "do the tests first");
+    await until(() => {
+      return types(s).includes("done");
+    });
+    expect(told).toContain("did not approve the plan: do the tests first");
+    expect(s.permission).toBe("plan");
+    expect(namesAt(1)).not.toContain("write_file");
+  });
+
+  it("does not let an always-allow or a remembered rule skip the plan's approval", async () => {
+    registry.upsert(beat({ allowedTools: ["read_file"] }));
+    const rules = { has: () => {
+      return true;
+    }, add: () => {
+      return undefined;
+    } };
+    sessions = new Sessions({ registry, relay, complete, rules });
+    complete.mockImplementationOnce(async () => {
+      return plan(steps);
+    }).mockImplementation(async () => {
+      return { role: "assistant", content: "ok" };
+    });
+    const s = sessions.create({ model: "qwen", device: "pc", root: "proj", mode: "plan" });
+    s.send("fix it");
+    await until(() => {
+      return approvals(s).length === 1;
+    });
+    s.answer(approvals(s)[0]?.id ?? "", true, "project");
+    await until(() => {
+      return types(s).includes("done");
+    });
   });
 });

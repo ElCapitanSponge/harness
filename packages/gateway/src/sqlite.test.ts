@@ -3,7 +3,7 @@ import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { StoredSession } from "./sessions.js";
-import { openDatabase, sqliteStore } from "./sqlite.js";
+import { openDatabase, sqliteRules, sqliteStore } from "./sqlite.js";
 
 let dir: string;
 beforeEach(async () => {
@@ -135,5 +135,31 @@ describe("sqliteStore", () => {
     });
     await store.save(session({ events: many }));
     expect(store.loadAll()[0]?.events).toEqual(many);
+  });
+});
+
+describe("permission modes and rules in the database", () => {
+  it("keeps the mode of a conversation", async () => {
+    const store = sqliteStore(openDatabase(":memory:"));
+    await store.save(session({ mode: "plan" }));
+    expect(store.loadAll()[0]).toMatchObject({ mode: "plan" });
+    await store.save(session({ mode: "edits" }));
+    expect(store.loadAll()[0]).toMatchObject({ mode: "edits" });
+  });
+
+  it("remembers a tool for a folder on a device once, lists it, and removes it", () => {
+    const rules = sqliteRules(openDatabase(":memory:"));
+    expect(rules.has("pc", "proj", "run_command")).toBe(false);
+    rules.add("pc", "proj", "run_command");
+    rules.add("pc", "proj", "run_command");
+    rules.add("pc", "other", "run_command");
+    expect(rules.has("pc", "proj", "run_command")).toBe(true);
+    expect(rules.has("pc", "proj", "write_file")).toBe(false);
+    expect(rules.has("mac", "proj", "run_command")).toBe(false);
+    const listed = rules.list();
+    expect(listed).toHaveLength(2);
+    expect(rules.remove(listed[0]?.id ?? 0)).toBe(true);
+    expect(rules.remove(listed[0]?.id ?? 0)).toBe(false);
+    expect(rules.list()).toHaveLength(1);
   });
 });

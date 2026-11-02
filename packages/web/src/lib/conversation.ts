@@ -1,4 +1,4 @@
-import type { FileChange, ImageAttachment, PlanStep, ToolImage, SessionEvent, StageName } from "@harness/core";
+import type { ApprovalPreview, FileChange, ImageAttachment, PlanStep, ToolImage, SessionEvent, StageName } from "@harness/core";
 
 // What the page shows for a conversation, built up from the gateway's events. Kept free of React so it can be tested.
 
@@ -9,7 +9,7 @@ export type Item
     | { kind: "tool"; id: number; summary: string }
     | { kind: "skill"; id: number; name: string; arguments: string; text: string }
     | { kind: "compaction"; id: number; messages: number; tokensBefore: number; tokensAfter: number; manual: boolean }
-    | { kind: "approval"; id: number; approvalId: string; tool: string; summary: string; status: "pending" | "allowed" | "declined" }
+    | { kind: "approval"; id: number; approvalId: string; tool: string; summary: string; status: "pending" | "allowed" | "declined"; preview?: ApprovalPreview; reason?: string }
     | { kind: "subagent"; id: number; childId: string; task: string; status: "running" | "done" | "failed"; result?: string; n: number; of: number; depth: number }
     | { kind: "question"; id: number; questionId: string; question: string; options: string[]; status: "pending" | "answered" | "unanswered"; answer?: string }
     | { kind: "note"; id: number; text: string; tone: "info" | "error" };
@@ -41,6 +41,8 @@ export interface ConversationState {
   since?: number;
   stage?: { name: StageName; detail?: string };
 }
+
+import { MODE_LABELS } from "./modes";
 
 export const emptyConversation = (): ConversationState => {
   return { items: [], changes: [], plan: [], shots: [], busy: false, cursor: 0, next: 1 };
@@ -156,6 +158,11 @@ export const applyEvent = (state: ConversationState, event: StreamEvent, now: nu
       })] };
     }
 
+    case "mode":
+      return push(state.items, (id) => {
+        return { kind: "note", id, text: `Changes in this conversation now: ${MODE_LABELS[event.mode]}.`, tone: "info" };
+      });
+
     case "screenshot":
       return { ...state, cursor, shots: [event.shot, ...state.shots] };
 
@@ -184,7 +191,7 @@ export const applyEvent = (state: ConversationState, event: StreamEvent, now: nu
 
     case "approval":
       return push(settle(state.items, now), (id) => {
-        return { kind: "approval", id, approvalId: event.id, tool: event.tool, summary: event.summary, status: "pending" };
+        return { kind: "approval", id, approvalId: event.id, tool: event.tool, summary: event.summary, status: "pending", ...(event.preview ? { preview: event.preview } : {}) };
       });
 
     case "approval-resolved":
@@ -192,7 +199,7 @@ export const applyEvent = (state: ConversationState, event: StreamEvent, now: nu
         ...state,
         cursor,
         items: state.items.map((item) => {
-          return item.kind === "approval" && item.approvalId === event.id ? { ...item, status: event.approved ? "allowed" : "declined" } : item;
+          return item.kind === "approval" && item.approvalId === event.id ? { ...item, status: event.approved ? "allowed" : "declined", ...(event.reason ? { reason: event.reason } : {}) } : item;
         }),
       };
 

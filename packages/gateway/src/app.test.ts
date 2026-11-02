@@ -621,3 +621,62 @@ describe("which device the browser is on", () => {
     expect(await res.json()).toMatchObject({ devices: [] });
   });
 });
+
+describe("permission modes and remembered rules over HTTP", () => {
+  const withRules = (allowBypass = true) => {
+    const store = [{ id: 1, device: "pc", root: "proj", tool: "run_command", created: 1 }];
+    const app = createApp({ registry, relay: relay as never, loader: { ensure: loaderEnsure }, sessions: new Sessions({ registry, relay: relay as never, allowBypass, complete: (async () => {
+      return { role: "assistant", content: "ok" };
+    }) as never }), rules: { list: () => {
+      return store;
+    }, remove: (id: number) => {
+      const i = store.findIndex((r) => {
+        return r.id === id;
+      });
+      if (i < 0) {
+        return false;
+      }
+      store.splice(i, 1);
+      return true;
+    } } });
+    return app;
+  };
+  const start = async (app: ReturnType<typeof withRules>, body: Record<string, unknown> = {}) => {
+    registry.upsert(beat({ roots: ["proj"], allowedTools: ["read_file", "write_file"] }));
+    return await (await app.request("/sessions", json({ model: "qwen", device: "pc", root: "proj", ...body }))).json() as { id: string; mode: string };
+  };
+
+  it("starts a conversation in ask mode, or the mode asked for, and changes it", async () => {
+    const app = withRules();
+    const first = await start(app);
+    expect(first.mode).toBe("ask");
+    const res = await app.request(`/sessions/${first.id}/mode`, { method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify({ mode: "plan" }) });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toMatchObject({ mode: "plan" });
+    expect((await start(app, { mode: "edits" })).mode).toBe("edits");
+    expect((await app.request(`/sessions/${first.id}/mode`, { method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify({ mode: "nope" }) })).status).toBe(400);
+    expect((await app.request("/sessions/missing/mode", { method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify({ mode: "ask" }) })).status).toBe(404);
+  });
+
+  it("refuses running without asking when the gateway has it turned off", async () => {
+    const app = withRules(false);
+    const s = await start(app);
+    const res = await app.request(`/sessions/${s.id}/mode`, { method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify({ mode: "bypass" }) });
+    expect(res.status).toBe(403);
+    registry.upsert(beat({ roots: ["proj"], allowedTools: ["read_file"] }));
+    expect((await app.request("/sessions", json({ model: "qwen", device: "pc", root: "proj", mode: "bypass" }))).status).toBe(400);
+  });
+
+  it("lists the remembered rules and removes one", async () => {
+    const app = withRules();
+    expect(await (await app.request("/rules")).json()).toEqual([{ id: 1, device: "pc", root: "proj", tool: "run_command", created: 1 }]);
+    expect((await app.request("/rules/1", { method: "DELETE" })).status).toBe(200);
+    expect(await (await app.request("/rules")).json()).toEqual([]);
+    expect((await app.request("/rules/1", { method: "DELETE" })).status).toBe(404);
+  });
+
+  it("answers an empty list on a gateway with no rule store", async () => {
+    expect(await (await build().request("/rules")).json()).toEqual([]);
+    expect((await build().request("/rules/1", { method: "DELETE" })).status).toBe(404);
+  });
+});

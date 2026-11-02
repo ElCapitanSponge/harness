@@ -18,6 +18,7 @@ The gateway serves the page at its own address. With a key set, the first screen
 | `/manage/devices` | Devices and their settings. See [Devices and their settings](../guides/devices.md). |
 | `/manage/skills` | Skills found on each device. See [Skills](../guides/skills.md). |
 | `/manage/usage` | Tokens used per day and per model. See [Usage](../guides/usage.md). |
+| `/manage/permissions` | The tools remembered as always allowed in a project, removable. See [Coding sessions](../guides/coding-sessions.md#permissions-modes-and-approvals). |
 | `/import` | Bring in a conversation. See [Importing and exporting](../guides/importing.md). |
 
 The sidebar lists conversations and has **New conversation**, the Claude plan meter, links to Devices, Skills, Import and Usage, the theme switch (light, dark, system) and sign out. A page that fails while drawing shows a card with **Reload** instead of a blank screen; a device running an older version can cause that until it is updated.
@@ -28,7 +29,8 @@ The sidebar lists conversations and has **New conversation**, the Claude plan me
 - Under each reply: which model and device wrote it, and with Auto the reason it was chosen.
 - The **context meter** shows how full the model's window is, with **Compact now**. Automatic compaction is marked by a tick on the bar and a divider in the thread. See [Usage](../guides/usage.md).
 - The status line shows the stage of a request (finding a device, loading a model, waiting, thinking, writing). See [Progress](../guides/progress.md).
-- A tool the model wants to use that changes things shows an approval card: **Allow**, **Always allow <tool>** or **Decline**. Declining ends the turn.
+- **Changes** next to the message box sets the permission mode (ask, accept edits, plan first, run without asking).
+- A tool the model wants to use that changes things shows an approval card with what will happen (the diff, the whole command and folder, or the new file): **Allow**, allow for this conversation, allow always in this project, or **Decline** with an optional reason. Declining ends the turn.
 - A failed turn shows the reason and **Retry**.
 - The conversation menu has **Rename**, **Export as markdown** and **Delete**.
 - In a coding session the panel button opens the plan and the changed files with their diffs ([Coding sessions](../guides/coding-sessions.md#the-session-panel)).

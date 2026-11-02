@@ -1,6 +1,7 @@
-import { Bot, Brain, ChevronRight, CircleHelp, GitBranch, Layers, Sparkles, Loader2, ShieldQuestion, Wrench } from "lucide-react";
+import { Bot, Brain, ChevronRight, CircleHelp, GitBranch, Layers, Sparkles, Loader2, Wrench } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Link } from "react-router";
+import { ApprovalCard, type Answer } from "@/components/ApprovalCard";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/fields";
 import { Markdown } from "@/components/Markdown";
@@ -97,7 +98,7 @@ const Question = ({ item, onReply }: { item: Extract<Item, { kind: "question" }>
   );
 };
 
-export const Message = ({ item, model, onAnswer, onReply }: { item: Item; model: string; onAnswer: (approvalId: string, approve: boolean, always: boolean) => void; onReply?: (questionId: string, answer: string) => void }) => {
+export const Message = ({ item, model, onAnswer, onReply }: { item: Item; model: string; onAnswer: Answer; onReply?: (questionId: string, answer: string) => void }) => {
   switch (item.kind) {
     case "user":
       return (
@@ -175,42 +176,7 @@ export const Message = ({ item, model, onAnswer, onReply }: { item: Item; model:
       );
 
     case "approval":
-      return (
-        <div className="px-10">
-          <div className={cn("grid gap-2 rounded-lg border border-primary bg-card p-3 shadow-card", item.status !== "pending" && "border-border opacity-80 shadow-none")}>
-            <div className="flex items-center gap-2 text-xs font-semibold text-muted-foreground">
-              <ShieldQuestion className="size-4 text-primary" />
-              Approval needed: {item.tool}
-              {item.status === "allowed" ? " (allowed)" : item.status === "declined" ? " (declined)" : ""}
-            </div>
-            <div className="break-all font-mono text-[13px]">{item.summary}</div>
-            {item.status === "pending"
-              ? (
-                  <div className="flex flex-wrap gap-2">
-                    <Button variant="primary" onClick={() => {
-                      onAnswer(item.approvalId, true, false);
-                    }}
-                    >
-                      Allow
-                    </Button>
-                    <Button onClick={() => {
-                      onAnswer(item.approvalId, true, true);
-                    }}
-                    >
-                      Always allow {item.tool}
-                    </Button>
-                    <Button variant="subtle" onClick={() => {
-                      onAnswer(item.approvalId, false, false);
-                    }}
-                    >
-                      Decline
-                    </Button>
-                  </div>
-                )
-              : null}
-          </div>
-        </div>
-      );
+      return <ApprovalCard item={item} onAnswer={onAnswer} />;
 
     case "subagent":
       return (

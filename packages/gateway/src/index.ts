@@ -16,7 +16,7 @@ import { Sessions, createCompleter } from "./sessions.js";
 import { importLegacySessions } from "./legacy.js";
 import { createLibrary } from "./library.js";
 import { sqliteLedger } from "./ledger.js";
-import { openDatabase, sqliteStore } from "./sqlite.js";
+import { openDatabase, sqliteRules, sqliteStore } from "./sqlite.js";
 import { attachTunnel } from "./tunnel.js";
 import { findWebDist, loadWebApp } from "./webapp.js";
 
@@ -31,6 +31,7 @@ const dataDir = process.env.HARNESS_DATA_DIR ?? path.join(os.homedir(), ".harnes
 const db = openDatabase(path.join(dataDir, "harness.db"));
 const store = sqliteStore(db);
 const ledger = sqliteLedger(db);
+const rules = sqliteRules(db);
 const claude = new ClaudeState();
 // The gateway's own skills, kept beside the database so they are available in every conversation, including chats.
 const library = createLibrary(path.join(dataDir, "skills"));
@@ -55,6 +56,9 @@ const sessions = new Sessions({
   relay,
   claude,
   library,
+  rules,
+  // Running without asking can be turned off for the whole gateway (HARNESS_ALLOW_BYPASS=0).
+  allowBypass: process.env.HARNESS_ALLOW_BYPASS !== "0",
   // The project's instruction files and skills, as the device finds them at the start of each turn; an older device just says no.
   projectContext: async (device, root, session) => {
     const result = await relay.callTool(device, root, "project_context", {}, { session });
@@ -84,6 +88,7 @@ const app = createApp({
   relay,
   sessions,
   library,
+  rules,
   trustProxy: process.env.HARNESS_TRUST_PROXY === "1",
   ledger,
   claude,

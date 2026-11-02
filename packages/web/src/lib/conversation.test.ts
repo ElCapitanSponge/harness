@@ -198,3 +198,18 @@ describe("a screenshot from the agent browser", () => {
     expect(state.cursor).toBe(2);
   });
 });
+
+describe("modes and approvals", () => {
+  it("keeps what an approval will do, and the reason a decline was given", () => {
+    const preview = { kind: "command" as const, title: "Runs in anakin:proj", text: "pnpm test" };
+    const asked = run([{ type: "approval", id: "a1", tool: "run_command", summary: "run: pnpm test", preview }]);
+    expect(asked.items[0]).toMatchObject({ kind: "approval", status: "pending", preview });
+    const declined = run([{ type: "approval-resolved", id: "a1", approved: false, reason: "use unit tests" }], asked);
+    expect(declined.items[0]).toMatchObject({ status: "declined", reason: "use unit tests" });
+  });
+
+  it("notes a change of mode in the thread", () => {
+    const state = run([{ type: "mode", mode: "plan" }]);
+    expect(state.items[0]).toMatchObject({ kind: "note", tone: "info", text: expect.stringContaining("plan first") as string });
+  });
+});

@@ -65,6 +65,26 @@ harness tool anakin proj read_file '{"path":"package.json"}'   # run one tool, f
 
 In the web page, choose **Code** on the start screen, pick the device and folder, and describe the task. Changes ask on the page (`-y` for the command line approves everything for the session; an approval nobody answers counts as no after five minutes). A session can switch model between messages, including to Claude, and can use [skills](skills.md) with `/`.
 
+## Permissions: modes and approvals
+
+Next to the message box, **Changes** sets how this coding session treats changes. It starts on the first and can be changed at any time; the thread notes each change.
+
+| Mode | What happens |
+| --- | --- |
+| **Ask before every change** (default) | Every write, edit, command and other change waits for you. |
+| **Accept file edits** | `write_file` and `edit_file` go ahead; commands, git changes, the web and everything else still ask. |
+| **Plan first** | The model is offered only what reads. It investigates and sends its plan; you approve it before it can change anything, and the tools for changes are offered from then on (each change then asks as usual, and the mode becomes "ask"). If you decline, it is told why and revises the plan, still read-only. |
+| **Run without asking** (marked as risky) | Nothing asks. It is never the default, asks you to confirm when you choose it, and can be turned off for the whole gateway with `HARNESS_ALLOW_BYPASS=0`. |
+
+An approval card shows what will happen before it does: the diff of an edit, the whole command and the device and folder it runs in, or the start of a file about to be written. Your choices:
+
+- **Allow**: this once.
+- **Allow *tool* for this conversation**.
+- **Allow *tool* always in this project**: remembered for that folder on that device, in every conversation, until you remove it on the **Permissions** page.
+- **Decline**, with an optional reason that goes back to the model. A decline still ends the turn ([ADR 0006](../adr/0006-a-declined-approval-ends-the-turn.md)); the reason is in what the model sees next time.
+
+Whatever the mode or a remembered rule says, **the device's own allow list has the last word**: a tool the device does not allow is never offered and never runs, and a read-only folder stays read-only. A sub-agent's approvals come to you through the conversation that started it, under the same mode. If the page is in the background when the model needs an answer (an approval or a question), the bell in the header turns on a notification, which the browser asks you to allow once.
+
 ## New code session here
 
 The sidebar's **New code session here** starts a coding session on the device the browser is on, with that device and the model picker already set. A browser cannot read files, so the device needs a node agent running ([Windows](windows.md), [macOS](macos.md), [Linux](linux.md)).
