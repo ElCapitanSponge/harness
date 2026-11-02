@@ -1,7 +1,12 @@
+import fs from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
+import { strToU8, unzipSync, zipSync } from "fflate";
 import type { Heartbeat } from "@harness/core";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createApp } from "./app.js";
 import type { ModelLoader } from "./loader.js";
+import { createLibrary } from "./library.js";
 import { Registry } from "./registry.js";
 import { Sessions } from "./sessions.js";
 
@@ -522,5 +527,69 @@ describe("answering a question", () => {
     const code = await (await app.request("/sessions", json({ model: "qwen", device: "pc", root: "proj" }))).json() as { id: string };
     expect((await app.request(`/sessions/${code.id}/questions/q`, json({ answer: "yes" }))).status).toBe(404);
     expect((await app.request(`/sessions/${code.id}/questions/q`, json({ answer: "  " }))).status).toBe(400);
+  });
+});
+
+describe("the skill library routes", () => {
+  const withLibrary = async () => {
+    const dir = await fs.mkdtemp(path.join(os.tmpdir(), "lib-routes-"));
+    const app = createApp({ registry, relay: relay as never, loader: { ensure: loaderEnsure }, sessions: new Sessions({ registry, relay: relay as never, complete: (async () => {
+      return { role: "assistant", content: "ok" };
+    }) as never }), library: createLibrary(dir) });
+    return { app, dir };
+  };
+  const skill = strToU8("---\nname: tdd\ndescription: Test first.\n---\n\nWrite the test.\n");
+  const b64 = (bytes: Uint8Array): string => {
+    return Buffer.from(bytes).toString("base64");
+  };
+
+  it("adds a skill from a zip or from files, lists it, exports it as a zip, and removes it", async () => {
+    const { app, dir } = await withLibrary();
+    try {
+      const added = await app.request("/library/skills", json({ zip: b64(zipSync({ "SKILL.md": skill })) }));
+      expect(added.status).toBe(201);
+      expect(await added.json()).toMatchObject({ name: "tdd", files: 1 });
+      expect(await (await app.request("/library/skills")).json()).toEqual([expect.objectContaining({ name: "tdd", description: "Test first." }) as unknown]);
+
+      const exported = await app.request("/library/skills/tdd/export");
+      expect(exported.headers.get("content-type")).toBe("application/zip");
+      expect(exported.headers.get("content-disposition")).toContain("tdd.zip");
+      expect(Object.keys(unzipSync(new Uint8Array(await exported.arrayBuffer())))).toEqual(["tdd/SKILL.md"]);
+
+      expect((await app.request("/library/skills/tdd", { method: "DELETE" })).status).toBe(200);
+      expect((await app.request("/library/skills/tdd", { method: "DELETE" })).status).toBe(404);
+      expect((await app.request("/library/skills/tdd/export")).status).toBe(404);
+
+      const files = await app.request("/library/skills", json({ files: [{ path: "folder/SKILL.md", data: b64(skill) }] }));
+      expect(files.status).toBe(201);
+    } finally {
+      await fs.rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("says why a skill was refused: a clash, a bad zip, an unsafe path, or a body that is neither zip nor files", async () => {
+    const { app, dir } = await withLibrary();
+    try {
+      const zip = b64(zipSync({ "SKILL.md": skill }));
+      expect((await app.request("/library/skills", json({ zip }))).status).toBe(201);
+      const again = await app.request("/library/skills", json({ zip }));
+      expect(again.status).toBe(409);
+      expect(((await again.json()) as { error: { message: string } }).error.message).toContain("already has a skill");
+      expect((await app.request("/library/skills", json({ zip, overwrite: true }))).status).toBe(201);
+
+      const bad = await app.request("/library/skills", json({ zip: b64(strToU8("not a zip")) }));
+      expect(bad.status).toBe(422);
+      const unsafe = await app.request("/library/skills", json({ files: [{ path: "SKILL.md", data: b64(skill) }, { path: "../x", data: b64(skill) }] }));
+      expect(unsafe.status).toBe(422);
+      expect((await app.request("/library/skills", json({}))).status).toBe(400);
+      expect((await app.request("/library/skills", json({ zip, files: [] }))).status).toBe(400);
+    } finally {
+      await fs.rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("answers an empty list, and refuses additions, on a gateway with no library", async () => {
+    expect(await (await build().request("/library/skills")).json()).toEqual([]);
+    expect((await build().request("/library/skills", json({ zip: "AAAA" }))).status).toBe(404);
   });
 });

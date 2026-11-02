@@ -38,6 +38,20 @@ Send `/name the rest` and the rest becomes the skill's arguments. The gateway lo
 
 **Skills** in the sidebar lists, for each device and project folder it exposes: the instruction files read (and how long), every skill with its description, hint, whether it is yours or the project's, whether only you start it, and its length; and any skills skipped, with the path and the reason. A device too old to answer is listed with a note. The same data is at `GET /skills` (`?device=&root=` narrows it).
 
-## Not built yet
+## The gateway's library
 
-Importing and exporting skills and the gateway's own skill library (so chats with no device have skills) are the rest of [#53](https://github.com/ElCapitanSponge/harness/issues/53). Sub-agents and the ask tool are in [Coding sessions](coding-sessions.md).
+The gateway keeps skills of its own, in a `skills` folder on its data volume (`HARNESS_DATA_DIR`), in the same layout as a device's. They are available in **every** conversation, including chats with no device, where a skill that needs files or commands says so when it is loaded ("this conversation has no device..."). In a coding session the device's skills come first and the library's fill in the names the device does not have.
+
+On the **Skills** page, the **Library** section lists them with their file count and size and has:
+
+- **Add a zip** or **Add a folder.** A zip may hold the skill at its top or in one folder; a folder is chosen with the browser's folder picker. The skill's name is the one in its `SKILL.md` front matter. If the library already has that name, the page asks whether to replace it.
+- **Export** as a zip with the skill's folder at the top, the layout Claude.ai and other tools take, so skills move between Torii and them.
+- **Remove.**
+
+Everything that comes in is checked, on the page and again on the gateway: the name (letters, digits, hyphens, up to 64), the paths (nothing absolute, no `..`, no drive letters, nothing from `__MACOSX`), at most 100 files, 1 MB a file and 5 MB in all, and a zip's declared sizes are checked before anything is unpacked, so a zip that claims to hold gigabytes is refused. Nothing from a zip is ever run.
+
+Type `/` in any conversation to see the device's skills and the library's together. A skill with `disable-model-invocation: true` is yours to start and is never offered to the model. The API is `GET/POST /library/skills`, `GET /library/skills/:name/export` and `DELETE /library/skills/:name` ([HTTP API](../reference/http-api.md)).
+
+## What is left
+
+Nothing from [#53](https://github.com/ElCapitanSponge/harness/issues/53) is left. Sub-agents and the ask tool are in [Coding sessions](coding-sessions.md).

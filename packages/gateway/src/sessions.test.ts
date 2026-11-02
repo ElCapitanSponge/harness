@@ -1024,3 +1024,130 @@ describe("Sub-agents", () => {
     expect(sessions.list()).toEqual([]);
   });
 });
+
+describe("Session and the gateway's skill library", () => {
+  const skills = [
+    { name: "tdd", description: "Test first.", length: 100, modelInvocable: true, source: "library" },
+    { name: "quiet", description: "Only the person starts it.", length: 100, modelInvocable: false, source: "library" },
+  ];
+  const library = {
+    list: async () => {
+      return skills;
+    },
+    text: vi.fn(async (name: string, args: Record<string, unknown>, options?: { byPerson?: boolean }) => {
+      if (name === "quiet" && options?.byPerson !== true) {
+        throw new Error(`the skill "${name}" is started by the person, not by you`);
+      }
+      return `[${name}] ${typeof args.arguments === "string" ? args.arguments : ""}`;
+    }),
+  };
+
+  it("tells a chat about the library's skills the model may start, offers the skill tool, and loads one from the library", async () => {
+    sessions = new Sessions({ registry, relay, complete, library });
+    let system = "";
+    let toolNames: string[] = [];
+    let reply = "";
+    complete.mockImplementationOnce(async (_m, messages, tools) => {
+      system = textOf(messages[0]?.content);
+      toolNames = tools.map((t) => {
+        return t.function.name;
+      });
+      return { role: "assistant", content: null, tool_calls: [call("1", "skill", { name: "tdd", arguments: "the parser" })] };
+    }).mockImplementationOnce(async (_m, messages) => {
+      reply = textOf(messages.at(-1)?.content);
+      return { role: "assistant", content: "done" };
+    });
+    const chat = sessions.create({ model: "qwen" });
+    chat.send("help");
+    await until(() => {
+      return types(chat).includes("done");
+    });
+    expect(system).toContain("- tdd: Test first.");
+    expect(system).not.toContain("quiet");
+    expect(toolNames).toEqual(["skill"]);
+    expect(reply).toContain("[tdd] the parser");
+    expect(reply).toContain("no device");
+    expect(relay.callTool).not.toHaveBeenCalled();
+  });
+
+  it("refuses to let the model start a skill only the person starts", async () => {
+    sessions = new Sessions({ registry, relay, complete, library });
+    let reply = "";
+    complete.mockImplementationOnce(async () => {
+      return { role: "assistant", content: null, tool_calls: [call("1", "skill", { name: "quiet" })] };
+    }).mockImplementationOnce(async (_m, messages) => {
+      reply = textOf(messages.at(-1)?.content);
+      return { role: "assistant", content: "ok" };
+    });
+    const chat = sessions.create({ model: "qwen" });
+    chat.send("help");
+    await until(() => {
+      return types(chat).includes("done");
+    });
+    expect(reply).toContain("started by the person");
+  });
+
+  it("runs a skill the person starts in a chat, with the rest of the message as its arguments", async () => {
+    sessions = new Sessions({ registry, relay, complete, library });
+    let last = "";
+    complete.mockImplementation(async (_m, messages) => {
+      last = textOf(messages.at(-1)?.content);
+      return { role: "assistant", content: "ok" };
+    });
+    const chat = sessions.create({ model: "qwen" });
+    chat.send("/quiet now", undefined, undefined, { name: "quiet", arguments: "now" });
+    await until(() => {
+      return types(chat).includes("done");
+    });
+    expect(chat.events[1]).toMatchObject({ type: "skill", name: "quiet", arguments: "now" });
+    expect(last).toContain("[quiet] now");
+    expect(last).toContain("/quiet now");
+  });
+
+  it("in a coding session uses the device's skill first, and falls back to the library for one the device does not have", async () => {
+    sessions = new Sessions({
+      registry,
+      relay,
+      complete,
+      library,
+      projectContext: async () => {
+        return { instructions: [], skills: [{ name: "local", description: "On the device.", length: 50, modelInvocable: true, source: "user" }], skipped: [] };
+      },
+    });
+    registry.upsert(beat({ allowedTools: ["read_file", "skill"] }));
+    relay.callTool.mockImplementation(async (_d, _r, name, args) => {
+      return args.name === "local" ? { ok: true, output: "device text" } : { ok: false, output: `there is no skill named "${String(args.name)}"` };
+    });
+    const replies: string[] = [];
+    let system = "";
+    complete.mockImplementation(async (_m, messages) => {
+      system ||= textOf(messages[0]?.content);
+      const tools = messages.filter((m) => {
+        return m.role === "tool";
+      });
+      if (tools.length === 0) {
+        return { role: "assistant", content: null, tool_calls: [call("1", "skill", { name: "local" }), call("2", "skill", { name: "tdd" })] };
+      }
+      replies.push(...tools.map((m) => {
+        return textOf(m.content);
+      }));
+      return { role: "assistant", content: "ok" };
+    });
+    const s = create();
+    s.send("go");
+    await until(() => {
+      return types(s).includes("done");
+    });
+    expect(system).toContain("- local: On the device.");
+    expect(system).toContain("- tdd: Test first.");
+    expect(replies).toEqual(["device text", "[tdd] "]);
+  });
+
+  it("refuses a started skill in a chat when there is no library", () => {
+    sessions = new Sessions({ registry, relay, complete });
+    const chat = sessions.create({ model: "qwen" });
+    expect(() => {
+      chat.send("/tdd", undefined, undefined, { name: "tdd" });
+    }).toThrow("coding session");
+  });
+});

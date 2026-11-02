@@ -19,6 +19,7 @@ Settings are read from the environment. For the gateway that means its container
 | `HARNESS_ALLOW_ANY_INTERFACE` | unset | `1` allows `0.0.0.0` and `::` (the container image sets it). |
 | `HARNESS_DATA_DIR` | `~/.harness/gateway` | Where the SQLite database (conversations, events, usage) is kept. `/data` in the container, so mount a volume there. |
 | `WEB_DIST` | the built `packages/web/dist` | The folder of the built web page to serve. |
+| (data volume) | | The library of skills is kept in a `skills` folder inside `HARNESS_DATA_DIR`. |
 | `HARNESS_KEEP_LOADED` | unset | `1` keeps a device's other models loaded when one is loaded (by default they are unloaded first, because two rarely fit in one graphics card). |
 | `HARNESS_DEFAULT_CONTEXT` | `32768` | Context window, in tokens, given to a model the gateway loads without being told one. |
 | `HARNESS_COMPACT_AT` | `80` | Compact a conversation when its context is this percent full before a message. `0` turns it off. See [Usage](../guides/usage.md). |

@@ -8,8 +8,8 @@ import { EffortPicker } from "@/components/EffortPicker";
 import { ModelPicker } from "@/components/ModelPicker";
 import { Select } from "@/components/ui/fields";
 import { api } from "@/lib/api";
-import { useCreateConversation, useNodes, useSkills } from "@/lib/queries";
-import { parseSlash } from "@/lib/skills";
+import { useCreateConversation, useLibrary, useNodes, useSkills } from "@/lib/queries";
+import { parseSlash, withLibrary } from "@/lib/skills";
 import { cn } from "@/lib/utils";
 
 type Mode = "chat" | "code";
@@ -37,7 +37,8 @@ export const NewConversation = () => {
   const chosenRoot = roots.includes(root) ? root : (roots[0] ?? "");
   const selected = model || "auto";
   const found = useSkills(mode === "code" && chosenDevice && chosenRoot ? { device: chosenDevice.nodeId, root: chosenRoot } : undefined);
-  const skills = mode === "code" ? found.data?.[0]?.skills : undefined;
+  const library = useLibrary();
+  const skills = withLibrary(mode === "code" ? found.data?.[0]?.skills : undefined, library.data);
   const ready = selected !== "" && (mode === "chat" || (chosenDevice !== undefined && chosenRoot !== ""));
 
   const start = async (text: string, images?: ImageAttachment[]): Promise<void> => {

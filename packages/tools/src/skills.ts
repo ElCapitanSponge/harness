@@ -47,7 +47,7 @@ const MAX_INSTRUCTION_CHARS = 20_000;
 const MAX_IMPORT_DEPTH = 4;
 const FRONT_MATTER = /^---[ \t]*\r?\n([\s\S]*?)\r?\n---[ \t]*(?:\r?\n|$)/;
 // Letters, digits and hyphens, as the Agent Skills layout names them.
-const NAME_RULE = /^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/;
+export const NAME_RULE = /^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/;
 
 type Value = string | boolean;
 
@@ -162,6 +162,16 @@ export const skillFolders = (root: string, home: string, extra: string[] = [], r
   ];
 };
 
+// The skills in one folder, for a library kept somewhere other than a device's usual places.
+export const discoverSkillsIn = async (dir: string, source: string): Promise<{ skills: (SkillSummary & { folder: string })[]; skipped: SkippedSkill[] }> => {
+  const found = new Map<string, FoundSkill>();
+  const skipped: SkippedSkill[] = [];
+  await scan(dir, source, found, skipped);
+  return { skills: [...found.values()].sort((a, b) => {
+    return a.name.localeCompare(b.name);
+  }), skipped };
+};
+
 export const discoverSkills = async (root: string, home: string, extra: string[] = []): Promise<{ skills: FoundSkill[]; skipped: SkippedSkill[] }> => {
   const found = new Map<string, FoundSkill>();
   const skipped: SkippedSkill[] = [];
@@ -261,7 +271,7 @@ const homeOf = (ctx: ToolContext): string => {
 };
 
 // The skill's instructions with the arguments filled in, or with `file`, a file from inside its folder.
-const loadSkill = async (skill: FoundSkill, a: Record<string, unknown>): Promise<string> => {
+export const loadSkill = async (skill: Pick<FoundSkill, "name" | "folder">, a: Record<string, unknown>): Promise<string> => {
   const name = skill.name;
   if (typeof a.file === "string" && a.file !== "") {
     // Only inside the skill's own folder, however the path is written (or linked).

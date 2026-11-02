@@ -227,6 +227,14 @@ export const SessionImport = z.object({
 // Text or a file's content to be split into turns, for the person to check before importing.
 export const ImportParse = z.object({ name: z.string().optional(), content: z.string().min(1) });
 export const SessionAnswer = z.object({ answer: z.string().trim().min(1).max(4000) });
+// A skill to add to the gateway's library: a zip, or the files of a folder, both base64.
+export const LibraryImport = z.object({
+  zip: z.string().regex(/^[A-Za-z0-9+/]+={0,2}$/).optional(),
+  files: z.array(z.object({ path: z.string().min(1).max(300), data: z.string().regex(/^[A-Za-z0-9+/]*={0,2}$/) })).max(300).optional(),
+  overwrite: z.boolean().optional(),
+}).refine((v) => {
+  return (v.zip !== undefined) !== (v.files !== undefined);
+}, { message: "send either a zip or files" });
 export const SessionRename = z.object({ title: z.string().trim().min(1).max(120) });
 
 // What happens in a coding session, in order. Sent to clients as server-sent events.

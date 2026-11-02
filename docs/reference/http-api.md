@@ -29,6 +29,15 @@ With `HARNESS_API_KEY` set, every route except the web page itself needs `Author
 | `PUT /devices/:nodeId/settings` | Change settings: a partial object. Returns the new report, or the device's reason with status `422`. |
 | `GET /skills` | The skills and instruction files each device finds in each folder; `?device=&root=` narrows it. See [Skills](../guides/skills.md). |
 
+## Skill library
+
+| Route | What it does |
+| --- | --- |
+| `GET /library/skills` | The gateway's own skills, with `files` and `bytes`. |
+| `POST /library/skills` | Add one: `{ zip }` (base64) or `{ files: [{ path, data }] }` (base64), and `overwrite?`. `409` if the name is taken, `422` with the reason if it is refused. |
+| `GET /library/skills/:name/export` | The skill as a zip. |
+| `DELETE /library/skills/:name` | Remove it. |
+
 ## Conversations
 
 | Route | What it does |

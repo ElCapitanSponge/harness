@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { matchSkills, parseSlash, slashQuery } from "./skills";
+import { matchSkills, parseSlash, slashQuery, withLibrary } from "./skills";
 import type { SkillInfo } from "./types";
 
 const skill = (name: string, description = "A skill."): SkillInfo => {
@@ -42,5 +42,24 @@ describe("running a skill from a message", () => {
     expect(parseSlash("/nope hello", skills)).toBeUndefined();
     expect(parseSlash("tell me about /tdd", skills)).toBeUndefined();
     expect(parseSlash("/tdd", [])).toBeUndefined();
+  });
+});
+
+describe("skills from the device and the library together", () => {
+  const device = [skill("tdd", "On the device."), skill("local")];
+  const library = [skill("tdd", "In the library."), skill("wizard")];
+
+  it("lists the device's first and the library's that the device does not have", () => {
+    expect(withLibrary(device, library)?.map((s) => {
+      return `${s.name}:${s.description}`;
+    })).toEqual(["tdd:On the device.", "local:A skill.", "wizard:A skill."]);
+  });
+
+  it("is the library alone in a chat, and nothing until either has loaded", () => {
+    expect(withLibrary(undefined, library)?.map((s) => {
+      return s.name;
+    })).toEqual(["tdd", "wizard"]);
+    expect(withLibrary(device, undefined)).toHaveLength(2);
+    expect(withLibrary(undefined, undefined)).toBeUndefined();
   });
 });
