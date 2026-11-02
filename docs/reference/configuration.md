@@ -51,6 +51,9 @@ Settings marked "page" can be changed from the Devices page on a device started 
 | `CLAUDE_BIN` | `claude` | no | The Claude program to run. |
 | `LIMITED_PROCESSES` | `ms-teams.exe, Teams.exe` | yes | Comma-separated program names that limit the device to smaller models while they run ([Devices](../guides/devices.md#limited-mode-small-models-during-a-call)). |
 | `LIMITED_MAX_GB` | `8` | yes | Largest model, in gigabytes, used while limited (1 to 512). |
+| `ALLOW_BROWSER` | unset | yes | `1` lets coding sessions use the agent browser on this device ([The agent browser](../guides/browser.md)). |
+| `BROWSER_HOSTS` | unset | yes | Comma-separated hosts the browser may visit (and their subdomains); empty means any public site. |
+| `BROWSER_PATH` | the usual Chrome, Edge or Chromium | no | The browser program to drive. |
 | `GAME_PROCESSES` | unset | yes | Comma-separated executable names; a match marks the device busy. |
 | `IDLE_UNLOAD_MINUTES` | `20` | yes | Unload a model Torii used after this long idle. `0` never. |
 | `SKILL_FOLDERS` | unset | yes | Comma-separated full paths of folders of skills to look in as well as the usual ones ([Skills](../guides/skills.md)). |

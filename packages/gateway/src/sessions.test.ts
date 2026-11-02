@@ -1151,3 +1151,25 @@ describe("Session and the gateway's skill library", () => {
     }).toThrow("coding session");
   });
 });
+
+describe("Session and screenshots", () => {
+  it("records a screenshot for the person's side panel and gives the model only the text of the result", async () => {
+    registry.upsert(beat({ allowedTools: ["browser_screenshot"] }));
+    relay.callTool.mockResolvedValue({ ok: true, output: "took a screenshot of https://example.com/; the person can see it", image: { mediaType: "image/png", data: "SECRETPIXELS", url: "https://example.com/" } });
+    const shown: string[] = [];
+    complete.mockImplementation(async (_model, messages) => {
+      shown.push(JSON.stringify(messages));
+      return shown.length === 1 ? { role: "assistant", content: null, tool_calls: [call("1", "browser_screenshot", {})] } : { role: "assistant", content: "done" };
+    });
+    const s = sessions.create({ model: "qwen", device: "pc", root: "proj", autoApprove: true });
+    s.send("look at the page");
+    await until(() => {
+      return types(s).includes("done");
+    });
+    expect(s.events.find((e) => {
+      return e.type === "screenshot";
+    })).toEqual({ type: "screenshot", shot: { mediaType: "image/png", data: "SECRETPIXELS", url: "https://example.com/" } });
+    expect(shown[1]).toContain("the person can see it");
+    expect(shown[1]).not.toContain("SECRETPIXELS");
+  });
+});

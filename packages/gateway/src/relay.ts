@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import type { FileChange, RelayRequest, TunnelMessage } from "@harness/core";
+import type { FileChange, RelayRequest, ToolImage, TunnelMessage } from "@harness/core";
 
 export interface Sender {
   send(data: string): void;
@@ -12,6 +12,8 @@ export interface ToolResult {
   output: string;
   // What a write or edit changed, for the person to see. Never part of what the model is told.
   change?: FileChange;
+  // A screenshot the agent browser took, for the person's side panel. Never part of what the model is told.
+  image?: ToolImage;
 }
 
 interface PendingTool {
@@ -200,7 +202,7 @@ export class Relay {
         return;
       }
       this.tools.delete(msg.id);
-      tool.settle({ ok: msg.ok, output: msg.output, ...(msg.change ? { change: msg.change } : {}) });
+      tool.settle({ ok: msg.ok, output: msg.output, ...(msg.change ? { change: msg.change } : {}), ...(msg.image ? { image: msg.image } : {}) });
       return;
     }
     const pending = this.pending.get(msg.id);

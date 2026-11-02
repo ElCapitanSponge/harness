@@ -1,8 +1,9 @@
-import { ArrowLeft, Check, CircleDot, FilePlus2, FileText, ListChecks, Circle, Terminal, X } from "lucide-react";
+import { ArrowLeft, Camera, Check, CircleDot, FilePlus2, FileText, ListChecks, Circle, Terminal, X } from "lucide-react";
 import { useState } from "react";
 import type { PlanStep } from "@harness/core";
 import { Button } from "@/components/ui/button";
 import type { ChangedFile } from "@/lib/conversation";
+import type { ToolImage } from "@harness/core";
 import type { BackgroundTask } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -86,6 +87,25 @@ const Tasks = ({ tasks }: { tasks: BackgroundTask[] }) => {
   );
 };
 
+// Screenshots from the agent browser: only the person sees them, the model is told one was taken.
+const Shots = ({ shots }: { shots: ToolImage[] }) => {
+  return (
+    <section aria-label="Screenshots" className="grid gap-1">
+      <h3 className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground"><Camera className="size-4" /> Screenshots</h3>
+      <ul className="grid gap-2">
+        {shots.map((s, i) => {
+          return (
+            <li key={`${String(i)}-${s.data.slice(-12)}`} className="grid gap-0.5">
+              <img src={`data:${s.mediaType};base64,${s.data}`} alt={`Screenshot of ${s.url}`} className="w-full rounded-md border" />
+              <span className="break-all text-xs text-muted-foreground">{s.url}</span>
+            </li>
+          );
+        })}
+      </ul>
+    </section>
+  );
+};
+
 const Counts = ({ file }: { file: ChangedFile }) => {
   return (
     <span className="shrink-0 font-mono text-xs">
@@ -96,7 +116,7 @@ const Counts = ({ file }: { file: ChangedFile }) => {
 
 // What the session has done, beside the conversation: the model's plan and the files it changed or created, newest first. A file
 // opens to its diff. At phone width it is a drawer over the conversation.
-export const SidePanel = ({ changes, plan, tasks = [], onClose }: { changes: ChangedFile[]; plan: PlanStep[]; tasks?: BackgroundTask[]; onClose: () => void }) => {
+export const SidePanel = ({ changes, plan, tasks = [], shots = [], onClose }: { changes: ChangedFile[]; plan: PlanStep[]; tasks?: BackgroundTask[]; shots?: ToolImage[]; onClose: () => void }) => {
   const [openPath, setOpenPath] = useState<string | undefined>();
   const open = changes.find((f) => {
     return f.path === openPath;
@@ -120,6 +140,7 @@ export const SidePanel = ({ changes, plan, tasks = [], onClose }: { changes: Cha
               <>
                 {plan.length > 0 ? <Plan steps={plan} /> : null}
                 {tasks.length > 0 ? <Tasks tasks={tasks} /> : null}
+                {shots.length > 0 ? <Shots shots={shots} /> : null}
                 <section aria-label="Changed files" className="grid gap-1">
                   <h3 className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground"><FileText className="size-4" /> Files</h3>
                   {changes.length === 0 ? <p className="text-[13px] text-muted-foreground">No file has been changed yet.</p> : null}

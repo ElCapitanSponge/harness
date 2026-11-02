@@ -22,6 +22,8 @@ const SETTING_ENV: Record<SettingKey, string> = {
   idleUnloadMinutes: "IDLE_UNLOAD_MINUTES",
   limitedProcesses: "LIMITED_PROCESSES",
   limitedMaxGb: "LIMITED_MAX_GB",
+  browser: "ALLOW_BROWSER",
+  browserHosts: "BROWSER_HOSTS",
   skillFolders: "SKILL_FOLDERS",
 };
 
@@ -121,6 +123,8 @@ const SettingsForm = ({ node, report }: { node: NodeRecord; report: SettingsRepo
   const [claude, setClaude] = useState(report.settings.claude);
   const [games, setGames] = useState(report.settings.gameProcesses.join(", "));
   const [idle, setIdle] = useState(String(report.settings.idleUnloadMinutes));
+  const [browser, setBrowser] = useState(report.settings.browser);
+  const [browserHosts, setBrowserHosts] = useState(report.settings.browserHosts.join(", "));
   const [limited, setLimited] = useState(report.settings.limitedProcesses.join(", "));
   const [limitedGb, setLimitedGb] = useState(String(report.settings.limitedMaxGb));
   const [skillFolders, setSkillFolders] = useState(report.settings.skillFolders.join(", "));
@@ -145,6 +149,10 @@ const SettingsForm = ({ node, report }: { node: NodeRecord; report: SettingsRepo
         return s.trim();
       }).filter(Boolean),
       limitedMaxGb: Math.min(512, Math.max(1, Number(limitedGb) || 8)),
+      browser,
+      browserHosts: browserHosts.split(",").map((s) => {
+        return s.trim();
+      }).filter(Boolean),
       skillFolders: skillFolders.split(",").map((s) => {
         return s.trim();
       }).filter(Boolean),
@@ -229,6 +237,14 @@ const SettingsForm = ({ node, report }: { node: NodeRecord; report: SettingsRepo
         </div>
         <p className="text-xs text-muted-foreground">The device keeps working, with models up to that size. A bigger one Torii loaded is unloaded so the call has the graphics card. A game from the list below still makes the device busy.</p>
       </Field>
+      <Field name="browser" label="Let coding sessions use a throwaway browser on this device" report={report}>
+        <Switch disabled={off("browser")} checked={browser} aria-label="Browser" onCheckedChange={setBrowser} />
+        <p className="text-xs text-muted-foreground">A headless Chrome, Edge or Chromium in a temporary profile, one per conversation, with none of your own browser's logins. Only the public web is reachable, and opening, clicking and typing ask first.</p>
+        <Input disabled={off("browserHosts") || !browser} value={browserHosts} aria-label="Hosts the browser may visit, comma separated" placeholder="Any public site, or list the only hosts it may visit" onChange={(ev) => {
+          setBrowserHosts(ev.target.value);
+        }}
+        />
+      </Field>
       <Field name="gameProcesses" label="Game programs that make the device busy" report={report}>
         <Input disabled={off("gameProcesses")} value={games} aria-label="Game programs, comma separated" onChange={(ev) => {
           setGames(ev.target.value);
@@ -252,7 +268,7 @@ const SettingsForm = ({ node, report }: { node: NodeRecord; report: SettingsRepo
 // An agent started before a setting existed does not send it. The form needs them all, so it is not shown for an older agent.
 const isCurrent = (report: SettingsReport): boolean => {
   const s = report.settings as Partial<SettingsReport["settings"]>;
-  return Array.isArray(s.readOnlyRoots) && typeof s.onDeviceTools === "string" && typeof s.remoteTools === "string" && typeof s.idleUnloadMinutes === "number" && Array.isArray(s.skillFolders) && Array.isArray(s.limitedProcesses);
+  return Array.isArray(s.readOnlyRoots) && typeof s.onDeviceTools === "string" && typeof s.remoteTools === "string" && typeof s.idleUnloadMinutes === "number" && Array.isArray(s.skillFolders) && Array.isArray(s.limitedProcesses) && Array.isArray(s.browserHosts);
 };
 
 const DeviceCard = ({ node }: { node: NodeRecord }) => {

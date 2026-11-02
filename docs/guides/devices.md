@@ -23,6 +23,8 @@ Each device decides what the gateway may do on it. The **Devices** button on the
 | Skill folders | `SKILL_FOLDERS` | More folders to look for skills in (full paths, which must exist), as well as `~/.claude/skills`, `~/.agents/skills` and the project's own. See [Skills](skills.md). |
 | Limiting programs | `LIMITED_PROCESSES` | Programs (a call or meeting: `ms-teams.exe` and `Teams.exe` by default) while which the device keeps working but only with smaller models. See [Limited mode](#limited-mode-small-models-during-a-call). |
 | Largest model while limited | `LIMITED_MAX_GB` | How large "small" is, in gigabytes (default 8). |
+| Browser | `ALLOW_BROWSER` | Lets coding sessions use a throwaway headless browser on this device. Off by default. See [The agent browser](browser.md). |
+| Browser hosts | `BROWSER_HOSTS` | If set, the only hosts (and their subdomains) the browser may visit. |
 | Game programs | `GAME_PROCESSES` | Programs that mark the device busy so the GPU is left alone. |
 
 The device name, gateway address and inference server address need a new process, so they are not changed from the page.

@@ -27,7 +27,7 @@ Every message is one JSON object in a text frame, with a `type`.
 | `chunk` | `id`, `data` | A piece of that reply's body. |
 | `end` | `id` | The reply is complete. |
 | `fail` | `id`, `message` | The request failed. |
-| `tool-result` | `id`, `ok`, `output`, `change?` | The single reply to a `tool`, `claude`, `model` or `settings` request. After a write or edit, `change` carries the file's path, whether it was created, lines added and removed and the diff, for the person's side panel; it is never given to the model. |
+| `tool-result` | `id`, `ok`, `output`, `change?` | The single reply to a `tool`, `claude`, `model` or `settings` request. After a browser screenshot, `image` carries the picture and the page's address for the side panel, never for the model. After a write or edit, `change` carries the file's path, whether it was created, lines added and removed and the diff, for the person's side panel; it is never given to the model. |
 
 ### The heartbeat
 

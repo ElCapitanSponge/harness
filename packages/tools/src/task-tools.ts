@@ -84,7 +84,10 @@ const tasksStopAllTool: ToolSpec = {
     return "stop background tasks";
   },
   run(_a, ctx) {
-    return Promise.resolve(`stopped ${String(stopSessionTasks(owner(ctx.session)))} tasks`);
+    // The conversation's browser goes with its tasks.
+    return (ctx.browser?.close(owner(ctx.session)) ?? Promise.resolve()).then(() => {
+      return `stopped ${String(stopSessionTasks(owner(ctx.session)))} tasks`;
+    });
   },
 };
 

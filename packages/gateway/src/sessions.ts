@@ -851,6 +851,9 @@ export class Session {
           if (result.change) {
             this.emit({ type: "change", change: result.change });
           }
+          if (result.image) {
+            this.emit({ type: "screenshot", shot: result.image });
+          }
           return result.output;
         },
         approve: this.approve,

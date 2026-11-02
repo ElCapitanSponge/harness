@@ -250,3 +250,20 @@ describe("limited mode settings", () => {
     expect(await settings.apply({ limitedMaxGb: 4 })).toMatchObject({ ok: false });
   });
 });
+
+describe("the browser setting", () => {
+  it("is off by default, adds the browser tools only when it is on, and is locked by ALLOW_BROWSER", async () => {
+    const { settings } = await make();
+    expect(settings.current()).toMatchObject({ browser: false, browserHosts: [] });
+    expect(settings.tools().some((t) => {
+      return t.startsWith("browser_");
+    })).toBe(false);
+    expect(await settings.apply({ browser: true, browserHosts: ["example.com"] })).toMatchObject({ ok: true });
+    expect(settings.tools()).toEqual(expect.arrayContaining(["browser_open", "browser_screenshot"]));
+    expect(settings.current().browserHosts).toEqual(["example.com"]);
+
+    const fixed = await make({ env: { ALLOW_BROWSER: "1" } });
+    expect(fixed.settings.current().browser).toBe(true);
+    expect(await fixed.settings.apply({ browser: false })).toMatchObject({ ok: false });
+  });
+});

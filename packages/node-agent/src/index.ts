@@ -12,6 +12,8 @@ import { detectPrograms } from "./programs.js";
 import { createSettings } from "./settings.js";
 import { shellName, tools as toolSpecs } from "@harness/tools";
 import { createSettingsServer } from "./settingsserver.js";
+import { createBrowser } from "./browser.js";
+import { findBrowser } from "./browser.js";
 import { createToolServer } from "./toolserver.js";
 import { connectTunnel } from "./tunnel.js";
 
@@ -35,7 +37,32 @@ const settings = await createSettings({
 });
 const now = settings.current();
 
-const tools = createToolServer({ roots: now.projectRoots, allowed: settings.tools(), readOnly: now.readOnlyRoots, audit, installed, skillFolders: () => {
+// The throwaway browser coding sessions may drive when the owner turns it on (docs/adr/0011-...). Nothing starts until a page is opened.
+const agentBrowser = createBrowser({
+  launch: async () => {
+    const executable = findBrowser(process.platform);
+    if (!executable) {
+      throw new Error("no Chrome, Edge or Chromium was found on this device; install one, or set BROWSER_PATH to it");
+    }
+    return (await import("./browser-playwright.js")).launchPlaywright(executable);
+  },
+  allowLocal: () => {
+    return process.env.WEB_FETCH_ALLOW_LOCAL === "1";
+  },
+  allowedHosts: () => {
+    return settings.current().browserHosts;
+  },
+  audit: (summary) => {
+    audit({ time: new Date().toISOString(), root: "", tool: "browser", summary, outcome: "refused", ms: 0 });
+  },
+});
+setInterval(() => {
+  void agentBrowser.sweep();
+}, 60_000).unref();
+
+const tools = createToolServer({ roots: now.projectRoots, allowed: settings.tools(), readOnly: now.readOnlyRoots, audit, installed, browser: () => {
+  return settings.current().browser ? agentBrowser : undefined;
+}, skillFolders: () => {
   return settings.current().skillFolders;
 } });
 

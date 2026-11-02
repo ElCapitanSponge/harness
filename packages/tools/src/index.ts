@@ -1,6 +1,8 @@
 export * from "./agent.js";
 export * from "./tools.js";
 export { fileChange } from "./diff.js";
+export { type BrowserHost, type PageInfo, type Screenshot } from "./browser-tools.js";
+export { isPrivateAddress } from "./web-fetch.js";
 export { MAX_SUBAGENTS, MAX_SUBAGENT_DEPTH, agentTool, readSubagentTask, type SubagentTask } from "./subagent.js";
 export { askTool, readQuestion, type Question } from "./ask.js";
 export { planTool, readPlan } from "./plan.js";

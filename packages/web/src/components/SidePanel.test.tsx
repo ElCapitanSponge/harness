@@ -60,3 +60,12 @@ describe("Side panel background tasks", () => {
     expect(screen.queryByRole("region", { name: "Background tasks" })).not.toBeInTheDocument();
   });
 });
+
+describe("Side panel screenshots", () => {
+  it("shows the screenshots the agent browser took, with the address of each", () => {
+    render(<SidePanel changes={[]} plan={[]} shots={[{ mediaType: "image/png", data: "AAAA", url: "https://example.com/" }]} onClose={vi.fn()} />);
+    const section = screen.getByRole("region", { name: "Screenshots" });
+    expect(within(section).getByRole("img", { name: "Screenshot of https://example.com/" })).toHaveAttribute("src", "data:image/png;base64,AAAA");
+    expect(within(section).getByText("https://example.com/")).toBeInTheDocument();
+  });
+});
