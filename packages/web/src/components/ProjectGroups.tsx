@@ -48,10 +48,10 @@ export const ProjectGroups = ({ groups, collapsed, pathname, onToggle, onNew, on
                       </span>
                     </button>
                   )}
-              {group.kind !== "project"
+              {group.kind === "pinned"
                 ? null
                 : (
-                    <Button variant="subtle" size="icon" className="size-7 opacity-0 focus-visible:opacity-100 group-hover/head:opacity-100" aria-label={`New session in ${group.name}`} title="New session in this project" onClick={() => {
+                    <Button variant="subtle" size="icon" className="size-7 opacity-0 focus-visible:opacity-100 group-hover/head:opacity-100" aria-label={group.kind === "project" ? `New session in ${group.name}` : "New chat"} title={group.kind === "project" ? "New session in this project" : "New chat"} onClick={() => {
                       onNew(group);
                     }}
                     >
