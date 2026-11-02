@@ -8,7 +8,9 @@ import { contextBlock, desktopApi, type PickedFile } from "@/lib/desktop";
 import { pickInBrowser } from "@/lib/pickfiles";
 import { readImages } from "@/lib/images";
 import { matchSkills, slashQuery } from "@/lib/skills";
+import { applyMention, type Candidate } from "@/lib/mentions";
 import type { SkillInfo } from "@/lib/types";
+import { readProjectFile, useMention, type Project } from "@/lib/useMention";
 import { cn } from "@/lib/utils";
 
 const read = (name: string): string => {
@@ -42,7 +44,7 @@ const Tool = ({ label, onClick, disabled, pressed, children }: { label: string; 
 // The message box. It takes markdown: a toolbar and the usual shortcuts (Ctrl or Cmd with B, I, E for code, K for a link), lists
 // that carry on, a live preview, and Enter that adds a line inside a code block instead of sending. What was typed and not sent
 // is kept for each conversation, so a refresh does not lose it.
-export const Composer = ({ draftKey, busy, disabled, placeholder, skills, imageNote, insertion, onSend, onStop }: { draftKey: string; busy: boolean; disabled?: boolean; placeholder?: string; skills?: SkillInfo[]; imageNote?: string; insertion?: { id: number; text: string }; onSend: (text: string, images?: ImageAttachment[]) => void; onStop?: () => void }) => {
+export const Composer = ({ draftKey, busy, disabled, placeholder, skills, imageNote, insertion, project, onSend, onStop }: { draftKey: string; busy: boolean; disabled?: boolean; placeholder?: string; skills?: SkillInfo[]; imageNote?: string; insertion?: { id: number; text: string }; project?: Project; onSend: (text: string, images?: ImageAttachment[]) => void; onStop?: () => void }) => {
   const name = `harness-draft-${draftKey}`;
   const [text, setText] = useState(() => {
     return read(name);
@@ -61,6 +63,14 @@ export const Composer = ({ draftKey, busy, disabled, placeholder, skills, imageN
   const menu = matches.length > 0 && !dismissed && !preview;
   const chosen = Math.min(active, Math.max(0, matches.length - 1));
   const ref = useRef<HTMLTextAreaElement>(null);
+  // The @ menu: in a coding session, typing @ and a name lists the project's files; choosing one puts its path in the message and its text
+  // below as context. The slash menu has the message when it starts with /.
+  const [caret, setCaret] = useState(0);
+  const [mentionActive, setMentionActive] = useState(0);
+  const [mentionDismissed, setMentionDismissed] = useState(false);
+  const found = useMention(project, text, caret, !menu && !preview);
+  const mentionOpen = found.mention !== undefined && found.candidates.length > 0 && !mentionDismissed;
+  const mentionChosen = Math.min(mentionActive, Math.max(0, found.candidates.length - 1));
   // Where the selection should be once the text it belongs to has been drawn.
   const selection = useRef<{ start: number; end: number } | undefined>(undefined);
 
@@ -113,8 +123,30 @@ export const Composer = ({ draftKey, busy, disabled, placeholder, skills, imageN
   const change = (value: string): void => {
     setActive(0);
     setDismissed(false);
+    setMentionActive(0);
+    setMentionDismissed(false);
     setText(value);
     write(name, value);
+  };
+
+  const chooseMention = (choice: Candidate): void => {
+    if (!found.mention) {
+      return;
+    }
+    const next = applyMention(text, found.mention, choice);
+    selection.current = { start: next.caret, end: next.caret };
+    setCaret(next.caret);
+    change(next.text);
+    if (!choice.isDir && project) {
+      setContextProblems([]);
+      void readProjectFile(project, choice.path).then((file) => {
+        if (file.ok) {
+          append(contextBlock(`${file.path}${file.shortened ? " (shortened)" : ""}`, file.text));
+        } else {
+          setContextProblems([file.problem]);
+        }
+      });
+    }
   };
 
   const apply = (edit: Edit): void => {
@@ -162,6 +194,24 @@ export const Composer = ({ draftKey, busy, disabled, placeholder, skills, imageN
   const keys = (ev: KeyboardEvent<HTMLTextAreaElement>): void => {
     if (ev.nativeEvent.isComposing) {
       return;
+    }
+    if (mentionOpen) {
+      const pick = found.candidates[mentionChosen];
+      if (ev.key === "ArrowDown" || ev.key === "ArrowUp") {
+        ev.preventDefault();
+        setMentionActive((mentionChosen + (ev.key === "ArrowDown" ? 1 : found.candidates.length - 1)) % found.candidates.length);
+        return;
+      }
+      if ((ev.key === "Enter" || ev.key === "Tab") && pick && !ev.shiftKey) {
+        ev.preventDefault();
+        chooseMention(pick);
+        return;
+      }
+      if (ev.key === "Escape") {
+        ev.preventDefault();
+        setMentionDismissed(true);
+        return;
+      }
     }
     if (menu) {
       const pick = matches[chosen];
@@ -245,6 +295,29 @@ export const Composer = ({ draftKey, busy, disabled, placeholder, skills, imageN
         }
       }}
     >
+      {mentionOpen
+        ? (
+            <ul id={`${name}-files`} role="listbox" aria-label="Project files" className="absolute inset-x-4 bottom-full z-10 mb-1 max-h-64 overflow-y-auto rounded-xl border bg-card p-1 shadow-card">
+              {found.candidates.map((c, i) => {
+                return (
+                  <li
+                    key={c.path}
+                    id={`${name}-file-${c.path}`}
+                    role="option"
+                    aria-selected={i === mentionChosen}
+                    className={cn("cursor-pointer rounded-lg px-3 py-1.5 font-mono text-[13px]", i === mentionChosen && "bg-accent text-accent-foreground")}
+                    onMouseDown={(ev) => {
+                      ev.preventDefault();
+                      chooseMention(c);
+                    }}
+                  >
+                    {c.path}
+                  </li>
+                );
+              })}
+            </ul>
+          )
+        : null}
       {menu
         ? (
             <ul id={`${name}-skills`} role="listbox" aria-label="Skills" className="absolute inset-x-4 bottom-full z-10 mb-1 max-h-64 overflow-y-auto rounded-xl border bg-card p-1 shadow-card">
@@ -410,14 +483,18 @@ export const Composer = ({ draftKey, busy, disabled, placeholder, skills, imageN
                   value={text}
                   rows={1}
                   aria-label="Message"
-                  role={skills ? "combobox" : undefined}
-                  aria-expanded={skills ? menu : undefined}
-                  aria-controls={menu ? `${name}-skills` : undefined}
-                  aria-activedescendant={menu && matches[chosen] ? `${name}-skill-${matches[chosen].name}` : undefined}
+                  role={skills || project ? "combobox" : undefined}
+                  aria-expanded={skills || project ? menu || mentionOpen : undefined}
+                  aria-controls={mentionOpen ? `${name}-files` : menu ? `${name}-skills` : undefined}
+                  aria-activedescendant={mentionOpen && found.candidates[mentionChosen] ? `${name}-file-${found.candidates[mentionChosen].path}` : menu && matches[chosen] ? `${name}-skill-${matches[chosen].name}` : undefined}
                   placeholder={placeholder ?? "Message (markdown works)"}
                   className="max-h-[40vh] min-h-9 min-w-0 flex-1 resize-none bg-transparent px-2 py-1.5 outline-none placeholder:text-muted-foreground"
                   onChange={(ev) => {
+                    setCaret(ev.target.selectionStart);
                     change(ev.target.value);
+                  }}
+                  onSelect={(ev) => {
+                    setCaret(ev.currentTarget.selectionStart);
                   }}
                   onKeyDown={keys}
                   onPaste={(ev) => {
