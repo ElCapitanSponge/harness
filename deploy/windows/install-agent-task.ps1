@@ -19,16 +19,8 @@ $taskName = "harness agent"
 $log = Join-Path $env:LOCALAPPDATA "harness-agent.log"
 # cmd drops the first and last quote of a command that starts with one, so the whole command is wrapped in one more pair.
 $command = "`"$pnpm`" --silent build:agent >> `"$log`" 2>&1 && `"$node`" --env-file-if-exists=.env packages/node-agent/dist/agent.mjs >> `"$log`" 2>&1"
-# A console program started by the task would open a terminal window, so a small script starts the command with its window hidden
-# (window style 0) and waits for it, which keeps the task "running" and lets the restart settings work.
-$launcher = Join-Path $env:LOCALAPPDATA "harness-agent.vbs"
-$cmdLine = "cmd.exe /c `"$command`"" -replace '"', '""'
-Set-Content -Path $launcher -Encoding ASCII -Value @(
-  'Set shell = CreateObject("WScript.Shell")',
-  "shell.CurrentDirectory = ""$repo""",
-  "shell.Run ""$cmdLine"", 0, True"
-)
-$action = New-ScheduledTaskAction -Execute "wscript.exe" -Argument "//B //Nologo `"$launcher`"" -WorkingDirectory $repo
+# conhost --headless runs the command with no console window at all (a plain cmd.exe would open one on the taskbar). Windows 10 1809 or later.
+$action = New-ScheduledTaskAction -Execute "conhost.exe" -Argument "--headless cmd.exe /c `"$command`"" -WorkingDirectory $repo
 $trigger = New-ScheduledTaskTrigger -AtLogOn -User $env:USERNAME
 $settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -StartWhenAvailable `
   -RestartCount 999 -RestartInterval (New-TimeSpan -Minutes 1) -ExecutionTimeLimit ([TimeSpan]::Zero)
