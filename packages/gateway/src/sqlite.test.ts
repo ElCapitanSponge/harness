@@ -147,6 +147,16 @@ describe("permission modes and rules in the database", () => {
     expect(store.loadAll()[0]).toMatchObject({ mode: "edits" });
   });
 
+  it("keeps a conversation pinned, and not pinned by default", async () => {
+    const store = sqliteStore(openDatabase(":memory:"));
+    await store.save(session());
+    expect(store.loadAll()[0]?.pinned).toBeUndefined();
+    await store.save(session({ pinned: true }));
+    expect(store.loadAll()[0]).toMatchObject({ pinned: true });
+    await store.save(session({ pinned: false }));
+    expect(store.loadAll()[0]?.pinned).toBeUndefined();
+  });
+
   it("remembers a tool for a folder on a device once, lists it, and removes it", () => {
     const rules = sqliteRules(openDatabase(":memory:"));
     expect(rules.has("pc", "proj", "run_command")).toBe(false);

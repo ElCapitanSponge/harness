@@ -31,6 +31,8 @@ export interface StoredSession {
   created: number;
   updated: number;
   effort?: Effort;
+  // Pinned to the top of the sidebar.
+  pinned?: boolean;
   // How changes are treated: ask (the default), edits, plan or bypass.
   mode?: PermissionMode;
   // The conversation that started this one as a sub-agent, and how deep it is (0 for an ordinary conversation).
@@ -279,6 +281,7 @@ export class Session {
   private always = new Set<string>();
   // How changes are treated in this conversation.
   private mode: PermissionMode;
+  pinned = false;
   // Why the person declined the last action, if they said, so the model is told.
   private declined: string | undefined;
   // When the history was last compacted and how big it was after, so the meter can show that before the next reply.
@@ -295,11 +298,12 @@ export class Session {
   private compactFailedFor = 0;
 
   constructor(
-    init: Pick<StoredSession, "id" | "title" | "model" | "device" | "root" | "created" | "updated"> & { mode?: PermissionMode; parent?: string; depth?: number; effort?: Effort; history: ChatMessage[]; events?: SessionEvent[] },
+    init: Pick<StoredSession, "id" | "title" | "model" | "device" | "root" | "created" | "updated"> & { pinned?: boolean; mode?: PermissionMode; parent?: string; depth?: number; effort?: Effort; history: ChatMessage[]; events?: SessionEvent[] },
     private deps: SessionDeps,
     autoApprove = false,
   ) {
     this.mode = init.mode ?? (autoApprove ? "bypass" : "ask");
+    this.pinned = init.pinned === true;
     this.id = init.id;
     this.parent = init.parent;
     this.depth = init.depth ?? 0;
@@ -349,12 +353,13 @@ export class Session {
       effort: this.effort,
       mode: this.mode,
       ...(this.parent ? { parent: this.parent } : {}),
+      ...(this.pinned ? { pinned: true } : {}),
       chosen: this.current === "auto" && this.chosen ? { model: this.chosen.model, device: this.chosen.device, reason: this.chosen.reason } : undefined,
     };
   }
 
   toStored(): StoredSession {
-    return { id: this.id, title: this.title, model: this.model, device: this.device, root: this.root, created: this.created, updated: this.updated, effort: this.effort, mode: this.mode, ...(this.parent ? { parent: this.parent } : {}), depth: this.depth, history: [...this.history], events: [...this.events] };
+    return { id: this.id, title: this.title, model: this.model, device: this.device, root: this.root, created: this.created, updated: this.updated, effort: this.effort, mode: this.mode, ...(this.pinned ? { pinned: true } : {}), ...(this.parent ? { parent: this.parent } : {}), depth: this.depth, history: [...this.history], events: [...this.events] };
   }
 
   // Replays what has already happened, then follows live. Returns an unsubscribe function.
@@ -372,6 +377,13 @@ export class Session {
     this.events.push(event);
     for (const listener of this.listeners) {
       listener(event);
+    }
+  }
+
+  setPinned(pinned: boolean): void {
+    if (pinned !== this.pinned) {
+      this.pinned = pinned;
+      this.deps.persist?.(this);
     }
   }
 

@@ -72,4 +72,19 @@ describe("the sidebar's project groups", () => {
     await userEvent.click(within(screen.getByRole("region", { name: "app on bastila" })).getByRole("button", { name: "New session in app" }));
     expect(onNew).toHaveBeenCalledWith(expect.objectContaining({ device: "bastila" }));
   });
+
+  it("lists pinned conversations first under a Pinned heading, with the project they belong to", () => {
+    const pinned = [{ ...code("a", "anakin", "C:/work/app"), pinned: true }, chat];
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        <MemoryRouter>
+          <ProjectGroups groups={groupSessions(pinned, "anakin")} collapsed={collapsedKeys([])} pathname="/" onToggle={vi.fn()} onNew={vi.fn()} onNavigate={vi.fn()} onDeleted={vi.fn()} />
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+    const group = screen.getByRole("region", { name: "Pinned" });
+    expect(within(group).getByText("Title a")).toBeVisible();
+    expect(within(group).getByText(/app · anakin/)).toBeVisible();
+    expect(within(group).queryByRole("button", { name: /New session in/ })).toBeNull();
+  });
 });

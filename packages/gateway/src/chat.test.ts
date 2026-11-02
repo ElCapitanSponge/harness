@@ -267,6 +267,17 @@ describe("conversation routes", () => {
     expect(await (await app.request("/sessions")).json()).toEqual([]);
   });
 
+  it("pins a conversation and unpins it, without changing its title or when it was last active", async () => {
+    const { app, sessions } = build();
+    const chat = sessions.create({ model: "qwen" });
+    const before = chat.info();
+    const pinned = (await (await app.request(`/sessions/${chat.id}`, send("PATCH", { pinned: true }))).json()) as { pinned?: boolean; title: string; updated: number };
+    expect(pinned).toMatchObject({ pinned: true, title: before.title, updated: before.updated });
+    expect(((await (await app.request("/sessions")).json()) as { pinned?: boolean }[])[0]?.pinned).toBe(true);
+    const unpinned = (await (await app.request(`/sessions/${chat.id}`, send("PATCH", { pinned: false }))).json()) as { pinned?: boolean };
+    expect(unpinned.pinned).toBeUndefined();
+  });
+
   it("refuses a rename with no title or a title that is too long, and for a conversation that does not exist", async () => {
     const { app, sessions } = build();
     const chat = sessions.create({ model: "qwen" });

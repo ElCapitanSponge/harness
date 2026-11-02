@@ -35,7 +35,7 @@ A task the model hands, with the agent tool, to a conversation of its own on the
 The connected device the browser is on, found by address or chosen by the person, where New code session here starts a session. It needs a node agent, since a browser cannot read files. See docs/guides/coding-sessions.md.
 
 **Project group**:
-The sidebar gathers conversations by project, a folder on a device, with chats in a group of their own. A group names its folder and says "This device" or the other device's name, collapses and expands (kept on the gateway so every client agrees), and has a button to start a new session in that project. See docs/guides/coding-sessions.md.
+The sidebar gathers conversations by project, a folder on a device, with chats in a group of their own. A group names its folder and says "This device" or the other device's name, collapses and expands (kept on the gateway so every client agrees), and has a button to start a new session in that project. A conversation can be pinned to a **Pinned** group above the projects; the pin is stored on the gateway with the conversation. See docs/guides/coding-sessions.md.
 
 **Limited**:
 A device state while a call or meeting runs: the device keeps working, but only with models up to a size the owner sets. Different from busy, where nothing is sent to it. See docs/guides/devices.md.
