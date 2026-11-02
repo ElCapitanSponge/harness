@@ -1,4 +1,4 @@
-import { textOf, type ChatMessage } from "@harness/core";
+import { IMAGE_TOKENS, textOf, type ChatMessage } from "@harness/core";
 import { estimateTokens } from "./ledger.js";
 
 // Compaction keeps a long conversation going: older turns are replaced by a short summary the model writes, and the system
@@ -76,6 +76,15 @@ export const compacted = (plan: CompactionPlan, summary: string): ChatMessage[] 
   return [...plan.head, { role: "system", content: `Summary of the earlier conversation (older messages were compacted to save space):\n${summary.trim()}` }, ...plan.keep];
 };
 
+// The size of a conversation in tokens. A picture counts as a fixed amount, not as its encoded bytes.
 export const historyTokens = (history: ChatMessage[]): number => {
-  return estimateTokens(JSON.stringify(history));
+  let images = 0;
+  const text = JSON.stringify(history, (key, value: unknown) => {
+    if (key === "url" && typeof value === "string" && value.startsWith("data:")) {
+      images++;
+      return "";
+    }
+    return value;
+  });
+  return estimateTokens(text) + images * IMAGE_TOKENS;
 };

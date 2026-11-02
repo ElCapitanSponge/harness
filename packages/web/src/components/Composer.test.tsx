@@ -172,3 +172,50 @@ describe("Composer slash menu", () => {
     expect(screen.queryByRole("listbox")).not.toBeInTheDocument();
   });
 });
+
+describe("Composer images", () => {
+  const png = (name = "cat.png", size = 12) => {
+    return new File([new Uint8Array(size)], name, { type: "image/png" });
+  };
+
+  it("offers no attach button unless the page allows images", () => {
+    render(<Composer draftKey="i" busy={false} onSend={vi.fn()} />);
+    expect(screen.queryByRole("button", { name: "Attach an image" })).not.toBeInTheDocument();
+  });
+
+  it("attaches a chosen picture, shows it, lets it be removed, and sends it with the text", async () => {
+    const onSend = vi.fn();
+    render(<Composer draftKey="i" busy={false} imageNote="" onSend={onSend} />);
+    await userEvent.upload(screen.getByLabelText("Choose images"), [png("a.png"), png("b.png")]);
+    const list = await screen.findByRole("list", { name: "Attached images" });
+    expect(within(list).getAllByRole("img")).toHaveLength(2);
+
+    await userEvent.click(screen.getByRole("button", { name: "Remove image 1" }));
+    expect(within(screen.getByRole("list", { name: "Attached images" })).getAllByRole("img")).toHaveLength(1);
+
+    await userEvent.type(screen.getByLabelText("Message"), "what is this?{Enter}");
+    expect(onSend).toHaveBeenCalledWith("what is this?", [{ mediaType: "image/png", data: expect.any(String) as string }]);
+    expect(screen.queryByRole("list", { name: "Attached images" })).not.toBeInTheDocument();
+  });
+
+  it("refuses another type, a picture that is too big, and more than the limit, saying why", async () => {
+    render(<Composer draftKey="i" busy={false} imageNote="" onSend={vi.fn()} />);
+    const input = screen.getByLabelText("Choose images");
+    await userEvent.upload(input, new File(["x"], "doc.pdf", { type: "application/pdf" }), { applyAccept: false });
+    expect(await screen.findByRole("alert")).toHaveTextContent("doc.pdf is not a PNG, JPEG, GIF or WebP image.");
+
+    await userEvent.upload(input, png("huge.png", 6 * 1024 * 1024));
+    expect(await screen.findByRole("alert")).toHaveTextContent("huge.png is larger than 5 MB.");
+
+    await userEvent.upload(input, [png("1.png"), png("2.png"), png("3.png"), png("4.png"), png("5.png")]);
+    expect(await screen.findByRole("alert")).toHaveTextContent("up to 4 images");
+    expect(within(screen.getByRole("list", { name: "Attached images" })).getAllByRole("img")).toHaveLength(4);
+  });
+
+  it("warns that the model cannot read the picture when the page says so", async () => {
+    render(<Composer draftKey="i" busy={false} imageNote="qwen does not look like a model that can read images, so the image was not sent." onSend={vi.fn()} />);
+    expect(screen.queryByRole("status")).not.toBeInTheDocument();
+    await userEvent.upload(screen.getByLabelText("Choose images"), png());
+    expect(await screen.findByRole("status")).toHaveTextContent("does not look like a model that can read images");
+  });
+});

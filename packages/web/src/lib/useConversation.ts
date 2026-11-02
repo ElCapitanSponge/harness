@@ -4,6 +4,7 @@ import { useSelector } from "@tanstack/react-store";
 import { useEffect, useState } from "react";
 import { ApiError, api, authHeaders, keyStore, readEvents } from "./api";
 import type { Effort } from "@harness/core/effort";
+import type { ImageAttachment } from "@harness/core/image";
 import { applyEvent, emptyConversation, markBusy, type ConversationState, type StreamEvent } from "./conversation";
 
 const pause = (ms: number, signal: AbortSignal): Promise<void> => {
@@ -70,13 +71,13 @@ export const useConversation = (id: string) => {
 
   const state = useSelector(store);
 
-  const send = async (text: string, model?: string, effort?: Effort | "default", skill?: { name: string; arguments: string }): Promise<void> => {
+  const send = async (text: string, model?: string, effort?: Effort | "default", skill?: { name: string; arguments: string }, images?: ImageAttachment[]): Promise<void> => {
     // Busy at once, so the button changes before the first event comes back.
     store.setState((s) => {
       return markBusy(s);
     });
     try {
-      await api<unknown>(`/sessions/${id}/messages`, { method: "POST", body: { text, ...(model ? { model } : {}), ...(effort ? { effort } : {}), ...(skill ? { skill } : {}) } });
+      await api<unknown>(`/sessions/${id}/messages`, { method: "POST", body: { text, ...(model ? { model } : {}), ...(effort ? { effort } : {}), ...(skill ? { skill } : {}), ...(images ? { images } : {}) } });
     } catch (err) {
       store.setState((s) => {
         return applyEvent(s, { type: "error", message: err instanceof Error ? err.message : "Could not send." });

@@ -148,3 +148,17 @@ describe("Auto: when nothing can be chosen", () => {
     expect(chooseModel(input({ tokens: 500_000 }))).toMatchObject({ none: expect.stringContaining("compact the conversation") as string });
   });
 });
+
+describe("Auto: images", () => {
+  const nodes = [node("anakin", { models: [{ id: "qwen3-coder-30b", loaded: true, contextLength: 32_768 }, { id: "qwen2.5-vl-7b", loaded: false, contextLength: 32_768 }] })];
+
+  it("takes only a model that can read images when the message has one, even if it has to be loaded", () => {
+    const c = chosen(chooseModel(input({ nodes, needsImages: true })));
+    expect(c).toMatchObject({ model: "qwen2.5-vl-7b", loads: true });
+  });
+
+  it("does not hand an image to Claude, which is driven with text only (the session then answers without the image)", () => {
+    expect(chooseModel(input({ nodes: [], claude: { available: true, device: "bastila" }, needsImages: true }))).toHaveProperty("none");
+    expect(chosen(chooseModel(input({ nodes: [], claude: { available: true, device: "bastila" } }))).model).toBe("claude");
+  });
+});

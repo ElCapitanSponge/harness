@@ -1,8 +1,10 @@
-import { ArrowUp, Bold, Braces, Code, Eye, Italic, Link, List, ListOrdered, Pencil, Quote, Square } from "lucide-react";
+import { ArrowUp, Bold, Braces, Code, Eye, Italic, Link, List, ListOrdered, Paperclip, Pencil, Quote, Square, X } from "lucide-react";
 import { useLayoutEffect, useRef, useState, type KeyboardEvent, type ReactNode, type SyntheticEvent } from "react";
 import { Markdown } from "@/components/Markdown";
 import { Button } from "@/components/ui/button";
 import { codeBlock, continueList, insideFence, link, prefixLines, wrapSelection, type Edit } from "@/lib/markdown-edit";
+import type { ImageAttachment } from "@harness/core/image";
+import { readImages } from "@/lib/images";
 import { matchSkills, slashQuery } from "@/lib/skills";
 import type { SkillInfo } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -38,12 +40,17 @@ const Tool = ({ label, onClick, disabled, pressed, children }: { label: string; 
 // The message box. It takes markdown: a toolbar and the usual shortcuts (Ctrl or Cmd with B, I, E for code, K for a link), lists
 // that carry on, a live preview, and Enter that adds a line inside a code block instead of sending. What was typed and not sent
 // is kept for each conversation, so a refresh does not lose it.
-export const Composer = ({ draftKey, busy, disabled, placeholder, skills, onSend, onStop }: { draftKey: string; busy: boolean; disabled?: boolean; placeholder?: string; skills?: SkillInfo[]; onSend: (text: string) => void; onStop?: () => void }) => {
+export const Composer = ({ draftKey, busy, disabled, placeholder, skills, imageNote, onSend, onStop }: { draftKey: string; busy: boolean; disabled?: boolean; placeholder?: string; skills?: SkillInfo[]; imageNote?: string; onSend: (text: string, images?: ImageAttachment[]) => void; onStop?: () => void }) => {
   const name = `harness-draft-${draftKey}`;
   const [text, setText] = useState(() => {
     return read(name);
   });
   const [preview, setPreview] = useState(false);
+  // Pictures to go with the message. Only offered where the page passes `imageNote` (a coding session or chat that can take them).
+  const [images, setImages] = useState<ImageAttachment[]>([]);
+  const [imageProblems, setImageProblems] = useState<string[]>([]);
+  const picker = useRef<HTMLInputElement>(null);
+  const imagesAllowed = imageNote !== undefined;
   // The slash menu: typing / first lists the skills; the arrows move, Enter or Tab completes the name, Escape closes it.
   const [active, setActive] = useState(0);
   const [dismissed, setDismissed] = useState(false);
@@ -89,6 +96,17 @@ export const Composer = ({ draftKey, busy, disabled, placeholder, skills, onSend
     }
   };
 
+  const attach = async (files: File[]): Promise<void> => {
+    if (!imagesAllowed || files.length === 0) {
+      return;
+    }
+    const read = await readImages(files, images.length);
+    setImages((current) => {
+      return [...current, ...read.images];
+    });
+    setImageProblems(read.problems);
+  };
+
   const submit = (): void => {
     const value = text.trim();
     if (!value || busy || disabled) {
@@ -97,7 +115,14 @@ export const Composer = ({ draftKey, busy, disabled, placeholder, skills, onSend
     write(name, "");
     setText("");
     setPreview(false);
-    onSend(value);
+    const sending = images;
+    setImages([]);
+    setImageProblems([]);
+    if (sending.length > 0) {
+      onSend(value, sending);
+    } else {
+      onSend(value);
+    }
   };
 
   const keys = (ev: KeyboardEvent<HTMLTextAreaElement>): void => {
@@ -173,6 +198,17 @@ export const Composer = ({ draftKey, busy, disabled, placeholder, skills, onSend
       onSubmit={(ev: SyntheticEvent) => {
         ev.preventDefault();
         submit();
+      }}
+      onDragOver={(ev) => {
+        if (imagesAllowed) {
+          ev.preventDefault();
+        }
+      }}
+      onDrop={(ev) => {
+        if (imagesAllowed) {
+          ev.preventDefault();
+          void attach([...ev.dataTransfer.files]);
+        }
       }}
     >
       {menu
@@ -265,6 +301,24 @@ export const Composer = ({ draftKey, busy, disabled, placeholder, skills, onSend
           >
             <Link />
           </Tool>
+          {imagesAllowed
+            ? (
+                <>
+                  <input ref={picker} type="file" multiple accept="image/png,image/jpeg,image/gif,image/webp" className="sr-only" aria-label="Choose images" onChange={(ev) => {
+                    const chosen = [...(ev.target.files ?? [])];
+                    ev.target.value = "";
+                    void attach(chosen);
+                  }}
+                  />
+                  <Tool label="Attach an image" disabled={preview} onClick={() => {
+                    picker.current?.click();
+                  }}
+                  >
+                    <Paperclip />
+                  </Tool>
+                </>
+              )
+            : null}
           <span className="flex-1" />
           <Tool label={preview ? "Edit" : "Preview"} pressed={preview} onClick={() => {
             setPreview(!preview);
@@ -273,6 +327,34 @@ export const Composer = ({ draftKey, busy, disabled, placeholder, skills, onSend
             {preview ? <Pencil /> : <Eye />}
           </Tool>
         </div>
+
+        {images.length > 0
+          ? (
+              <ul className="mb-1 flex flex-wrap gap-2" aria-label="Attached images">
+                {images.map((img, i) => {
+                  return (
+                    <li key={`${String(i)}-${img.data.slice(-12)}`} className="relative">
+                      <img src={`data:${img.mediaType};base64,${img.data}`} alt={`Attached image ${String(i + 1)}`} className="h-16 rounded-md border" />
+                      <button
+                        type="button"
+                        aria-label={`Remove image ${String(i + 1)}`}
+                        className="absolute -right-1.5 -top-1.5 flex size-5 items-center justify-center rounded-full border bg-card shadow-card"
+                        onClick={() => {
+                          setImages(images.filter((_, j) => {
+                            return j !== i;
+                          }));
+                        }}
+                      >
+                        <X className="size-3" />
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            )
+          : null}
+        {images.length > 0 && imageNote ? <p className="mb-1 text-xs text-warning" role="status">{imageNote}</p> : null}
+        {imageProblems.length > 0 ? <p className="mb-1 text-xs text-destructive" role="alert">{imageProblems.join(" ")}</p> : null}
 
         <div className="flex items-end gap-2">
           {preview
@@ -297,6 +379,15 @@ export const Composer = ({ draftKey, busy, disabled, placeholder, skills, onSend
                     change(ev.target.value);
                   }}
                   onKeyDown={keys}
+                  onPaste={(ev) => {
+                    const pasted = [...ev.clipboardData.files].filter((f) => {
+                      return f.type.startsWith("image/");
+                    });
+                    if (imagesAllowed && pasted.length > 0) {
+                      ev.preventDefault();
+                      void attach(pasted);
+                    }
+                  }}
                 />
               )}
           {busy && onStop

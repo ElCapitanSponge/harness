@@ -47,6 +47,15 @@ export const Message = ({ item, model, onAnswer }: { item: Item; model: string; 
       return (
         <div className="flex min-w-0 justify-end">
           <div className="min-w-0 max-w-[85%] rounded-xl bg-accent px-4 py-2 text-accent-foreground">
+            {item.images?.length
+              ? (
+                  <div className="mb-2 flex flex-wrap gap-2">
+                    {item.images.map((img, i) => {
+                      return <img key={`${String(i)}-${img.data.slice(-12)}`} src={`data:${img.mediaType};base64,${img.data}`} alt={`Attached image ${String(i + 1)}`} className="max-h-48 max-w-full rounded-md border" />;
+                    })}
+                  </div>
+                )
+              : null}
             <Markdown text={item.text} />
           </div>
         </div>

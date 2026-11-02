@@ -154,3 +154,13 @@ describe("the side panel's data", () => {
     expect(state.plan).toEqual([{ text: "a", status: "done" }, { text: "b", status: "pending" }]);
   });
 });
+
+describe("images and notices", () => {
+  it("keeps the pictures of a message with it, and shows a notice as a note", () => {
+    const img = { mediaType: "image/png" as const, data: "AAAA" };
+    const state = run([{ type: "user", text: "look", images: [img] }, { type: "notice", text: "qwen cannot read images" }, { type: "text", text: "ok" }]);
+    expect(kinds(state)).toEqual(["user", "note", "assistant"]);
+    expect(state.items[0]).toMatchObject({ images: [img] });
+    expect(state.items[1]).toMatchObject({ tone: "info", text: "qwen cannot read images" });
+  });
+});

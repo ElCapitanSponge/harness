@@ -1,6 +1,7 @@
 import { textOf, type ChatMessage, type Heartbeat, type ToolCall } from "@harness/core";
 import type { ProjectContext } from "@harness/tools";
 import { beforeEach, describe, expect, it, vi, type Mock } from "vitest";
+import { historyTokens } from "./compaction.js";
 import { Registry } from "./registry.js";
 import type { Relay } from "./relay.js";
 import { Sessions, type Complete, type Session, type SessionEvent } from "./sessions.js";
@@ -645,5 +646,74 @@ describe("Session side panel data", () => {
       return types(chat).includes("done");
     });
     expect(complete.mock.calls[0]?.[2]).toEqual([]);
+  });
+});
+
+describe("Session with images", () => {
+  const png = { mediaType: "image/png" as const, data: "iVBORw0KGgo=" };
+  const lastUser = (): ChatMessage | undefined => {
+    return complete.mock.calls[0]?.[1].find((m) => {
+      return m.role === "user";
+    });
+  };
+
+  it("sends the image to a model that can read it, in the standard message format, and keeps it with the session", async () => {
+    registry.upsert(beat({ models: [{ id: "qwen2.5-vl-7b", loaded: true }] }));
+    let seenContent: ChatMessage["content"];
+    complete.mockImplementation(async (_m, messages) => {
+      seenContent = messages.find((m) => {
+        return m.role === "user";
+      })?.content;
+      return { role: "assistant", content: "a cat" };
+    });
+    const s = sessions.create({ model: "qwen2.5-vl-7b" });
+    s.send("what is this?", undefined, undefined, undefined, [png]);
+    await until(() => {
+      return types(s).includes("done");
+    });
+    expect(seenContent).toEqual([{ type: "text", text: "what is this?" }, { type: "image_url", image_url: { url: "data:image/png;base64,iVBORw0KGgo=" } }]);
+    expect(s.events[0]).toEqual({ type: "user", text: "what is this?", images: [png] });
+    expect(types(s)).not.toContain("notice");
+  });
+
+  it("tells the person when the model cannot read images, and sends the text alone", async () => {
+    script({ role: "assistant", content: "ok" });
+    const s = sessions.create({ model: "qwen" });
+    s.send("what is this?", undefined, undefined, undefined, [png]);
+    await until(() => {
+      return types(s).includes("done");
+    });
+    expect(types(s)).toEqual(["user", "notice", "text", "done"]);
+    expect(s.events[1]).toMatchObject({ type: "notice", text: expect.stringContaining("qwen does not look like a model that can read images") as string });
+    expect(lastUser()?.content).toBe("what is this?");
+  });
+
+  it("replaces a picture with a note when a later turn goes to a model that cannot read it", async () => {
+    registry.upsert(beat({ models: [{ id: "qwen2.5-vl-7b", loaded: true }, { id: "qwen", loaded: true }] }));
+    const sent: string[] = [];
+    complete.mockImplementation(async (model, messages) => {
+      sent.push(`${model}: ${JSON.stringify(messages)}`);
+      return { role: "assistant", content: "ok" };
+    });
+    const s = sessions.create({ model: "qwen2.5-vl-7b" });
+    s.send("look", undefined, undefined, undefined, [png]);
+    await until(() => {
+      return types(s).includes("done");
+    });
+    s.send("and now?", "qwen");
+    await until(() => {
+      return types(s).filter((t) => {
+        return t === "done";
+      }).length === 2;
+    });
+    expect(sent[0]).toContain("iVBORw0KGgo=");
+    expect(sent[1]).not.toContain("iVBORw0KGgo=");
+    expect(sent[1]).toContain("[an image was attached here]");
+  });
+
+  it("counts a picture as a fixed amount, not as its bytes", () => {
+    const big = { role: "user", content: [{ type: "text", text: "x" }, { type: "image_url", image_url: { url: `data:image/png;base64,${"A".repeat(4_000_000)}` } }] } as ChatMessage;
+    expect(historyTokens([big])).toBeLessThan(1100);
+    expect(historyTokens([big])).toBeGreaterThanOrEqual(1000);
   });
 });

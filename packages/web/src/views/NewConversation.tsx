@@ -3,6 +3,7 @@ import { useState } from "react";
 import { useNavigate } from "react-router";
 import { Composer } from "@/components/Composer";
 import { effortLevels, type Effort } from "@harness/core/effort";
+import { noImagesReason, supportsImages, type ImageAttachment } from "@harness/core/image";
 import { EffortPicker } from "@/components/EffortPicker";
 import { ModelPicker } from "@/components/ModelPicker";
 import { Select } from "@/components/ui/fields";
@@ -39,12 +40,12 @@ export const NewConversation = () => {
   const skills = mode === "code" ? found.data?.[0]?.skills : undefined;
   const ready = selected !== "" && (mode === "chat" || (chosenDevice !== undefined && chosenRoot !== ""));
 
-  const start = async (text: string): Promise<void> => {
+  const start = async (text: string, images?: ImageAttachment[]): Promise<void> => {
     setError("");
     setSending(true);
     try {
       const info = await create.mutateAsync({ model: selected, ...(mode === "code" ? { device: chosenDevice?.nodeId, root: chosenRoot } : {}) });
-      await api<unknown>(`/sessions/${info.id}/messages`, { method: "POST", body: { text, ...(parseSlash(text, skills ?? []) ? { skill: parseSlash(text, skills ?? []) } : {}), ...(effortLevels(selected).length > 0 && effort ? { effort } : {}) } });
+      await api<unknown>(`/sessions/${info.id}/messages`, { method: "POST", body: { text, ...(images ? { images } : {}), ...(parseSlash(text, skills ?? []) ? { skill: parseSlash(text, skills ?? []) } : {}), ...(effortLevels(selected).length > 0 && effort ? { effort } : {}) } });
       await navigate(`/c/${info.id}`);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not start.");
@@ -109,8 +110,8 @@ export const NewConversation = () => {
         {error ? <p className="text-destructive" role="alert">{error}</p> : null}
       </div>
 
-      <Composer draftKey="new" busy={sending} disabled={!ready} skills={skills} placeholder={mode === "code" ? "Describe what to do in this folder" : "Message"} onSend={(text) => {
-        void start(text);
+      <Composer draftKey="new" busy={sending} disabled={!ready} skills={skills} imageNote={selected === "auto" || supportsImages(selected) ? "" : noImagesReason(selected)} placeholder={mode === "code" ? "Describe what to do in this folder" : "Message"} onSend={(text, images) => {
+        void start(text, images);
       }}
       />
     </div>
