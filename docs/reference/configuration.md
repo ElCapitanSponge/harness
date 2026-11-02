@@ -49,6 +49,8 @@ Settings marked "page" can be changed from the Devices page on a device started 
 | `ALLOW_MODEL_CONTROL` | unset | yes | `1` lets the gateway load and unload models in this device's LM Studio. |
 | `CLAUDE_ENABLED` | unset | yes | `1` answers Claude requests with this device's logged-in `claude` CLI. |
 | `CLAUDE_BIN` | `claude` | no | The Claude program to run. |
+| `LIMITED_PROCESSES` | `ms-teams.exe, Teams.exe` | yes | Comma-separated program names that limit the device to smaller models while they run ([Devices](../guides/devices.md#limited-mode-small-models-during-a-call)). |
+| `LIMITED_MAX_GB` | `8` | yes | Largest model, in gigabytes, used while limited (1 to 512). |
 | `GAME_PROCESSES` | unset | yes | Comma-separated executable names; a match marks the device busy. |
 | `IDLE_UNLOAD_MINUTES` | `20` | yes | Unload a model Torii used after this long idle. `0` never. |
 | `SKILL_FOLDERS` | unset | yes | Comma-separated full paths of folders of skills to look in as well as the usual ones ([Skills](../guides/skills.md)). |

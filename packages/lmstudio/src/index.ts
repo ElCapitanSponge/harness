@@ -61,7 +61,26 @@ export const unloadArgs = (model?: string): string[] => {
   return model ? ["unload", model] : ["unload", "--all"];
 };
 
+// The models LM Studio has downloaded, with how big each is, from `lms ls --json`. Anything unreadable is left out.
+export const parseModelList = (json: string): { key: string; sizeBytes: number }[] => {
+  try {
+    const data: unknown = JSON.parse(json);
+    if (!Array.isArray(data)) {
+      return [];
+    }
+    return data.flatMap((m: unknown) => {
+      const model = m as { modelKey?: unknown; sizeBytes?: unknown; type?: unknown } | null;
+      return typeof model?.modelKey === "string" && typeof model.sizeBytes === "number" && model.type !== "embedding" ? [{ key: model.modelKey, sizeBytes: model.sizeBytes }] : [];
+    });
+  } catch {
+    return [];
+  }
+};
+
 export const lms = {
+  async list(run: Run = defaultRun) {
+    return parseModelList(await run(lmsBin, ["ls", "--json"]));
+  },
   async serverStart(run: Run = defaultRun) {
     return run(lmsBin, ["server", "start"]);
   },

@@ -35,7 +35,8 @@ Every message is one JSON object in a text frame, with a `type`.
 | --- | --- |
 | `nodeId`, `kind` | The device's name and `local` (an agent). |
 | `busy`, `busyReason?` | True while a program from the game list is running, so the device is left alone. |
-| `models` | Each model's `id`, whether it is `loaded`, and its `contextLength` when known. |
+| `limit?` | `{ reason, maxBytes }` while a program from the limited list is running: the device still works, with models up to that size. |
+| `models` | Each model's `id`, whether it is `loaded`, its `contextLength` and its `sizeBytes` when known. |
 | `roots` | Names of the project folders it lets coding sessions use. |
 | `allowedTools` | The tools it will run there. |
 | `readOnlyRoots` | The folders that can only be read. |

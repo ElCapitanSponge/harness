@@ -1,5 +1,5 @@
 import type { Heartbeat } from "@harness/core";
-import { detectBusy } from "./busy.js";
+import { detectBusy, detectLoad } from "./busy.js";
 import { config } from "./config.js";
 import { lms } from "@harness/lmstudio";
 import { listModels } from "./lmstudio.js";
@@ -56,20 +56,58 @@ setInterval(() => {
   void idle.check();
 }, 60_000).unref();
 
+// How big each downloaded model is, from LM Studio's own list, refreshed now and then. A model whose size is not known is simply not
+// limited (there is nothing to compare).
+const sizes = new Map<string, number>();
+let sizesAt = 0;
+const refreshSizes = async (): Promise<void> => {
+  if (Date.now() - sizesAt < 5 * 60_000) {
+    return;
+  }
+  sizesAt = Date.now();
+  try {
+    for (const m of await lms.list()) {
+      sizes.set(m.key, m.sizeBytes);
+    }
+  } catch {
+    // No lms, or it failed: sizes stay as they were.
+  }
+};
+
 const collect = async (): Promise<Heartbeat> => {
   const current = settings.current();
-  const { busy, reason } = await detectBusy(current.gameProcesses);
+  const { busy, reason, limit } = await detectLoad(current.gameProcesses, current.limitedProcesses, current.limitedMaxGb);
+  await refreshSizes();
   let models: Heartbeat["models"] = [];
   try {
-    models = await listModels(config.inferenceUrl);
+    models = await listModels(config.inferenceUrl, sizes);
   } catch (err) {
     console.warn(`[agent] inference server unreachable: ${(err as Error).message}`);
+  }
+  // While limited, a model Torii loaded that is too big for the limit is unloaded (never one with a reply in progress, and never one the
+  // owner loaded for their own use), so the call has the graphics card to itself.
+  if (limit && current.modelControl) {
+    for (const m of models) {
+      if (m.loaded && m.sizeBytes !== undefined && m.sizeBytes > limit.maxBytes && idle.tracked().some((t) => {
+        return t.model === m.id && t.inflight === 0;
+      })) {
+        const started = Date.now();
+        void lms.unload(m.id).then(() => {
+          idle.forget(m.id);
+          console.log(`[agent] unloaded ${m.id}: too big while ${limit.reason}`);
+          audit({ time: new Date(started).toISOString(), root: "", tool: "limit-unload", summary: `unloaded ${m.id}: too big while ${limit.reason}`, outcome: "ok", ms: Date.now() - started });
+        }).catch(() => {
+          return undefined;
+        });
+      }
+    }
   }
   return {
     nodeId: config.nodeId,
     kind: "local",
     busy,
     busyReason: reason,
+    ...(limit ? { limit } : {}),
     models,
     roots: tools.rootNames(),
     allowedTools: tools.allowedNames(),

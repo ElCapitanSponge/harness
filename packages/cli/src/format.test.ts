@@ -64,8 +64,8 @@ describe("formatSessions and formatSettings", () => {
 
   it("shows each setting with its source and whether changes are accepted", () => {
     const report = {
-      settings: { projectRoots: {}, readOnlyRoots: [], onDeviceTools: "read", remoteTools: "off", modelControl: false, claude: true, gameProcesses: [], idleUnloadMinutes: 20, skillFolders: [] },
-      sources: { projectRoots: "default", onDeviceTools: "file", remoteTools: "default", readOnlyRoots: "default", modelControl: "default", claude: "env", gameProcesses: "default", idleUnloadMinutes: "default", skillFolders: "default" },
+      settings: { projectRoots: {}, readOnlyRoots: [], onDeviceTools: "read", remoteTools: "off", modelControl: false, claude: true, gameProcesses: [], idleUnloadMinutes: 20, limitedProcesses: [], limitedMaxGb: 8, skillFolders: [] },
+      sources: { projectRoots: "default", onDeviceTools: "file", remoteTools: "default", readOnlyRoots: "default", modelControl: "default", claude: "env", gameProcesses: "default", idleUnloadMinutes: "default", limitedProcesses: "default", limitedMaxGb: "default", skillFolders: "default" },
       locked: ["claude"],
       remoteConfig: false,
     } satisfies SettingsReport;
