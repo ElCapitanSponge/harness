@@ -567,7 +567,7 @@ export const createApp = ({ registry, apiKey, relay, sessions, library, rules, g
     const limitedUntil = claudeDevice ? claude.limitedUntil() : undefined;
     return c.json({
       models: catalogue(nodes),
-      claude: { available: claudeDevice !== undefined && limitedUntil === undefined, device: claudeDevice?.nodeId, models: claudeDevice ? CLAUDE_MODEL_IDS : [], limitedUntil },
+      claude: { available: claudeDevice !== undefined && limitedUntil === undefined, device: claudeDevice?.nodeId, models: claudeDevice ? CLAUDE_MODEL_IDS : [], limitedUntil, model: claude.reportedModel() },
     });
   });
 

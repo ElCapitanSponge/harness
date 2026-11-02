@@ -23,7 +23,16 @@ Models that can be told how hard to think show an **Effort** choice next to the 
 
 ## Which models, and what they cost
 
-`claude` uses your account's default; `claude:sonnet`, `claude:opus` and `claude:haiku` ask the program for that alias, which it resolves to the newest version of the family it has. At the time of writing that is Claude Sonnet 5.5 (`claude-sonnet-5-5`), Opus 5.5 (`claude-opus-5-5`) and Haiku 5.5 (`claude-haiku-5-5`), and the default is Sonnet 5.5. The reply names the exact model that answered.
+`claude` uses your account's default; `claude:sonnet`, `claude:opus` and `claude:haiku` ask the program for that alias, which it resolves to the newest version of the family it has. At the time of writing that is Claude Sonnet 5.5 (`claude-sonnet-5-5`), Opus 5.5 (`claude-opus-5-5`) and Haiku 5.5 (`claude-haiku-5-5`), and the default is Sonnet 5.5.
+
+### Which model actually answered
+
+The gateway does not guess the model. It reads it from what the `claude` program reports for the call (its start message, the reply, or the usage it counted), and:
+
+- The reply is labelled with that model, for example `claude-sonnet-5-5`, even when you chose plain `claude` and the program picked the model itself.
+- The model picker shows it beside Claude once a reply has named it (**Claude (through bastila), using claude-sonnet-5-5**), and changes if the program starts using another.
+- The [Usage](usage.md) ledger records that model, and the context meter uses the window the program reports for it. If the program reports none, the meter assumes 200,000 tokens, as before.
+- If the program names no model, the reply says **Claude (model not reported)** and the picker names none. Nothing is invented.
 
 A coding session takes several model calls for one request (each tool result is another call). So that those do not each pay for the whole conversation again, the gateway keeps the program's own conversation for each Torii conversation and sends only what is new at each step, through the program's `--resume`; its prompt cache then covers everything before. The conversation starts again, with the whole transcript, when the history changed (compaction, rewind, an edit), when the model or device differs, or after a gateway restart, so those steps cost more once. The program keeps the conversation files in its usual place under a folder named for Torii's own working folder, and Torii removes ones unused for three days.
 

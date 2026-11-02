@@ -123,6 +123,10 @@ export const buildArgs = (req: ChatRequest, system?: string): string[] => {
 export interface ClaudeResult {
   text: string;
   model: string;
+  // The model the program says it used, read from its own output. Absent when it said nothing, so the caller can say so instead of guessing.
+  reportedModel?: string;
+  // That model's context window in tokens, when the program reported it.
+  contextWindow?: number;
   // The tools Claude asked to use, when tools were offered. The coding loop runs them and sends the results back.
   toolCalls?: ToolCall[];
   // What the program counted for the call. Prompt tokens include its cached input.
@@ -136,6 +140,8 @@ interface ResultEvent {
   result?: string;
   is_error?: boolean;
   model?: string;
+  // Per model, what the call used, including the window: the program's own account of which model answered.
+  modelUsage?: Record<string, { contextWindow?: number } | undefined>;
   usage?: { input_tokens?: number; cache_creation_input_tokens?: number; cache_read_input_tokens?: number; output_tokens?: number };
 }
 
@@ -166,6 +172,9 @@ export const parseClaudeOutput = (out: string, fallbackModel: string, now = Date
   const assistantModel = (events.find((e) => {
     return e.type === "assistant";
   }) as { message?: { model?: string } } | undefined)?.message?.model;
+  const initModel = (events.find((e) => {
+    return e.type === "system" && typeof e.model === "string";
+  }) as { model?: string } | undefined)?.model;
   const info = (events.findLast((e) => {
     return e.type === "rate_limit_event";
   }) as { rate_limit_info?: RateLimitInfo } | undefined)?.rate_limit_info;
@@ -186,7 +195,19 @@ export const parseClaudeOutput = (out: string, fallbackModel: string, now = Date
 
   const u = result.usage;
   const usage = u ? { inputTokens: (u.input_tokens ?? 0) + (u.cache_creation_input_tokens ?? 0) + (u.cache_read_input_tokens ?? 0), outputTokens: u.output_tokens ?? 0 } : undefined;
-  return { text: result.result, model: result.model ?? assistantModel ?? fallbackModel, ...(usage ? { usage } : {}), ...(limits ? { limits } : {}) };
+  // Where the program names the model: its init message, a reply, the result, or the one model its usage was counted against.
+  const reportedModel = [result.model, initModel, assistantModel, Object.keys(result.modelUsage ?? {})[0]].find((m) => {
+    return typeof m === "string" && m !== "";
+  });
+  const contextWindow = reportedModel === undefined ? undefined : result.modelUsage?.[reportedModel]?.contextWindow;
+  return {
+    text: result.result,
+    model: reportedModel ?? fallbackModel,
+    ...(reportedModel === undefined ? {} : { reportedModel }),
+    ...(contextWindow === undefined ? {} : { contextWindow }),
+    ...(usage ? { usage } : {}),
+    ...(limits ? { limits } : {}),
+  };
 };
 
 const ask = async (bin: string, req: ChatRequest, exec: Exec): Promise<ClaudeResult> => {

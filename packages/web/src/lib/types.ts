@@ -78,5 +78,5 @@ export interface CatalogueEntry {
 export interface Catalogue {
   models: CatalogueEntry[];
   // `limitedUntil` is set (milliseconds since the epoch) while Claude is at its usage limit.
-  claude: { available: boolean; device?: string; models: string[]; limitedUntil?: number };
+  claude: { available: boolean; device?: string; models: string[]; limitedUntil?: number; model?: string };
 }

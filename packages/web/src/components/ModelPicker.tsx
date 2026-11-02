@@ -61,7 +61,7 @@ export const ModelPicker = ({ value, onChange, disabled, className }: { value: s
       })}
       {data?.claude.available
         ? (
-            <optgroup label={`Claude (through ${data.claude.device ?? "a device"})`}>
+            <optgroup label={`Claude (through ${data.claude.device ?? "a device"})${data.claude.model ? `, using ${data.claude.model}` : ""}`}>
               {data.claude.models.map((id) => {
                 return <option key={id} value={id}>{id}</option>;
               })}

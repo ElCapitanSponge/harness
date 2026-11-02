@@ -54,6 +54,17 @@ export const ClaudeIsAChoiceForCodingToo: StoryObj = {
   },
 };
 
+export const ClaudeSaysWhichModelItUsed: StoryObj = {
+  parameters: seed([[["catalogue"], { ...catalogue, claude: { ...catalogue.claude, model: "claude-sonnet-5-5" } } satisfies Catalogue]]),
+  render: () => {
+    return <div className="max-w-sm"><ModelPicker value="claude" onChange={fn()} /></div>;
+  },
+  play: async ({ canvasElement }) => {
+    // Once a reply has named the model, the picker says which one Claude is using; before that it names none.
+    await expect(within(canvasElement).getByRole("group", { name: "Claude (through bastila), using claude-sonnet-5-5" })).toBeInTheDocument();
+  },
+};
+
 export const EffortForModelsThatTakeIt: StoryObj = {
   render: () => {
     return (

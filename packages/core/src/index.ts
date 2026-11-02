@@ -357,6 +357,9 @@ export interface ClaudeStatus {
   sevenDay?: ClaudeWindow;
   usingOverage?: boolean;
   observedAt?: number;
+  // The model the program last said it used, and its window. Absent until a reply has named one.
+  model?: string;
+  contextWindow?: number;
 }
 
 // What one model has used, over some span of calls. `estimated` is true if any of the counts were estimated, not reported by the model server.

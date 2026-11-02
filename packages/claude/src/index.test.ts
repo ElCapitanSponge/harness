@@ -92,7 +92,7 @@ describe("runClaude", () => {
 
   it("returns the result text and sends the prompt on stdin", async () => {
     const exec = vi.fn().mockResolvedValue(JSON.stringify({ result: "hello!", model: "claude-sonnet" }));
-    await expect(runClaude("claude", r, exec)).resolves.toEqual({ text: "hello!", model: "claude-sonnet" });
+    await expect(runClaude("claude", r, exec)).resolves.toEqual({ text: "hello!", model: "claude-sonnet", reportedModel: "claude-sonnet" });
     expect(exec).toHaveBeenCalledWith("claude", expect.any(Array), "hi");
   });
 

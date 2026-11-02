@@ -35,6 +35,7 @@ describe("parseClaudeOutput", () => {
     expect(parseClaudeOutput(out, "claude:haiku", NOW)).toEqual({
       text: "ok",
       model: "claude-haiku-5-5",
+      reportedModel: "claude-haiku-5-5",
       usage: { inputTokens: 9943, outputTokens: 4 },
       limits: {
         status: "allowed",
@@ -85,7 +86,26 @@ describe("parseClaudeOutput", () => {
   });
 
   it("still reads a single JSON object from an older program, with no plan information", () => {
-    expect(parseClaudeOutput(line({ result: "hi", model: "claude-sonnet" }), "claude")).toEqual({ text: "hi", model: "claude-sonnet" });
+    expect(parseClaudeOutput(line({ result: "hi", model: "claude-sonnet" }), "claude")).toEqual({ text: "hi", model: "claude-sonnet", reportedModel: "claude-sonnet" });
+  });
+
+  describe("which model answered", () => {
+    it("reads it from the init message when the reply does not carry it", () => {
+      const out = [line({ type: "system", subtype: "init", model: "claude-opus-5" }), success].join("\n");
+      expect(parseClaudeOutput(out, "claude", NOW)).toMatchObject({ model: "claude-opus-5", reportedModel: "claude-opus-5" });
+    });
+
+    it("reads the model, and its context window, from the usage the program counted", () => {
+      const counted = line({ type: "result", is_error: false, result: "ok", modelUsage: { "claude-sonnet-5-5": { contextWindow: 1_000_000 } } });
+      expect(parseClaudeOutput(counted, "claude", NOW)).toMatchObject({ reportedModel: "claude-sonnet-5-5", contextWindow: 1_000_000 });
+    });
+
+    it("names no model when the program named none, and keeps the requested alias as the label only", () => {
+      const result = parseClaudeOutput(success, "claude", NOW);
+      expect(result.model).toBe("claude");
+      expect(result).not.toHaveProperty("reportedModel");
+      expect(result).not.toHaveProperty("contextWindow");
+    });
   });
 
   it("reports an output with no result", () => {
