@@ -14,7 +14,12 @@ Default five-role vocabulary (needs-triage, needs-info, ready-for-agent, ready-f
 
 ### Claiming issues
 
-Before you start an issue, claim it so no other agent takes it, and release it when you stop: follow `docs/agents/claiming.md`. Skip any issue that already has `in-progress-agent`.
+Several agents may be working at once. Before you start an issue, claim it so no other agent takes it, and release it when you stop. The full steps are in `docs/agents/claiming.md`; in short:
+
+- Only take an issue that is open, has `ready-for-agent`, has no `in-progress-agent` label, and has no open blockers. Skip the rest.
+- Claim: `gh issue edit <n> --add-label in-progress-agent`, then `gh issue comment <n> --body "Claimed on branch <branch> at <ISO time>"`. Read the comments again; if an earlier live claim from another agent exists, stand down and pick something else.
+- Keep it alive by pushing to your branch (a draft PR is fine). A claim with no commits, PR activity or comments for six hours may be taken over; comment when you do.
+- Release: a PR that says `Closes #<n>` removes the label when it is closed or merged. If you stop for any other reason, remove the label yourself and say why in a comment.
 
 ### Domain docs
 
