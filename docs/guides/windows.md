@@ -53,7 +53,7 @@ powershell -File deploy\windows\install-agent-task.ps1
 Start-ScheduledTask -TaskName "harness agent"
 ```
 
-This registers a scheduled task that starts the agent at logon, restarts it if it stops, and logs to `%LOCALAPPDATA%\harness-agent.log`. Restart the task after changing `.env`. Remove it with:
+This registers a scheduled task that bundles the agent and runs it with plain `node` at logon (see [How much memory the agent uses](devices.md#how-much-memory-the-agent-uses)), restarts it if it stops, and logs to `%LOCALAPPDATA%\harness-agent.log`. Restart the task after changing `.env`. Remove it with:
 
 ```powershell
 Unregister-ScheduledTask -TaskName "harness agent" -Confirm:$false

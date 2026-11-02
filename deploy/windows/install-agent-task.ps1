@@ -11,11 +11,13 @@ $ErrorActionPreference = "Stop"
 
 $repo = (Resolve-Path (Join-Path $PSScriptRoot "..\..")).Path
 $pnpm = (Get-Command pnpm -ErrorAction Stop).Source
+$node = (Get-Command node -ErrorAction Stop).Source
 $taskName = "harness agent"
 
-# Run through cmd so the task keeps a log, and with the repo as the working directory so .env is found.
+# Run through cmd so the task keeps a log, and with the repo as the working directory so .env is found. It bundles the agent and runs it
+# with plain node, so pnpm and tsx do not sit beside it using more memory than the agent does.
 $log = Join-Path $env:LOCALAPPDATA "harness-agent.log"
-$action = New-ScheduledTaskAction -Execute "cmd.exe" -Argument "/c `"$pnpm`" --silent agent >> `"$log`" 2>&1" -WorkingDirectory $repo
+$action = New-ScheduledTaskAction -Execute "cmd.exe" -Argument "/c `"$pnpm`" --silent build:agent >> `"$log`" 2>&1 && `"$node`" --env-file-if-exists=.env packages\node-agent\dist\agent.mjs >> `"$log`" 2>&1" -WorkingDirectory $repo
 $trigger = New-ScheduledTaskTrigger -AtLogOn -User $env:USERNAME
 $settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -StartWhenAvailable `
   -RestartCount 999 -RestartInterval (New-TimeSpan -Minutes 1) -ExecutionTimeLimit ([TimeSpan]::Zero)

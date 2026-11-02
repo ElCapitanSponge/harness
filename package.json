@@ -16,6 +16,8 @@
     "bench": "tsx scripts/bench.ts",
     "gateway": "pnpm --filter @harness/gateway start",
     "agent": "pnpm --filter @harness/node-agent start",
+    "build:agent": "tsx scripts/build-agent.ts",
+    "agent:run": "node --env-file-if-exists=.env packages/node-agent/dist/agent.mjs",
     "web": "pnpm --filter @harness/web dev",
     "storybook": "pnpm --filter @harness/web storybook",
     "build:web": "pnpm --filter @harness/web build"
@@ -26,6 +28,7 @@
     "@types/node": "^22.10.0",
     "@types/ws": "^8.18.2",
     "@typescript/native": "npm:typescript@^7.0.2",
+    "esbuild": "0.28.2",
     "eslint": "^10.14.0",
     "eslint-plugin-react-hooks": "^7.1.1",
     "globals": "^17.13.0",

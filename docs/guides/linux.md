@@ -51,7 +51,7 @@ loginctl enable-linger "$USER"      # keep it running when you are not logged in
 journalctl --user -u harness-agent -f
 ```
 
-The unit restarts the agent five seconds after it exits. It assumes the repository is at `~/personal/harness`; edit `ExecStart` in the copied file if it is elsewhere. Restart after changing `.env`:
+The unit restarts the agent five seconds after it exits, and each start bundles the agent and runs it with plain `node` (see [How much memory the agent uses](devices.md#how-much-memory-the-agent-uses)). It assumes the repository is at `~/personal/harness`; edit `ExecStart` in the copied file if it is elsewhere. Restart after changing `.env`:
 
 ```bash
 systemctl --user restart harness-agent

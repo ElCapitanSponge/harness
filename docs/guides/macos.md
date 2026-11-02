@@ -49,7 +49,7 @@ launchctl bootstrap "gui/$(id -u)" ~/Library/LaunchAgents/com.harness.agent.plis
 tail -f ~/Library/Logs/harness-agent.log
 ```
 
-The agent starts at login, restarts if it exits (after a ten second pause), and logs to `~/Library/Logs/harness-agent.log`. The file assumes the repository is at `~/personal/harness`; change the path in the `sed` command if it is elsewhere. Stop it with `launchctl bootout "gui/$(id -u)/com.harness.agent"`.
+The agent starts at login (bundled and run with plain `node`; see [How much memory the agent uses](devices.md#how-much-memory-the-agent-uses)), restarts if it exits (after a ten second pause), and logs to `~/Library/Logs/harness-agent.log`. The file assumes the repository is at `~/personal/harness`; change the path in the `sed` command if it is elsewhere. Stop it with `launchctl bootout "gui/$(id -u)/com.harness.agent"`.
 
 ## Commands the model runs
 

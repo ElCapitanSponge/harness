@@ -13,4 +13,6 @@ if [ -f .env ]; then
   chmod 600 .env
 fi
 
-exec pnpm --silent agent
+# Bundle the agent and run it with plain node: pnpm and tsx beside it would be more than half of its memory.
+pnpm --silent build:agent
+exec node --env-file-if-exists=.env packages/node-agent/dist/agent.mjs
