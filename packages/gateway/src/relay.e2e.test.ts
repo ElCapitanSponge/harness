@@ -267,7 +267,7 @@ describe("approvals over the tunnel", () => {
   it("writes the file on the device only after it is approved", async () => {
     const { root, types } = await run(true);
     try {
-      expect(types).toEqual(["user", "tool", "approval", "approval-resolved", "change", "text", "done"]);
+      expect(types).toEqual(["user", "tool", "approval", "approval-resolved", "change", "tool-output", "text", "done"]);
       expect(await fs.readFile(path.join(root, "notes.txt"), "utf8")).toBe("written on the device");
     } finally {
       await fs.rm(root, { recursive: true, force: true });

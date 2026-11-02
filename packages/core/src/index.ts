@@ -296,7 +296,10 @@ export type SessionEvent
     | { type: "imported"; source: string; turns: number }
     // A skill the person started: its name, what they gave it, and the instructions it put in the conversation.
     | { type: "skill"; name: string; arguments: string; text: string }
-    | { type: "tool"; summary: string }
+    // A tool the model started, by its name (absent in conversations stored before it was recorded), and then what it returned. The output
+    // belongs to the latest tool that has none yet, since tools run one at a time. It is shortened, and `failed` is set when the tool reported an error.
+    | { type: "tool"; summary: string; name?: string }
+    | { type: "tool-output"; name: string; output: string; failed?: boolean }
     | { type: "approval"; id: string; tool: string; summary: string; preview?: ApprovalPreview }
     // The conversation's permission mode changed (or was set when it began).
     | { type: "mode"; mode: PermissionMode }

@@ -42,7 +42,9 @@ export interface AgentDeps {
   onThinking?: (text: string) => void;
   onThinkingDelta?: (piece: string) => void;
   onTextDelta?: (piece: string) => void;
-  onTool: (summary: string) => void;
+  // A tool the model asked for, as one line and by name; and then, once it has run, what it returned (not called for one that was declined).
+  onTool: (summary: string, name: string) => void;
+  onToolOutput?: (name: string, output: string, failed: boolean) => void;
   maxSteps?: number;
 }
 
@@ -60,7 +62,8 @@ export const systemPrompt = (cwd: string, platform: string = process.platform, s
 const DECLINED = "The user declined this action. Stop and ask what they would like instead.";
 const SKIPPED = "Skipped because the user declined an earlier action in this turn.";
 
-const execute = async (call: ToolCall, deps: AgentDeps): Promise<{ result: string; declined?: boolean }> => {
+// `announced` is set once onTool has been called for it, so an output is only reported for a tool that was reported.
+const execute = async (call: ToolCall, deps: AgentDeps): Promise<{ result: string; declined?: boolean; announced?: boolean }> => {
   const tool = (deps.tools ?? allTools).find((t) => {
     return t.def.function.name === call.function.name;
   });
@@ -80,21 +83,21 @@ const execute = async (call: ToolCall, deps: AgentDeps): Promise<{ result: strin
   }
 
   const summary = tool.describe(args);
-  deps.onTool(summary);
+  deps.onTool(summary, call.function.name);
   if (tool.needsApproval && !(await deps.approve(call.function.name, summary, args))) {
     const reason = deps.declineReason?.();
-    return { result: reason ? `${DECLINED} The user said: ${reason}` : DECLINED, declined: true };
+    return { result: reason ? `${DECLINED} The user said: ${reason}` : DECLINED, declined: true, announced: true };
   }
   try {
     if (deps.run) {
-      return { result: await deps.run(call.function.name, args) };
+      return { result: await deps.run(call.function.name, args), announced: true };
     }
     if (!deps.ctx) {
       throw new Error("no working directory");
     }
-    return { result: await tool.run(args, deps.ctx) };
+    return { result: await tool.run(args, deps.ctx), announced: true };
   } catch (err) {
-    return { result: `error: ${(err as Error).message}` };
+    return { result: `error: ${(err as Error).message}`, announced: true };
   }
 };
 
@@ -144,6 +147,9 @@ export const runTurn = async (history: ChatMessage[], deps: AgentDeps): Promise<
       }
       const outcome = await execute(call, deps);
       declined = outcome.declined ?? false;
+      if (outcome.announced === true && !declined) {
+        deps.onToolOutput?.(call.function.name, outcome.result, outcome.result.startsWith("error:"));
+      }
       history.push({ role: "tool", tool_call_id: call.id, content: outcome.result });
     }
     if (declined) {

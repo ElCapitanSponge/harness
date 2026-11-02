@@ -115,7 +115,8 @@ describe("Session turns", () => {
     expect(relay.callTool).toHaveBeenCalledWith("pc", "proj", "read_file", { path: "a.txt" }, { session: expect.any(String) as string });
     expect(s.events).toEqual<SessionEvent[]>([
       { type: "user", text: "what is in a.txt?" },
-      { type: "tool", summary: "read a.txt" },
+      { type: "tool", summary: "read a.txt", name: "read_file" },
+      { type: "tool-output", name: "read_file", output: expect.any(String) as string },
       { type: "text", text: "It says contents.", model: "qwen" },
       { type: "done", stopped: false },
     ]);
@@ -602,7 +603,7 @@ describe("Session side panel data", () => {
     await until(() => {
       return types(s).includes("done");
     });
-    expect(types(s)).toEqual(["user", "tool", "change", "text", "done"]);
+    expect(types(s)).toEqual(["user", "tool", "change", "tool-output", "text", "done"]);
     expect(s.events[2]).toEqual({ type: "change", change: expect.objectContaining({ path: "a.txt", added: 1 }) as unknown });
     // The model saw the tool's result and nothing of the diff.
     expect(shown[1]).toContain("wrote 5 characters to a.txt");

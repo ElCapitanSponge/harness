@@ -1,5 +1,6 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, fn, userEvent, within } from "storybook/test";
+import type { ActionEntry } from "@/lib/actions";
 import type { Item } from "@/lib/conversation";
 import { Message, StatusLine } from "./Messages";
 
@@ -73,7 +74,68 @@ export const ThinkingNow: Story = { args: item({ kind: "thinking", id: 5, live: 
 
 export const ThoughtAbout: Story = { args: item({ kind: "thinking", id: 6, live: false, startedAt: 0, seconds: 12, text: "Checked three files." }) };
 
-export const ToolCall: Story = { args: item({ kind: "tool", id: 7, summary: "read_file src/sum.js" }) };
+const READ: ActionEntry = { name: "read_file", summary: "read src/sum.js", output: "export const sum = (a, b) => a - b;\n" };
+const EDIT: ActionEntry = {
+  name: "edit_file",
+  summary: "edit src/sum.js",
+  output: "edited src/sum.js",
+  change: { path: "src/sum.js", created: false, patch: "@@ -1 +1 @@\n-export const sum = (a, b) => a - b;\n+export const sum = (a, b) => a + b;" },
+};
+
+export const ActionsRunning: Story = {
+  args: item({ kind: "actions", id: 7, live: true, entries: [READ, { name: "run_command", summary: "run npm test" }] }),
+  play: async ({ canvasElement }) => {
+    // Open while it runs: a working mark, the one-line count, and the call still running listed.
+    const canvas = within(canvasElement);
+    await expect(canvas.getByLabelText("working")).toBeVisible();
+    await expect(canvas.getByText("Read 1 file, ran 1 command")).toBeVisible();
+    await expect(canvas.getByText("run npm test")).toBeVisible();
+  },
+};
+
+export const ActionsFinished: Story = {
+  args: item({ kind: "actions", id: 7, live: false, entries: [READ, { name: "run_command", summary: "run npm test", output: "1 passing" }, EDIT] }),
+  play: async ({ canvasElement }) => {
+    // Folded when it ends, with a line that counts what was done; opening it lists each call, and a change shows its diff.
+    const canvas = within(canvasElement);
+    const summary = canvas.getByText("Read 1 file, ran 1 command, modified 1 file");
+    await expect(canvas.queryByText("run npm test")).not.toBeVisible();
+    await userEvent.click(summary);
+    await expect(canvas.getByText("run npm test")).toBeVisible();
+    await expect(canvas.getByText("src/sum.js", { selector: "span.font-mono" })).toBeVisible();
+    await userEvent.click(canvas.getByText("Modified"));
+    await expect(canvas.getByText("+export const sum = (a, b) => a + b;")).toBeVisible();
+    // The person's choice stands: closing it again folds it.
+    await userEvent.click(summary);
+    await expect(canvas.getByText("run npm test")).not.toBeVisible();
+  },
+};
+
+export const ActionsWaitingOnApproval: Story = {
+  args: item({ kind: "actions", id: 7, live: false, entries: [READ, { name: "write_file", summary: "write src/sum.js (42 bytes)" }] }),
+  render: (args) => {
+    // The approval ends the group and is shown outside it, so it is never hidden in a fold.
+    return (
+      <div className="grid gap-2">
+        <Message {...args} />
+        <Message {...args} item={{ kind: "approval", id: 10, approvalId: "a1", tool: "write_file", summary: "write src/sum.js (42 bytes)", status: "pending" }} />
+      </div>
+    );
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(canvas.getByText("Read 1 file, 1 other action")).toBeVisible();
+    await expect(canvas.getByRole("button", { name: "Allow" })).toBeVisible();
+  },
+};
+
+export const ActionsFailed: Story = {
+  args: item({ kind: "actions", id: 7, live: false, entries: [READ, { name: "run_command", summary: "run npm test", output: "error: exit code 1", failed: true }] }),
+  play: async ({ canvasElement }) => {
+    // A failure is counted in the line, so it is seen without opening the group.
+    await expect(within(canvasElement).getByText("Read 1 file, ran 1 command, 1 failed")).toBeVisible();
+  },
+};
 
 export const ErrorNote: Story = { args: item({ kind: "note", id: 8, tone: "error", text: "no connected device has qwen loaded" }) };
 

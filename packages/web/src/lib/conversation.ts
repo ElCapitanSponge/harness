@@ -6,7 +6,8 @@ export type Item
   = | { kind: "user"; id: number; text: string; images?: ImageAttachment[] }
     | { kind: "assistant"; id: number; text: string; streaming: boolean; model?: string; device?: string; reason?: string }
     | { kind: "thinking"; id: number; text: string; live: boolean; startedAt: number; seconds: number }
-    | { kind: "tool"; id: number; summary: string }
+    // A run of tool activity between two messages, or a message and an approval or question. Open (live) while the turn is still adding to it.
+    | { kind: "actions"; id: number; entries: ActionEntry[]; live: boolean }
     | { kind: "skill"; id: number; name: string; arguments: string; text: string }
     | { kind: "compaction"; id: number; messages: number; tokensBefore: number; tokensAfter: number; manual: boolean }
     | { kind: "approval"; id: number; approvalId: string; tool: string; summary: string; status: "pending" | "allowed" | "declined"; preview?: ApprovalPreview; reason?: string }
@@ -42,6 +43,7 @@ export interface ConversationState {
   stage?: { name: StageName; detail?: string };
 }
 
+import type { ActionEntry } from "./actions";
 import { MODE_LABELS } from "./modes";
 
 export const emptyConversation = (): ConversationState => {
@@ -59,9 +61,13 @@ const isDelta = (event: StreamEvent): boolean => {
   return event.type === "thinking-delta" || event.type === "text-delta" || event.type === "stage";
 };
 
-// Finishes any thinking or reply that was still being written.
-const settle = (items: Item[], now: number): Item[] => {
+// Finishes any thinking or reply that was still being written, and ends the open group of actions: a message, an approval, a question
+// or the end of the turn closes it. Thinking and more tool calls (`keepGroup`) do not, so one group spans a run of steps.
+const settle = (items: Item[], now: number, keepGroup = false): Item[] => {
   return items.map((item) => {
+    if (item.kind === "actions" && item.live && !keepGroup) {
+      return { ...item, live: false };
+    }
     if (item.kind === "thinking" && item.live) {
       return { ...item, live: false, seconds: Math.max(0, Math.round((now - item.startedAt) / 1000)) };
     }
@@ -82,6 +88,38 @@ const withNote = (state: ConversationState, cursor: number, text: string, tone: 
     items: [...settle(state.items, now), { kind: "note", id: state.next, text, tone }],
     next: state.next + 1,
   };
+};
+
+const lastActions = (items: Item[]): number => {
+  return items.findLastIndex((i) => {
+    return i.kind === "actions";
+  });
+};
+
+const withEntries = (items: Item[], index: number, entries: ActionEntry[]): Item[] => {
+  return items.map((item, i) => {
+    return item.kind === "actions" && i === index ? { ...item, entries } : item;
+  });
+};
+
+// A file change belongs to the write or edit that made it: the latest entry still waiting for its output (the change arrives before the output,
+// and in a conversation stored before tool names were kept, every entry is waiting, so the latest is the one). With none to join, it is a row of its own.
+const attachChange = (items: Item[], c: FileChange): Item[] => {
+  const index = lastActions(items);
+  const group = items[index];
+  if (group?.kind !== "actions") {
+    return items;
+  }
+  const change = { path: c.path, patch: c.patch, note: c.note, created: c.created };
+  const k = group.entries.findLastIndex((e) => {
+    return e.output === undefined && e.change === undefined && (e.name === undefined || e.name === "write_file" || e.name === "edit_file");
+  });
+  if (k >= 0) {
+    return withEntries(items, index, group.entries.map((e, j) => {
+      return j === k ? { ...e, change } : e;
+    }));
+  }
+  return group.live ? withEntries(items, index, [...group.entries, { summary: `modified ${c.path}`, change }]) : items;
 };
 
 export const applyEvent = (state: ConversationState, event: StreamEvent, now: number = Date.now()): ConversationState => {
@@ -107,7 +145,7 @@ export const applyEvent = (state: ConversationState, event: StreamEvent, now: nu
       if (last?.kind === "thinking" && last.live) {
         return replaceLast({ ...last, text: last.text + event.text });
       }
-      return push(settle(state.items, now), (id) => {
+      return push(settle(state.items, now, true), (id) => {
         return { kind: "thinking", id, text: event.text, live: true, startedAt: now, seconds: 0 };
       });
 
@@ -153,7 +191,7 @@ export const applyEvent = (state: ConversationState, event: StreamEvent, now: nu
         removed: (earlier?.removed ?? 0) + c.removed,
         diffs: [...(earlier?.diffs ?? []), { patch: c.patch, note: c.note }],
       };
-      return { ...state, cursor, changes: [entry, ...state.changes.filter((f) => {
+      return { ...state, cursor, items: attachChange(state.items, c), changes: [entry, ...state.changes.filter((f) => {
         return f.path !== c.path;
       })] };
     }
@@ -184,10 +222,35 @@ export const applyEvent = (state: ConversationState, event: StreamEvent, now: nu
         return { kind: "skill", id, name: event.name, arguments: event.arguments, text: event.text };
       });
 
-    case "tool":
-      return push(settle(state.items, now), (id) => {
-        return { kind: "tool", id, summary: event.summary };
+    case "tool": {
+      const entry: ActionEntry = { summary: event.summary, ...(event.name ? { name: event.name } : {}) };
+      const open = state.items.findLastIndex((i) => {
+        return i.kind === "actions" && i.live;
       });
+      const group = state.items[open];
+      if (group?.kind === "actions") {
+        return { ...state, cursor, items: withEntries(state.items, open, [...group.entries, entry]) };
+      }
+      return push(settle(state.items, now, true), (id) => {
+        return { kind: "actions", id, entries: [entry], live: true };
+      });
+    }
+
+    case "tool-output": {
+      const index = lastActions(state.items);
+      const group = state.items[index];
+      const k = group?.kind === "actions"
+        ? group.entries.findLastIndex((e) => {
+            return e.output === undefined && (e.name === undefined || e.name === event.name);
+          })
+        : -1;
+      if (group?.kind !== "actions" || k < 0) {
+        return { ...state, cursor };
+      }
+      return { ...state, cursor, items: withEntries(state.items, index, group.entries.map((e, j) => {
+        return j === k ? { ...e, name: event.name, output: event.output, ...(event.failed ? { failed: true } : {}) } : e;
+      })) };
+    }
 
     case "approval":
       return push(settle(state.items, now), (id) => {
@@ -214,7 +277,7 @@ export const applyEvent = (state: ConversationState, event: StreamEvent, now: nu
         ? { ...state, cursor, items: state.items.map((i) => {
             return i.kind === "subagent" && i.childId === event.childId ? item(i.id) : i;
           }) }
-        : push(settle(state.items, now), item);
+        : push(settle(state.items, now, true), item);
     }
 
     case "question":

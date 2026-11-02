@@ -217,6 +217,8 @@ const titleFrom = (text: string): string => {
 };
 // Reasoning can run to many thousands of characters a step; keep enough to read without bloating saved sessions.
 const MAX_STORED_THOUGHT = 6000;
+// What a tool returned, as kept in the events for the page to show when a group of actions is opened. The model was given all of it.
+const MAX_STORED_OUTPUT = 4000;
 
 interface SessionDeps {
   relay: Pick<Relay, "callTool">;
@@ -963,8 +965,11 @@ export class Session {
         onText: (text) => {
           this.emit({ type: "text", text, model: this.lastRoute?.model ?? this.active, device: this.lastRoute?.device, ...(this.current === "auto" && this.chosen ? { reason: this.chosen.reason } : {}) });
         },
-        onTool: (summary) => {
-          this.emit({ type: "tool", summary });
+        onTool: (summary, name) => {
+          this.emit({ type: "tool", summary, name });
+        },
+        onToolOutput: (name, output, failed) => {
+          this.emit({ type: "tool-output", name, output: output.length > MAX_STORED_OUTPUT ? output.slice(0, MAX_STORED_OUTPUT) + "\n... (shortened)" : output, ...(failed ? { failed: true } : {}) });
         },
       });
       this.emit({ type: "done", ...outcome });

@@ -1,6 +1,7 @@
-import { Bot, Brain, ChevronRight, CircleHelp, GitBranch, Layers, Sparkles, Loader2, Wrench, Copy } from "lucide-react";
+import { Bot, Brain, ChevronRight, CircleHelp, GitBranch, Layers, Sparkles, Loader2, Copy } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Link } from "react-router";
+import { Actions } from "@/components/Actions";
 import { ApprovalCard, type Answer } from "@/components/ApprovalCard";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/fields";
@@ -177,13 +178,10 @@ export const Message = ({ item, model, onAnswer, onReply }: { item: Item; model:
         </div>
       );
 
-    case "tool":
+    case "actions":
       return (
         <div className="px-10">
-          <div className="inline-flex max-w-full items-center gap-1.5 rounded-md border bg-card px-2 py-1 font-mono text-xs text-muted-foreground">
-            <Wrench className="size-3.5 shrink-0" />
-            <span className="break-all">{item.summary}</span>
-          </div>
+          <Actions item={item} />
         </div>
       );
 

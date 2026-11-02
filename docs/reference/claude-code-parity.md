@@ -23,6 +23,7 @@ Torii is meant to replace Claude Code desktop and the Claude Code command line i
 | Images in a message | [Coding sessions](../guides/coding-sessions.md) |
 | Commands that run in the background | [Commands in the background](../guides/coding-sessions.md#commands-in-the-background) |
 | Changed files with diffs | [The session panel](../guides/coding-sessions.md#the-session-panel) |
+| Tool calls folded into a collapsible group with a summary line | [Actions in the thread](../guides/coding-sessions.md#actions-in-the-thread) |
 | Picking a folder to work in | [Desktop app](../guides/desktop.md) (system folder picker) |
 | Sessions grouped by project, pinned sessions, working / needs-you / unread marks | [Projects in the sidebar](../guides/coding-sessions.md#projects-in-the-sidebar) |
 | Told when a session needs you, with a badge on the app's icon | Same section, and the [desktop app](../guides/desktop.md) |
