@@ -38,7 +38,7 @@ None of these has a ticket yet; each gets one, with its blockers, before work on
 - [ ] **MCP servers.** Tools from Model Context Protocol servers, configured per device or project.
 - [ ] **Hooks.** Commands that run before or after a tool call or at the end of a turn.
 - [ ] **A git worktree for each session.** Sessions that work on the same project without touching each other's files.
-- [ ] **Resume and continue on the command line.** `harness code --resume` and `--continue` for the sessions the gateway keeps.
+- [x] **Resume and continue on the command line.** `harness code --resume` and `--continue` for the sessions the gateway keeps (#126).
 - [ ] **A headless print mode on the command line.** One prompt in, the answer on standard output, for scripts (`claude -p`).
 - [ ] **A status line.** A line of the person's own choosing under the message box.
 - [ ] **Output styles.** Changing how the model words its replies.

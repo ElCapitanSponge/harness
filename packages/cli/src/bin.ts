@@ -1,5 +1,5 @@
 #!/usr/bin/env tsx
-import { isLiveEvent, nonEmpty, type ChatMessage, type SessionEvent, type StageName } from "@harness/core";
+import { isLiveEvent, nonEmpty, type ChatMessage, type SessionEvent, type SessionInfo, type StageName } from "@harness/core";
 import fs from "node:fs/promises";
 import path from "node:path";
 import readline from "node:readline/promises";
@@ -7,6 +7,7 @@ import { runTurn, systemPrompt, type Approver } from "@harness/tools";
 import { Gateway } from "./api.js";
 import { isClaudeModel, runClaudeCode } from "./claudecode.js";
 import { parseCommand, USAGE } from "./commands.js";
+import { pickSession } from "./resume.js";
 import { formatModels, formatNodes, formatSessions, formatSettings } from "./format.js";
 import { lms } from "@harness/lmstudio";
 
@@ -86,7 +87,10 @@ const chat = async (model: string, prompt: string): Promise<void> => {
 };
 
 // Works on a connected device's files: the model loop runs on the gateway, tools run on the device.
-const codeRemote = async (model: string, prompt: string, yes: boolean, device: string, rootName?: string): Promise<void> => {
+const codeRemote = async (model: string, prompt: string, yes: boolean, device: string, rootName?: string, back?: SessionInfo): Promise<void> => {
+  if (back) {
+    return codeSession(back, prompt);
+  }
   const node = (await gateway.nodes()).find((n) => {
     return n.nodeId === device;
   });
@@ -101,10 +105,14 @@ const codeRemote = async (model: string, prompt: string, yes: boolean, device: s
 
   const session = await gateway.createSession({ model, device, root, autoApprove: yes });
   console.error(`working on ${device}:${root} with "${model}"${yes ? " (auto-approving changes)" : ""}`);
+  return codeSession(session, prompt);
+};
 
+// Talks to a coding session on the gateway, a new one or one gone back to; earlier events are not shown again.
+const codeSession = async (session: SessionInfo, prompt: string): Promise<void> => {
   const rl = process.stdin.isTTY ? readline.createInterface({ input: process.stdin, output: process.stdout }) : undefined;
   // Events already shown, so a later turn does not replay earlier ones.
-  let cursor = 0;
+  let cursor = session.events;
   let lastStage = "";
   const ask = async (event: Extract<SessionEvent, { type: "approval" }>): Promise<void> => {
     let approve = false;
@@ -320,8 +328,17 @@ const main = async (): Promise<void> => {
       return;
     case "chat":
       return chat(cmd.model, cmd.prompt);
-    case "code":
+    case "code": {
+      if (cmd.resume || cmd.continue) {
+        const back = pickSession(await gateway.sessions(), { resume: cmd.resume, continue: cmd.continue, device: cmd.device, root: cmd.root });
+        if (!back.deviceConnected) {
+          throw new Error(`${back.device} is not connected, so that session cannot be continued`);
+        }
+        console.error(`continuing ${back.id.slice(0, 8)} on ${back.device}:${back.root} with "${back.model}"`);
+        return codeRemote(back.model, cmd.prompt, cmd.yes, back.device, back.root, back);
+      }
       return cmd.device ? codeRemote(cmd.model, cmd.prompt, cmd.yes, cmd.device, cmd.root) : code(cmd.model, cmd.prompt, cmd.yes);
+    }
     case "tool": {
       const result = await gateway.deviceTool(cmd.device, cmd.root, cmd.tool, cmd.args);
       console.log(result.output);

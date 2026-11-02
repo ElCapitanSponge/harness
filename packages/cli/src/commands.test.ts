@@ -22,8 +22,8 @@ describe("parseCommand", () => {
   });
 
   it("parses code with a prompt, a model and the auto-approve flag", () => {
-    expect(parseCommand(["code", "fix", "the", "bug"])).toEqual({ name: "code", model: "auto", prompt: "fix the bug", yes: false });
-    expect(parseCommand(["code", "-m", "claude:sonnet", "-y"])).toEqual({ name: "code", model: "claude:sonnet", prompt: "", yes: true });
+    expect(parseCommand(["code", "fix", "the", "bug"])).toEqual({ name: "code", model: "auto", prompt: "fix the bug", yes: false, continue: false });
+    expect(parseCommand(["code", "-m", "claude:sonnet", "-y"])).toEqual({ name: "code", model: "claude:sonnet", prompt: "", yes: true, continue: false });
   });
 
   it("parses load with and without a context length", () => {
@@ -54,7 +54,13 @@ describe("parseCommand", () => {
       yes: false,
       device: "anakin",
       root: "proj",
+      continue: false,
     });
+  });
+
+  it("parses --continue and --resume for going back to a coding session", () => {
+    expect(parseCommand(["code", "--continue", "-d", "anakin", "more"])).toMatchObject({ name: "code", continue: true, device: "anakin", prompt: "more" });
+    expect(parseCommand(["code", "--resume", "ab12"])).toMatchObject({ name: "code", resume: "ab12", continue: false });
   });
 
   it("parses tool with a device, root, tool and optional JSON args", () => {

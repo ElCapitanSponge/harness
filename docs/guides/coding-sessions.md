@@ -60,6 +60,8 @@ Nothing is exposed unless project folders are set, and only the tools the two to
 ```bash
 harness nodes                                         # the ROOTS column shows what each device exposes
 harness code -d anakin -r proj "why does the build fail?"
+harness code --continue "and the lint errors?"                 # back to the newest coding session
+harness code --resume 3f2a9c1b                                  # back to one from `harness sessions`
 harness tool anakin proj read_file '{"path":"package.json"}'   # run one tool, for debugging
 ```
 
