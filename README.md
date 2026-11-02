@@ -18,7 +18,7 @@ Each device runs a **node agent** that reports which models it has loaded and wh
 
 ## Status
 
-Working, and in daily use. The gateway, node agents, CLI and web interface (chat, coding sessions on any connected device, Auto mode, skills, import and export) are built and tested, including end to end over a real tunnel. Not yet run in practice: node agents on a Mac or Linux machine. See the [open issues](https://github.com/ElCapitanSponge/harness/issues).
+Working, and in daily use. The gateway, node agents, CLI and web interface (chat, coding sessions on any connected device, Auto mode, skills, import and export) are built and tested, including end to end over a real tunnel. Not yet run in practice: node agents on a Mac or Linux machine; the [list of what is untested](docs/status.md) says what, and the [open issues](https://github.com/ElCapitanSponge/harness/issues) track it.
 
 ## Requirements
 

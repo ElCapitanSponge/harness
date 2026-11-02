@@ -9,7 +9,7 @@ sidebar:
 
 A device appears in the pool while its node agent runs. This guide installs the agent, points it at the gateway and starts it at login.
 
-The launchd file has been written but **not yet run on a Mac** (the MacBook Air check is still to do on [#14](https://github.com/ElCapitanSponge/harness/issues/14)). After setting it up, confirm the device appears, and tell us if a step needed changing.
+The launchd file has been written but is **untested on a real Mac** (the owner's follow-up is [#105](https://github.com/ElCapitanSponge/harness/issues/105); see [what has not been tested](../status.md)). After setting it up, confirm the device appears, and tell us if a step needed changing.
 
 ## Install
 
