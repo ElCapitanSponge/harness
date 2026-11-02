@@ -18,7 +18,7 @@ Run from the repository root as `pnpm harness <command>`, or with the `harness` 
 | `harness import <file> [-n number \| --all] [-m model]` | Bring in a Claude Code `.jsonl`, a ChatGPT or Claude.ai export, or a markdown or text transcript. With several conversations in the file, `-n` picks one by number (they are listed if you omit it) and `--all` takes them all. |
 | `harness settings <device> [key json]` | Show a device's settings, or change one, for example `settings anakin claude true`. The device must run with `REMOTE_CONFIG=1`. |
 | `harness chat [-m model] [prompt...]` | One-shot chat, or interactive with no prompt. |
-| `harness code [-m model] [-y] [-d device [-r root]] [prompt...]` | Work on the files in the current directory (read, edit, run commands); with `-d` and `-r`, on a device's folder. Claude models launch Claude Code locally. See [Coding sessions](../guides/coding-sessions.md). |
+| `harness code [-m model] [-y] [-d device [-r root]] [--continue \| --resume id] [prompt...]` | Work on the files in the current directory (read, edit, run commands); with `-d` and `-r`, on a device's folder. Claude models launch Claude Code locally. `--continue` goes back to the newest coding session (in the given device and root, if any); `--resume` goes back to one by id or the start of it. See [Coding sessions](../guides/coding-sessions.md). |
 | `harness tool <device> <root> <tool> [json-args]` | Run one tool on a connected device, for debugging. |
 | `harness load <model> [-c tokens] [-d device]` | Load a model in LM Studio, here or on a connected device. |
 | `harness unload [model] [-d device]` | Unload one model, or all if omitted. |

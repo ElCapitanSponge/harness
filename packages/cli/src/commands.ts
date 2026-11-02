@@ -8,7 +8,7 @@ export type Command
     | { name: "import"; file: string; all: boolean; pick?: number; model?: string }
     | { name: "settings"; device: string; key?: string; value?: unknown }
     | { name: "chat"; model: string; prompt: string }
-    | { name: "code"; model: string; prompt: string; yes: boolean; device?: string; root?: string }
+    | { name: "code"; model: string; prompt: string; yes: boolean; device?: string; root?: string; resume?: string; continue: boolean }
     | { name: "tool"; device: string; root: string; tool: string; args: Record<string, unknown> }
     | { name: "load"; model: string; contextLength?: number; device?: string }
     | { name: "unload"; model?: string; device?: string }
@@ -28,9 +28,10 @@ Usage:
   harness settings <device> [key json] show a device's settings, or change one (the device must run
                                         with REMOTE_CONFIG=1), e.g. settings anakin claude true
   harness chat [-m model] [prompt...]   one-shot chat, or interactive with no prompt
-  harness code [-m model] [-y] [-d device [-r root]] [prompt...]
+  harness code [-m model] [-y] [-d device [-r root]] [--continue | --resume id] [prompt...]
                                         work on the files in the current directory (read, edit, run
-                                        commands). Runs on this machine; claude models launch Claude Code
+                                        commands). Runs on this machine; claude models launch Claude Code.
+                                        --continue / --resume go back to a saved coding session
   harness tool <device> <root> <tool> [json-args]
                                         run one tool on a connected device (debugging the remote tools)
   harness load <model> [-c tokens] [-d device]
@@ -52,6 +53,8 @@ export const parseCommand = (argv: string[]): Command => {
       yes: { type: "boolean", short: "y" },
       device: { type: "string", short: "d" },
       root: { type: "string", short: "r" },
+      resume: { type: "string" },
+      continue: { type: "boolean" },
       all: { type: "boolean" },
       number: { type: "string", short: "n" },
     },
@@ -103,7 +106,7 @@ export const parseCommand = (argv: string[]): Command => {
     case "chat":
       return { name: "chat", model: values.model ?? "auto", prompt: rest.join(" ").trim() };
     case "code":
-      return { name: "code", model: values.model ?? "auto", prompt: rest.join(" ").trim(), yes: values.yes ?? false, device: values.device, root: values.root };
+      return { name: "code", model: values.model ?? "auto", prompt: rest.join(" ").trim(), yes: values.yes ?? false, device: values.device, root: values.root, resume: values.resume, continue: values.continue ?? false };
     case "tool": {
       const [device, root, tool, json] = rest;
       if (!device || !root || !tool) {
