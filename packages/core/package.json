@@ -5,7 +5,8 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
-    "./effort": "./src/effort.ts"
+    "./effort": "./src/effort.ts",
+    "./image": "./src/image.ts"
   },
   "dependencies": {
     "zod": "^4.6.7"

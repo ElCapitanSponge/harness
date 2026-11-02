@@ -75,7 +75,7 @@ In a coding session, the panel button in the header opens **This session** besid
 
 Both are stored as events of the conversation, so reopening it shows the panel as it was.
 
-Not built yet from the same plan: attaching images for models that can read them ([#28](https://github.com/ElCapitanSponge/harness/issues/28)).
+Messages can carry images for models that can read them; see [Images](models.md#images).
 
 ## Commands in the background
 

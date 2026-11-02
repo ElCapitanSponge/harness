@@ -246,7 +246,7 @@ export const createApp = ({ registry, apiKey, relay, sessions, ledger, claude = 
       return c.json({ error: flattenError(parsed.error) }, 400);
     }
     try {
-      session.send(parsed.data.text, parsed.data.model, parsed.data.effort, parsed.data.skill);
+      session.send(parsed.data.text, parsed.data.model, parsed.data.effort, parsed.data.skill, parsed.data.images);
     } catch (err) {
       return c.json({ error: { message: (err as Error).message } }, 409);
     }

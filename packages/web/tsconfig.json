@@ -14,6 +14,7 @@
     "paths": {
       "@harness/core": ["../core/src/index.ts"],
       "@harness/core/effort": ["../core/src/effort.ts"],
+      "@harness/core/image": ["../core/src/image.ts"],
       "@/*": ["./src/*"]
     }
   },

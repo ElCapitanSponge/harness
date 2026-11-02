@@ -47,6 +47,7 @@ The message box takes markdown.
 | Ctrl or Cmd+I | Italic. |
 | Ctrl or Cmd+E | Inline code. |
 | Ctrl or Cmd+K | Link. |
+| Paste or drop an image | Attach it (up to 4). The paperclip does the same. See [Images](../guides/models.md#images). |
 | `/` at the start (coding sessions) | Open the skill menu. Up and Down move, Enter or Tab completes the name, Escape closes it. |
 
 Inside a fenced code block Enter adds a line instead of sending, so code can be pasted whole. The toolbar has the same formatting as buttons and a **Preview**. What you typed and did not send is kept per conversation, so a refresh does not lose it.

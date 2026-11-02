@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { effortFor, sseData, textOf, type ChatMessage, type Effort, type NodeRecord, type LiveSessionEvent, type SessionEvent, type SessionInfo, type Tool, type ToolCall } from "@harness/core";
+import { effortFor, noImagesReason, sseData, supportsImages, type ImageAttachment, textOf, type ChatMessage, type Effort, type NodeRecord, type LiveSessionEvent, type SessionEvent, type SessionInfo, type Tool, type ToolCall } from "@harness/core";
 import { contextPrompt, planTool, readPlan, runTurn, systemPrompt, type ProjectContext, tools as allTools, type StreamHooks, type ToolSpec } from "@harness/tools";
 import type { Registry } from "./registry.js";
 import type { Relay } from "./relay.js";
@@ -250,6 +250,8 @@ export class Session {
   compaction: { time: number; tokensAfter: number } | undefined;
   // Which model on which device made the latest call, to label the reply that follows.
   private lastRoute: { model: string; device: string } | undefined;
+  // Pictures sent with the message being run.
+  private attached: ImageAttachment[] = [];
   // A skill the person started with the message being sent.
   private starting: { name: string; arguments?: string } | undefined;
   // With the model set to "auto": what was chosen for the turn, kept so the next turn can stay on it.
@@ -347,7 +349,7 @@ export class Session {
   }
 
   // Throws if a turn is running or the device is not connected: a session whose device is away can be read, not continued.
-  send(text: string, model?: string, effort?: Effort | "default", skill?: { name: string; arguments?: string }): void {
+  send(text: string, model?: string, effort?: Effort | "default", skill?: { name: string; arguments?: string }, images?: ImageAttachment[]): void {
     if (this.abort) {
       throw new Error("the session is busy with a turn");
     }
@@ -355,6 +357,7 @@ export class Session {
       throw new Error("skills run in a coding session, on a device");
     }
     this.starting = skill;
+    this.attached = images ?? [];
     if (model !== undefined && model !== this.current) {
       this.current = model;
       // Picking a model takes Auto off, and picking Auto starts its choice afresh.
@@ -369,7 +372,7 @@ export class Session {
       this.title = titleFrom(text);
     }
     this.abort = new AbortController();
-    this.emit({ type: "user", text });
+    this.emit({ type: "user", text, ...(images && images.length > 0 ? { images } : {}) });
     this.history.push({ role: "user", content: text });
     void this.run(this.abort, specs);
   }
@@ -501,12 +504,17 @@ export class Session {
     if (!pool) {
       throw new Error("Auto mode is not set up on this gateway; pick a model");
     }
-    const result = chooseModel({
+    let result = chooseModel({
       tokens: historyTokens(this.history),
       needsTools: this.kind === "code",
+      needsImages: this.attached.length > 0,
       current: this.chosen?.model ?? this.lastRoute?.model,
       ...pool,
     });
+    // With no model that can read the image, Auto still answers; the image is left out and the person is told.
+    if ("none" in result && this.attached.length > 0) {
+      result = chooseModel({ tokens: historyTokens(this.history), needsTools: this.kind === "code", current: this.chosen?.model ?? this.lastRoute?.model, ...pool });
+    }
     if ("none" in result) {
       throw new Error(result.none);
     }
@@ -548,6 +556,23 @@ export class Session {
         });
   }
 
+  // Puts the message's pictures into the request if the model that will answer can read them; otherwise leaves them out and says so.
+  private attachImages(): void {
+    const images = this.attached;
+    this.attached = [];
+    const last = this.history.at(-1);
+    if (images.length === 0 || last?.role !== "user" || typeof last.content !== "string") {
+      return;
+    }
+    if (!supportsImages(this.active)) {
+      this.emit({ type: "notice", text: noImagesReason(this.active) });
+      return;
+    }
+    last.content = [{ type: "text", text: last.content }, ...images.map((i) => {
+      return { type: "image_url", image_url: { url: `data:${i.mediaType};base64,${i.data}` } };
+    })];
+  }
+
   // If the person started a skill with this message, its instructions go into the conversation in place of the bare command.
   private async runStartedSkill(): Promise<void> {
     const skill = this.starting;
@@ -573,6 +598,7 @@ export class Session {
       if (this.starting) {
         await this.runStartedSkill();
       }
+      this.attachImages();
     } catch (err) {
       this.history.pop();
       this.emit({ type: "error", message: err instanceof Error ? err.message : String(err) });
@@ -599,7 +625,7 @@ export class Session {
           if (abort.signal.aborted) {
             throw new Error("cancelled");
           }
-          return this.deps.complete(this.active, messages, tools, abort.signal, {
+          return this.deps.complete(this.active, supportsImages(this.active) ? messages : withoutImages(messages), tools, abort.signal, {
             thinking: (piece) => {
               this.emitLive({ type: "thinking-delta", text: piece });
             },
@@ -657,6 +683,21 @@ export class Session {
     }
   }
 }
+
+// A model that cannot read images is sent the conversation with each picture replaced by a note, so an image sent earlier to a model
+// that could see it does not break a later turn on one that cannot.
+const withoutImages = (messages: ChatMessage[]): ChatMessage[] => {
+  return messages.map((m) => {
+    if (!Array.isArray(m.content) || !m.content.some((p) => {
+      return p.type === "image_url";
+    })) {
+      return m;
+    }
+    return { ...m, content: m.content.map((p) => {
+      return p.type === "image_url" ? { type: "text", text: "[an image was attached here]" } : p;
+    }) };
+  });
+};
 
 // Where the project's instructions and skills begin in a coding session's system prompt.
 const CONTEXT_MARK = "\n\n--- This project and its owner ---\n";

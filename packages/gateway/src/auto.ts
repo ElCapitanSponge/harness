@@ -1,4 +1,4 @@
-import type { NodeRecord } from "@harness/core";
+import { supportsImages, type NodeRecord } from "@harness/core";
 
 // Auto mode: which model should answer this turn. A pure function of the conversation and the pool, so it can be tested and its reasons
 // read. The rules and why they are what they are are in docs/adr/0010-auto-mode-chooses-by-rules-and-explains-itself.md.
@@ -17,6 +17,8 @@ export interface AutoInput {
   tokens: number;
   // A coding session needs tools, so a model with room to work.
   needsTools: boolean;
+  // The message carries an image, so only a model that can read images will do (and not Claude, which is driven with text only).
+  needsImages?: boolean;
   // The model that answered last, kept if it still fits.
   current?: string;
   nodes: NodeRecord[];
@@ -88,6 +90,9 @@ const locals = (input: AutoInput): Candidate[] => {
       })) {
         return [];
       }
+      if (input.needsImages === true && !supportsImages(m.id)) {
+        return [];
+      }
       if (!m.loaded && !node.modelControl) {
         return [];
       }
@@ -103,7 +108,7 @@ export const chooseModel = (input: AutoInput): AutoResult => {
   const fits = (c: Candidate): boolean => {
     return c.window >= needed && (!input.needsTools || c.window >= MIN_TOOL_WINDOW);
   };
-  const claude: Candidate | undefined = input.claude.available && input.claude.device !== undefined && !input.prefs.avoid.some((a) => {
+  const claude: Candidate | undefined = input.claude.available && input.needsImages !== true && input.claude.device !== undefined && !input.prefs.avoid.some((a) => {
     return a.trim() !== "" && matches("claude", a);
   })
     ? { model: "claude", device: input.claude.device, window: CLAUDE_CONTEXT, loaded: true, claude: true, rank: preferenceRank("claude", input.prefs.prefer) }

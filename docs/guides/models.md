@@ -30,3 +30,9 @@ Not a council: one model answers each message. Orchestrating several models on o
 - If nothing can be used, the message is not sent and the reason is shown.
 
 Picking a model yourself takes Auto off for that message; picking Auto again turns it back on. Settings on the gateway, each a comma-separated list: `HARNESS_AUTO_PREFER` (names, best first; a name matches any model id containing it, and `claude` ranks Claude), `HARNESS_AUTO_AVOID`, and `HARNESS_AUTO_KEEP_FREE` (device names Auto never chooses).
+
+## Images
+
+The paperclip in the message box (or drag and drop, or pasting a picture) attaches up to 4 PNG, JPEG, GIF or WebP images of up to 5 MB each to a message, in a chat or a coding session. A model that can read images receives them in the standard message format; the pictures are kept with the conversation and shown again when it is reopened.
+
+Local models do not say whether they can see, so Torii goes by the name: the usual vision families (LLaVA, Qwen-VL, Gemma 3, Llama vision, Pixtral, MiniCPM-V and similar). If the model that will answer does not look like one, the page warns before you send, and the answer is written from the text alone, with a notice saying the image was not sent. Claude is driven with text only here, so it is never sent images. **Auto** looks for a model that can read images when the message has one and falls back to the text alone, with the notice, if none is available. A picture sent earlier is replaced by a short note when a later message goes to a model that cannot see. In the size meter a picture counts as about 1,000 tokens.

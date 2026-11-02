@@ -1,9 +1,9 @@
-import type { FileChange, PlanStep, SessionEvent, StageName } from "@harness/core";
+import type { FileChange, ImageAttachment, PlanStep, SessionEvent, StageName } from "@harness/core";
 
 // What the page shows for a conversation, built up from the gateway's events. Kept free of React so it can be tested.
 
 export type Item
-  = | { kind: "user"; id: number; text: string }
+  = | { kind: "user"; id: number; text: string; images?: ImageAttachment[] }
     | { kind: "assistant"; id: number; text: string; streaming: boolean; model?: string; device?: string; reason?: string }
     | { kind: "thinking"; id: number; text: string; live: boolean; startedAt: number; seconds: number }
     | { kind: "tool"; id: number; summary: string }
@@ -91,7 +91,7 @@ export const applyEvent = (state: ConversationState, event: StreamEvent, now: nu
   switch (event.type) {
     case "user":
       return { ...push(state.items, (id) => {
-        return { kind: "user", id, text: event.text };
+        return { kind: "user", id, text: event.text, ...(event.images ? { images: event.images } : {}) };
       }), busy: true, since: state.since ?? now, stage: undefined };
 
     case "stage":
@@ -158,6 +158,11 @@ export const applyEvent = (state: ConversationState, event: StreamEvent, now: nu
     case "imported":
       return push(state.items, (id) => {
         return { kind: "note", id, text: `Imported from ${event.source}: ${String(event.turns)} message${event.turns === 1 ? "" : "s"}. Nothing was sent to a model; carry on with any model.`, tone: "info" };
+      });
+
+    case "notice":
+      return push(settle(state.items, now), (id) => {
+        return { kind: "note", id, text: event.text, tone: "info" };
       });
 
     case "skill":

@@ -6,6 +6,7 @@ import type { Effort } from "@harness/core/effort";
 import { ContextMeter } from "@/components/ContextMeter";
 import { EffortPicker } from "@/components/EffortPicker";
 import { ModelPicker } from "@/components/ModelPicker";
+import { noImagesReason, supportsImages } from "@harness/core/image";
 import { ConversationActions } from "@/components/ConversationActions";
 import { Message, StatusLine } from "@/components/Messages";
 import { SidePanel } from "@/components/SidePanel";
@@ -51,6 +52,9 @@ const Conversation = ({ id }: { id: string }) => {
   const failed = !state.busy && last?.kind === "note" && last.tone === "error" && lastUser?.kind === "user";
   const offline = info?.kind === "code" && !info.deviceConnected;
 
+  // Auto picks a model that can read images when it can; a model picked by hand is checked here.
+  const next = picked || model;
+  const imageNote = next === "auto" || next === "" || supportsImages(next) ? "" : noImagesReason(next);
   const panelCount = state.changes.length + (state.plan.length > 0 ? 1 : 0);
 
   return (
@@ -131,9 +135,10 @@ const Conversation = ({ id }: { id: string }) => {
           busy={state.busy}
           disabled={!info || offline}
           skills={skills}
-          onSend={(text) => {
+          imageNote={imageNote}
+          onSend={(text, images) => {
             stuck.current = true;
-            void send(text, picked || undefined, pickedEffort, parseSlash(text, skills ?? []));
+            void send(text, picked || undefined, pickedEffort, parseSlash(text, skills ?? []), images);
           }}
           onStop={() => {
             void cancel();

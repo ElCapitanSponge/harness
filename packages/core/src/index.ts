@@ -2,6 +2,8 @@ import { z } from "zod";
 import { EFFORTS, type Effort } from "./effort.js";
 
 export { EFFORTS, effortFor, effortLevels, type Effort } from "./effort.js";
+import { IMAGE_TYPES, MAX_IMAGE_BYTES, MAX_IMAGES, type ImageAttachment } from "./image.js";
+export { IMAGE_TOKENS, IMAGE_TYPES, MAX_IMAGE_BYTES, MAX_IMAGES, noImagesReason, supportsImages, type ImageAttachment, type ImageType } from "./image.js";
 
 // Validation errors in the shape the API returns: { formErrors, fieldErrors }. Re-exported so other packages need no direct zod dependency.
 export const flattenError = z.flattenError;
@@ -207,7 +209,12 @@ export const SessionCreate = z.object({
 export const SessionApproval = z.object({ approve: z.boolean(), always: z.boolean().optional() });
 // `model` picks the model for this message and those after it, so one conversation can move between models, devices and Claude.
 // `skill` is a skill the person started with / in the page; `text` is what they typed (the skill's name and its arguments).
-export const SessionMessage = z.object({ text: z.string().min(1), model: z.string().min(1).optional(), effort: z.enum(["default", ...EFFORTS]).optional(), skill: z.object({ name: z.string().min(1), arguments: z.string().optional() }).optional() });
+// Pictures sent with a message: base64, within the limits in image.ts.
+export const ImageAttachmentSchema = z.object({
+  mediaType: z.enum(IMAGE_TYPES),
+  data: z.string().min(1).max(Math.ceil(MAX_IMAGE_BYTES * 4 / 3) + 8).regex(/^[A-Za-z0-9+/]+={0,2}$/),
+});
+export const SessionMessage = z.object({ images: z.array(ImageAttachmentSchema).max(MAX_IMAGES).optional(), text: z.string().min(1), model: z.string().min(1).optional(), effort: z.enum(["default", ...EFFORTS]).optional(), skill: z.object({ name: z.string().min(1), arguments: z.string().optional() }).optional() });
 // A conversation to bring in: the turns, where they came from, and optionally the model to continue with.
 export const SessionImport = z.object({
   title: z.string().trim().max(120).optional(),
@@ -221,7 +228,9 @@ export const SessionRename = z.object({ title: z.string().trim().min(1).max(120)
 
 // What happens in a coding session, in order. Sent to clients as server-sent events.
 export type SessionEvent
-  = | { type: "user"; text: string }
+  = | { type: "user"; text: string; images?: ImageAttachment[] }
+    // Something the person should know that is not a failure, such as an image that was not sent to a model that cannot read it.
+    | { type: "notice"; text: string }
     | { type: "text"; text: string; model?: string; device?: string; reason?: string }
     | { type: "thinking"; text: string }
     // A file a write or edit changed, with its diff. Shown in the side panel, never sent to the model.
