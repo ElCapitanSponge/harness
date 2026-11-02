@@ -37,6 +37,9 @@ The connected device the browser is on, found by address or chosen by the person
 **Project group**:
 The sidebar gathers conversations by project, a folder on a device, with chats in a group of their own. A group names its folder and says "This device" or the other device's name, collapses and expands (kept on the gateway so every client agrees), and has a button to start a new session in that project. A conversation can be pinned to a **Pinned** group above the projects; the pin is stored on the gateway with the conversation. See docs/guides/coding-sessions.md.
 
+**Built-in command**:
+A slash command the page itself runs (`/compact`, `/clear`, `/model`, `/permissions`, `/init`), listed with the skills but marked as a command. See docs/guides/coding-sessions.md.
+
 **Mention**:
 Typing `@` and a name in a coding session's message box searches the project's files; choosing one puts its path in the message and its text below as context. See docs/guides/coding-sessions.md.
 
