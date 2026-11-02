@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { effortFor, noImagesReason, sseData, supportsImages, type ImageAttachment, textOf, type ChatMessage, type Effort, type NodeRecord, type LiveSessionEvent, type SessionEvent, type SessionInfo, type Tool, type ToolCall } from "@harness/core";
-import { askTool, contextPrompt, planTool, readQuestion, readPlan, runTurn, systemPrompt, type ProjectContext, tools as allTools, type StreamHooks, type ToolSpec } from "@harness/tools";
+import { MAX_SUBAGENTS, MAX_SUBAGENT_DEPTH, agentTool, askTool, contextPrompt, planTool, readQuestion, readPlan, readSubagentTask, runTurn, systemPrompt, type ProjectContext, tools as allTools, type StreamHooks, type ToolSpec } from "@harness/tools";
 import type { Registry } from "./registry.js";
 import type { Relay } from "./relay.js";
 import type { ModelLoader } from "./loader.js";
@@ -31,6 +31,9 @@ export interface StoredSession {
   created: number;
   updated: number;
   effort?: Effort;
+  // The conversation that started this one as a sub-agent, and how deep it is (0 for an ordinary conversation).
+  parent?: string;
+  depth?: number;
   history: ChatMessage[];
   events: SessionEvent[];
 }
@@ -210,6 +213,8 @@ interface SessionDeps {
   relay: Pick<Relay, "callTool">;
   // What the device says about the project's instructions and skills; without it the session tells the model nothing of them.
   projectContext?(device: string, root: string, session: string): Promise<ProjectContext | undefined>;
+  // Starts a child conversation for a sub-agent on the same device and folder.
+  spawn?(parent: Session, input: { task: string; model: string; tools: string[] | undefined }): Session;
   // The text of a skill the person started, with its arguments filled in. Throws if the device cannot load it.
   startSkill?(device: string, root: string, session: string, name: string, args: string): Promise<string>;
   complete: Complete;
@@ -247,6 +252,16 @@ export class Session {
   private abort: AbortController | undefined;
   private approvals = new Map<string, (approved: boolean, always?: boolean) => void>();
   private questions = new Map<string, (answer: string | undefined) => void>();
+  // Sub-agents: the conversation that started this one (if any) and how deep it is; the ones this conversation has started; the tools
+  // it may use at most (a sub-agent is given a subset of its parent's); and the names it was offered at its last turn.
+  readonly parent: string | undefined;
+  readonly depth: number;
+  private children = new Set<Session>();
+  private started = 0;
+  private restrict: string[] | undefined;
+  private offered: string[] = [];
+  // A sub-agent's approvals and questions go to the person through the conversation that started it.
+  private delegate: { approve: (tool: string, summary: string) => Promise<boolean>; ask: (args: Record<string, unknown>) => Promise<string> } | undefined;
   private always = new Set<string>();
   // When the history was last compacted and how big it was after, so the meter can show that before the next reply.
   compaction: { time: number; tokensAfter: number } | undefined;
@@ -262,11 +277,13 @@ export class Session {
   private compactFailedFor = 0;
 
   constructor(
-    init: Pick<StoredSession, "id" | "title" | "model" | "device" | "root" | "created" | "updated"> & { effort?: Effort; history: ChatMessage[]; events?: SessionEvent[] },
+    init: Pick<StoredSession, "id" | "title" | "model" | "device" | "root" | "created" | "updated"> & { parent?: string; depth?: number; effort?: Effort; history: ChatMessage[]; events?: SessionEvent[] },
     private deps: SessionDeps,
     private autoApprove = false,
   ) {
     this.id = init.id;
+    this.parent = init.parent;
+    this.depth = init.depth ?? 0;
     this.title = init.title;
     this.updated = init.updated;
     this.current = init.model;
@@ -311,12 +328,13 @@ export class Session {
       title: this.title,
       deviceConnected: this.kind === "chat" || this.deps.connected(this.device),
       effort: this.effort,
+      ...(this.parent ? { parent: this.parent } : {}),
       chosen: this.current === "auto" && this.chosen ? { model: this.chosen.model, device: this.chosen.device, reason: this.chosen.reason } : undefined,
     };
   }
 
   toStored(): StoredSession {
-    return { id: this.id, title: this.title, model: this.model, device: this.device, root: this.root, created: this.created, updated: this.updated, effort: this.effort, history: [...this.history], events: [...this.events] };
+    return { id: this.id, title: this.title, model: this.model, device: this.device, root: this.root, created: this.created, updated: this.updated, effort: this.effort, ...(this.parent ? { parent: this.parent } : {}), depth: this.depth, history: [...this.history], events: [...this.events] };
   }
 
   // Replays what has already happened, then follows live. Returns an unsubscribe function.
@@ -369,7 +387,13 @@ export class Session {
     if (effort !== undefined) {
       this.effort = effort === "default" ? undefined : effort;
     }
-    const specs = this.kind === "chat" ? [] : this.deps.resolve(this.device, this.root);
+    const allowed = this.kind === "chat" ? [] : this.deps.resolve(this.device, this.root);
+    // A sub-agent has the tools it was given and no others.
+    const specs = this.restrict
+      ? allowed.filter((t) => {
+          return this.restrict?.includes(t.def.function.name);
+        })
+      : allowed;
     if (this.title === "") {
       this.title = titleFrom(text);
     }
@@ -381,6 +405,9 @@ export class Session {
 
   cancel(): void {
     this.abort?.abort();
+    for (const child of this.children) {
+      child.cancel();
+    }
     for (const settle of this.approvals.values()) {
       settle(false);
     }
@@ -399,8 +426,69 @@ export class Session {
     return true;
   }
 
+  // Gives a sub-agent its tools (a subset of this conversation's) and sends its approvals and questions through this one.
+  adopt(child: Session, tools: string[] | undefined): void {
+    const mine = this.offered.filter((n) => {
+      return n !== "agent" || child.depth < MAX_SUBAGENT_DEPTH;
+    });
+    child.restrict = tools
+      ? tools.filter((t) => {
+          return mine.includes(t);
+        })
+      : mine;
+    child.delegate = { approve: this.approve, ask: (args) => {
+      return this.ask(args);
+    } };
+    this.children.add(child);
+  }
+
+  // Waits for the turn that is running to end and gives its last answer, or why it failed.
+  finished(): Promise<{ ok: boolean; text: string }> {
+    return new Promise((resolve) => {
+      const off = this.subscribe((event) => {
+        if (event.type === "done" || event.type === "cancelled" || event.type === "error") {
+          off();
+          const last = this.events.findLast((e) => {
+            return e.type === "text";
+          });
+          const failure = event.type === "error" ? event.message : event.type === "cancelled" ? "it was cancelled" : undefined;
+          resolve(failure === undefined ? { ok: true, text: last?.type === "text" ? last.text : "(it gave no answer)" } : { ok: false, text: failure });
+        }
+      }, this.events.length);
+    });
+  }
+
+  // Starts a sub-agent on a task and returns what it answers. It is a conversation of its own, shown under this one.
+  private async runSubagent(args: Record<string, unknown>): Promise<string> {
+    const task = readSubagentTask(args);
+    if (this.depth >= MAX_SUBAGENT_DEPTH) {
+      throw new Error(`sub-agents may nest ${String(MAX_SUBAGENT_DEPTH)} deep, and this one is at the limit; do the task yourself`);
+    }
+    if (this.started >= MAX_SUBAGENTS) {
+      throw new Error(`this conversation has already started ${String(MAX_SUBAGENTS)} sub-agents, which is the limit; do the rest yourself`);
+    }
+    if (!this.deps.spawn) {
+      throw new Error("sub-agents are not available here");
+    }
+    this.started++;
+    const child = this.deps.spawn(this, { task: task.task, model: task.model ?? this.active, tools: task.tools });
+    const base = { childId: child.id, task: task.task.slice(0, 300), n: this.started, of: MAX_SUBAGENTS, depth: this.depth + 1 };
+    this.emit({ type: "subagent", status: "running", ...base });
+    const outcome = child.finished();
+    child.send(task.task);
+    const result = await outcome;
+    this.emit({ type: "subagent", status: result.ok ? "done" : "failed", result: result.text.slice(0, 2000), ...base });
+    if (!result.ok) {
+      throw new Error(`the sub-agent failed: ${result.text}`);
+    }
+    return result.text.length > 8000 ? `${result.text.slice(0, 8000)}\n[... shortened]` : result.text;
+  }
+
   // Puts a question to the person and waits. Nobody watching, no answer in ten minutes, or a cancel, is "nobody answered".
   private ask(args: Record<string, unknown>): Promise<string> {
+    if (this.delegate) {
+      return this.delegate.ask(args);
+    }
     const { question, options } = readQuestion(args);
     const nobody = "Nobody answered. Do not guess: stop and tell the person what you need to know.";
     if (this.listeners.size === 0) {
@@ -434,6 +522,9 @@ export class Session {
 
   // Changes need an answer from whoever is driving the session. No answer in five minutes counts as no.
   private approve = (tool: string, summary: string): Promise<boolean> => {
+    if (this.delegate) {
+      return this.delegate.approve(tool, summary);
+    }
     if (this.autoApprove || this.always.has(tool)) {
       return Promise.resolve(true);
     }
@@ -627,7 +718,10 @@ export class Session {
   }
 
   private async run(abort: AbortController, offered: ToolSpec[]): Promise<void> {
-    let specs = this.kind === "code" ? [...offered, planTool, askTool] : offered;
+    let specs = this.kind === "code" ? [...offered, planTool, askTool, ...(this.depth < MAX_SUBAGENT_DEPTH && (this.restrict?.includes("agent") ?? true) ? [agentTool] : [])] : offered;
+    this.offered = specs.map((s) => {
+      return s.def.function.name;
+    });
     try {
       this.decide();
       if (this.kind === "code" && this.deps.projectContext) {
@@ -682,6 +776,9 @@ export class Session {
         run: async (name, args) => {
           if (name === "ask") {
             return this.ask(args);
+          }
+          if (name === "agent") {
+            return this.runSubagent(args);
           }
           // The plan is the session's own, kept here and shown in the side panel; it touches no device.
           if (name === "plan") {
@@ -760,6 +857,9 @@ export class Sessions {
     this.deps = {
       relay: opts.relay,
       projectContext: opts.projectContext,
+      spawn: (parent, input) => {
+        return this.spawnChild(parent, input);
+      },
       startSkill: opts.startSkill,
       complete: opts.complete,
       ledger: opts.ledger,
@@ -860,6 +960,25 @@ export class Sessions {
     return session;
   }
 
+  // A sub-agent's conversation: the same device and folder as the one that started it, a model and a set of tools it chose, and a
+  // prompt that says what it is for. It is saved and listed like any conversation, under its parent.
+  private spawnChild(parent: Session, input: { task: string; model: string; tools: string[] | undefined }): Session {
+    const node = this.opts.registry.live().find((n) => {
+      return n.nodeId === parent.device;
+    });
+    const readOnly = node?.readOnlyRoots?.includes(parent.root) ?? false;
+    const prompt = `${systemPrompt(parent.root, node?.platform, node?.shell)}${readOnly ? " This folder is read-only: you can look at its files but cannot change, create or delete anything in it." : ""}\nYou are a sub-agent: another agent gave you one task. You cannot see its conversation, so work only from the task. When you finish, reply with the result alone, concisely, since it is handed back to that agent.`;
+    const now = Date.now();
+    const child = new Session(
+      { id: randomUUID(), title: input.task.slice(0, 60), model: input.model, device: parent.device, root: parent.root, created: now, updated: now, parent: parent.id, depth: parent.depth + 1, history: [{ role: "system", content: prompt }] },
+      this.deps,
+    );
+    parent.adopt(child, input.tools);
+    this.sessions.set(child.id, child);
+    this.deps.persist?.(child);
+    return child;
+  }
+
   // A conversation brought in from another tool, as a saved chat that carries on with whichever model is picked. The turns become
   // events and history exactly as they are; nothing is sent to a model.
   import(input: { title?: string; source: string; turns: Turn[]; model?: string; created?: number }): Session {
@@ -901,6 +1020,13 @@ export class Sessions {
     const session = this.sessions.get(id);
     if (!session) {
       return false;
+    }
+    // Its sub-agents go with it.
+    const kids = [...this.sessions.values()].filter((other) => {
+      return other.parent === id;
+    });
+    for (const kid of kids) {
+      await this.delete(kid.id);
     }
     session.cancel();
     this.sessions.delete(id);

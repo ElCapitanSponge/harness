@@ -10,6 +10,7 @@ export type Item
     | { kind: "skill"; id: number; name: string; arguments: string; text: string }
     | { kind: "compaction"; id: number; messages: number; tokensBefore: number; tokensAfter: number; manual: boolean }
     | { kind: "approval"; id: number; approvalId: string; tool: string; summary: string; status: "pending" | "allowed" | "declined" }
+    | { kind: "subagent"; id: number; childId: string; task: string; status: "running" | "done" | "failed"; result?: string; n: number; of: number; depth: number }
     | { kind: "question"; id: number; questionId: string; question: string; options: string[]; status: "pending" | "answered" | "unanswered"; answer?: string }
     | { kind: "note"; id: number; text: string; tone: "info" | "error" };
 
@@ -189,6 +190,20 @@ export const applyEvent = (state: ConversationState, event: StreamEvent, now: nu
           return item.kind === "approval" && item.approvalId === event.id ? { ...item, status: event.approved ? "allowed" : "declined" } : item;
         }),
       };
+
+    case "subagent": {
+      const known = state.items.some((i) => {
+        return i.kind === "subagent" && i.childId === event.childId;
+      });
+      const item = (id: number): Item => {
+        return { kind: "subagent", id, childId: event.childId, task: event.task, status: event.status, result: event.result, n: event.n, of: event.of, depth: event.depth };
+      };
+      return known
+        ? { ...state, cursor, items: state.items.map((i) => {
+            return i.kind === "subagent" && i.childId === event.childId ? item(i.id) : i;
+          }) }
+        : push(settle(state.items, now), item);
+    }
 
     case "question":
       return push(settle(state.items, now), (id) => {

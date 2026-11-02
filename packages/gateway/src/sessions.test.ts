@@ -132,7 +132,7 @@ describe("Session turns", () => {
     const offered = (complete.mock.calls[0]![2] as { function: { name: string } }[]).map((t) => {
       return t.function.name;
     }).sort();
-    expect(offered).toEqual(["ask", "grep", "list_dir", "plan", "read_file"]);
+    expect(offered).toEqual(["agent", "ask", "grep", "list_dir", "plan", "read_file"]);
   });
 
   it("puts the project root and device platform in the system prompt", async () => {
@@ -822,5 +822,205 @@ describe("Session question cancelled or unanswered", () => {
     expect(s.events.find((e) => {
       return e.type === "question-resolved";
     })).toEqual({ type: "question-resolved", id: expect.any(String) as string });
+  });
+});
+
+describe("Sub-agents", () => {
+  const isChild = (messages: ChatMessage[]): boolean => {
+    return textOf(messages[0]?.content).includes("You are a sub-agent");
+  };
+  const agentCall = (id: string, args: Record<string, unknown>) => {
+    return call(id, "agent", args);
+  };
+  const subagents = (s: Session) => {
+    return s.events.filter((e): e is Extract<SessionEvent, { type: "subagent" }> => {
+      return e.type === "subagent";
+    });
+  };
+
+  it("runs a task in a conversation of its own and gives its answer to the parent, which lists it under itself", async () => {
+    registry.upsert(beat({ allowedTools: ["read_file", "grep", "write_file"] }));
+    let parentSaw = "";
+    const childTools: string[][] = [];
+    complete.mockImplementation(async (_model, messages, tools) => {
+      if (isChild(messages)) {
+        childTools.push(tools.map((t) => {
+          return t.function.name;
+        }));
+        return { role: "assistant", content: "found it in a.ts" };
+      }
+      if (messages.some((m) => {
+        return m.role === "tool";
+      })) {
+        parentSaw = textOf(messages.findLast((m) => {
+          return m.role === "tool";
+        })?.content);
+        return { role: "assistant", content: "done" };
+      }
+      return { role: "assistant", content: null, tool_calls: [agentCall("1", { task: "find the config", tools: ["read_file", "write_file", "nonsense"] })] };
+    });
+    const s = create();
+    s.send("look around");
+    await until(() => {
+      return types(s).includes("done");
+    });
+
+    expect(parentSaw).toBe("found it in a.ts");
+    expect(subagents(s).map((e) => {
+      return e.status;
+    })).toEqual(["running", "done"]);
+    expect(subagents(s)[1]).toMatchObject({ result: "found it in a.ts", n: 1, of: 8, depth: 1, task: "find the config" });
+    // The child has the tools it asked for that its parent has (not write_file, which the parent was not offered a turn ago... it was, so it stays), plus plan and ask, and cannot start another.
+    expect(childTools[0]).toEqual(["read_file", "write_file", "plan", "ask"]);
+
+    const infos = sessions.list();
+    const child = infos.find((i) => {
+      return i.parent === s.id;
+    });
+    expect(child).toMatchObject({ kind: "code", device: "pc", root: "proj", title: "find the config" });
+    expect(infos.find((i) => {
+      return i.id === s.id;
+    })?.parent).toBeUndefined();
+  });
+
+  it("never gives a sub-agent a tool its parent does not have", async () => {
+    registry.upsert(beat({ allowedTools: ["read_file"] }));
+    const childTools: string[][] = [];
+    complete.mockImplementation(async (_model, messages, tools) => {
+      if (isChild(messages)) {
+        childTools.push(tools.map((t) => {
+          return t.function.name;
+        }));
+        return { role: "assistant", content: "ok" };
+      }
+      return messages.some((m) => {
+        return m.role === "tool";
+      })
+        ? { role: "assistant", content: "done" }
+        : { role: "assistant", content: null, tool_calls: [agentCall("1", { task: "write a file", tools: ["write_file", "run_command"] })] };
+    });
+    const s = create();
+    s.send("go");
+    await until(() => {
+      return types(s).includes("done");
+    });
+    expect(childTools[0]).toEqual(["plan", "ask"]);
+  });
+
+  it("limits how many a conversation may start, and tells the model the limit when it is reached", async () => {
+    let toolReplies: string[] = [];
+    complete.mockImplementation(async (_model, messages) => {
+      if (isChild(messages)) {
+        return { role: "assistant", content: "r" };
+      }
+      if (messages.some((m) => {
+        return m.role === "tool";
+      })) {
+        toolReplies = messages.filter((m) => {
+          return m.role === "tool";
+        }).map((m) => {
+          return textOf(m.content);
+        });
+        return { role: "assistant", content: "done" };
+      }
+      return { role: "assistant", content: null, tool_calls: Array.from({ length: 9 }, (_, i) => {
+        return agentCall(String(i), { task: `task ${String(i)}` });
+      }) };
+    });
+    const s = create();
+    s.send("go");
+    await until(() => {
+      return types(s).includes("done");
+    });
+    expect(subagents(s).filter((e) => {
+      return e.status === "done";
+    })).toHaveLength(8);
+    expect(toolReplies).toHaveLength(9);
+    expect(toolReplies[8]).toContain("already started 8 sub-agents");
+  });
+
+  it("limits how deep they nest: the second level cannot start another", async () => {
+    const offeredAgent: boolean[] = [];
+    complete.mockImplementation(async (_model, messages, tools) => {
+      offeredAgent.push(tools.some((t) => {
+        return t.function.name === "agent";
+      }));
+      if (messages.some((m) => {
+        return m.role === "tool";
+      }) || offeredAgent.length > 6) {
+        return { role: "assistant", content: "done" };
+      }
+      // Every level asks for one more, as far as it is let.
+      return offeredAgent.length <= 3 && tools.some((t) => {
+        return t.function.name === "agent";
+      })
+        ? { role: "assistant", content: null, tool_calls: [agentCall(String(offeredAgent.length), { task: "go deeper" })] }
+        : { role: "assistant", content: "bottom" };
+    });
+    const s = create();
+    s.send("go");
+    await until(() => {
+      return types(s).includes("done");
+    });
+    // Parent (depth 0) and its child (depth 1) are offered the tool; the grandchild (depth 2) is not.
+    expect(offeredAgent.slice(0, 3)).toEqual([true, true, false]);
+    expect(sessions.list()).toHaveLength(3);
+  });
+
+  it("sends a sub-agent's approvals to the person through the conversation that started it", async () => {
+    registry.upsert(beat({ allowedTools: ["read_file", "write_file"] }));
+    complete.mockImplementation(async (_model, messages) => {
+      const toolMessages = messages.filter((m) => {
+        return m.role === "tool";
+      });
+      if (isChild(messages)) {
+        return toolMessages.length > 0 ? { role: "assistant", content: "wrote it" } : { role: "assistant", content: null, tool_calls: [call("w", "write_file", { path: "n.txt", content: "x" })] };
+      }
+      return toolMessages.length > 0 ? { role: "assistant", content: "done" } : { role: "assistant", content: null, tool_calls: [agentCall("1", { task: "write n.txt" })] };
+    });
+    const s = create();
+    s.send("go");
+    await until(() => {
+      return s.events.some((e) => {
+        return e.type === "approval";
+      });
+    });
+    expect(relay.callTool).not.toHaveBeenCalled();
+    const approval = s.events.find((e): e is Extract<SessionEvent, { type: "approval" }> => {
+      return e.type === "approval";
+    });
+    expect(approval).toMatchObject({ tool: "write_file" });
+    expect(s.answer(approval?.id ?? "", true)).toBe(true);
+    await until(() => {
+      return types(s).includes("done");
+    });
+    expect(relay.callTool).toHaveBeenCalledWith("pc", "proj", "write_file", { path: "n.txt", content: "x" }, expect.anything());
+  });
+
+  it("is deleted with its parent, and a cancel reaches it", async () => {
+    complete.mockImplementation(async (_model, messages, _tools, signal) => {
+      if (isChild(messages)) {
+        return new Promise<ChatMessage>((_resolve, reject) => {
+          signal.addEventListener("abort", () => {
+            reject(new Error("cancelled"));
+          });
+        });
+      }
+      return { role: "assistant", content: null, tool_calls: [agentCall("1", { task: "wait forever" })] };
+    });
+    const s = create();
+    s.send("go");
+    await until(() => {
+      return sessions.list().length === 2;
+    });
+    s.cancel();
+    await until(() => {
+      return !s.busy;
+    });
+    expect(sessions.list().find((i) => {
+      return i.parent === s.id;
+    })?.busy).toBe(false);
+    await sessions.delete(s.id);
+    expect(sessions.list()).toEqual([]);
   });
 });
