@@ -162,6 +162,7 @@ const Conversation = ({ id }: { id: string }) => {
           disabled={!info || offline}
           skills={skills}
           insertion={insertion}
+          project={info?.kind === "code" && info.device !== "" ? { device: info.device, root: info.root } : undefined}
           imageNote={imageNote}
           onSend={(text, images) => {
             stuck.current = true;

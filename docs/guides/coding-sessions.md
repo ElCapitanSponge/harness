@@ -110,6 +110,12 @@ The match depends on what the gateway sees. Over Tailscale to a gateway that see
 
 The start screen also lists your recent folders (the last five used, kept in the browser) as one-click choices.
 
+## Mentioning files with @
+
+In a coding session, type `@` in the message box to search the project's files, as in Claude Code. The list is the project folder on its device, read through the same read-only route as the session panel, and it narrows as you type: `@read` offers `README.md`, `@src/` lists what is in `src`. Folders come first and are chosen to go inside (the word stays open); a file is chosen with **Enter** or **Tab** (or a click), moves with the arrow keys, and **Escape** closes the list.
+
+Choosing a file puts `@path` in your message and adds the file's text below it in a code block, the same as **Add files as context**, so the model has it without asking. Text only, up to 200 KB; a binary or larger file is refused with a reason, and a long file is added shortened with a note. Names starting with a dot are listed only once you type a dot. Nothing outside the project folder is offered (`..` and absolute paths list nothing), and the list is not offered in a chat with no project. An `@` inside a word, such as an email address, is left alone, and a message that starts with `/` gets the skills list instead.
+
 ## The session panel
 
 In a coding session, the panel button in the header opens **This session** beside the conversation (a drawer over it on a phone). It shows:

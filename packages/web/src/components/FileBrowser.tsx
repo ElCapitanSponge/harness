@@ -1,35 +1,12 @@
 import { ChevronRight, FileText, Folder, FolderUp, Plus } from "lucide-react";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { api } from "@/lib/api";
+import { deviceTool as call, plainText } from "@/lib/devicefiles";
 
 // Browses a coding session's project folder on its device, read-only, and adds a file's text to the message being written. It asks the
 // device through the same read-only tool route the command line uses, so it sees only what the device exposes to sessions.
 
-const call = async (device: string, root: string, name: string, args: Record<string, unknown>): Promise<string> => {
-  const result = await api<{ ok: boolean; output: string }>(`/devices/${encodeURIComponent(device)}/tools`, { method: "POST", body: { root, name, args } });
-  if (!result.ok) {
-    throw new Error(result.output);
-  }
-  return result.output;
-};
-
-// read_file returns numbered lines ("12<tab>text") and may end with a note about the lines left out.
-export const plainText = (numbered: string): { text: string; shortened: boolean } => {
-  const lines = numbered.split("\n");
-  const note = /^\[\.\.\. \d+ more lines?; use offset \d+\]$/;
-  const shortened = lines.some((l) => {
-    return note.test(l) || l.startsWith("[... truncated");
-  });
-  return {
-    text: lines.filter((l) => {
-      return !note.test(l) && !l.startsWith("[... truncated");
-    }).map((l) => {
-      return l.replace(/^\d+\t/, "");
-    }).join("\n"),
-    shortened,
-  };
-};
+export { plainText } from "@/lib/devicefiles";
 
 export const parentOf = (dir: string): string => {
   const parts = dir.split("/").filter(Boolean);
