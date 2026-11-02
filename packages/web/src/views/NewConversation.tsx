@@ -1,4 +1,5 @@
-import { Code2, MessageSquare } from "lucide-react";
+import { useQueryClient } from "@tanstack/react-query";
+import { Code2, FolderOpen, MessageSquare } from "lucide-react";
 import { useState } from "react";
 import { useNavigate, useSearchParams } from "react-router";
 import { Composer } from "@/components/Composer";
@@ -6,11 +7,15 @@ import { effortLevels, type Effort } from "@harness/core/effort";
 import { noImagesReason, supportsImages, type ImageAttachment } from "@harness/core/image";
 import { EffortPicker } from "@/components/EffortPicker";
 import { ModelPicker } from "@/components/ModelPicker";
+import { Button } from "@/components/ui/button";
 import { Select } from "@/components/ui/fields";
 import { api } from "@/lib/api";
 import { useCreateConversation, useLibrary, useNodes, useSkills } from "@/lib/queries";
 import { parseSlash, withLibrary } from "@/lib/skills";
 import { pushRecent, readRecent } from "@/lib/thisdevice";
+import { addProjectFolder } from "@/lib/addfolder";
+import { desktopApi } from "@/lib/desktop";
+import type { NodeRecord, SettingsReport } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 type Mode = "chat" | "code";
@@ -28,6 +33,9 @@ export const NewConversation = () => {
   const [root, setRoot] = useState(params.get("root") ?? "");
   const [error, setError] = useState("");
   const [sending, setSending] = useState(false);
+  const [choosing, setChoosing] = useState(false);
+  const queryClient = useQueryClient();
+  const app = desktopApi();
   const [effort, setEffort] = useState<Effort | undefined>(undefined);
 
   const devices = (nodes.data ?? []).filter((n) => {
@@ -43,6 +51,39 @@ export const NewConversation = () => {
   const library = useLibrary();
   const skills = withLibrary(mode === "code" ? found.data?.[0]?.skills : undefined, library.data);
   const ready = selected !== "" && (mode === "chat" || (chosenDevice !== undefined && chosenRoot !== ""));
+
+  // The desktop app only: the system folder picker. The folder becomes a project folder on this machine (see addProjectFolder).
+  const choose = async (): Promise<void> => {
+    if (!app) {
+      return;
+    }
+    setError("");
+    const folder = await app.pickFolder();
+    if (!folder) {
+      return;
+    }
+    setChoosing(true);
+    const result = await addProjectFolder(app.nodeId, folder, {
+      settings: (nodeId) => {
+        return api<SettingsReport>(`/devices/${encodeURIComponent(nodeId)}/settings`);
+      },
+      save: (nodeId, projectRoots) => {
+        return api<unknown>(`/devices/${encodeURIComponent(nodeId)}/settings`, { method: "PUT", body: { projectRoots } });
+      },
+      nodes: () => {
+        return api<NodeRecord[]>("/nodes");
+      },
+    });
+    setChoosing(false);
+    if (result.ok) {
+      await queryClient.invalidateQueries({ queryKey: ["nodes"] });
+      setMode("code");
+      setDevice(app.nodeId);
+      setRoot(result.root);
+    } else {
+      setError(result.error);
+    }
+  };
 
   const start = async (text: string, images?: ImageAttachment[]): Promise<void> => {
     setError("");
@@ -109,6 +150,16 @@ export const NewConversation = () => {
                       return <option key={r} value={r}>{r}</option>;
                     })}
                   </Select>
+                  {app
+                    ? (
+                        <Button type="button" className="sm:col-span-2" disabled={choosing} onClick={() => {
+                          void choose();
+                        }}
+                        >
+                          <FolderOpen /> {choosing ? "Adding the folder..." : "Choose a folder..."}
+                        </Button>
+                      )
+                    : null}
                   {recent.length > 0
                     ? (
                         <div className="flex flex-wrap items-center gap-1.5 sm:col-span-2" role="group" aria-label="Recent folders">
