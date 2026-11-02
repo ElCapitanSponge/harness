@@ -1,6 +1,7 @@
 import { ArrowLeft, Camera, Check, CircleDot, FilePlus2, FileText, ListChecks, Circle, Terminal, X } from "lucide-react";
 import { useState } from "react";
 import type { PlanStep } from "@harness/core";
+import { FileBrowser } from "@/components/FileBrowser";
 import { Button } from "@/components/ui/button";
 import type { ChangedFile } from "@/lib/conversation";
 import type { ToolImage } from "@harness/core";
@@ -116,7 +117,7 @@ const Counts = ({ file }: { file: ChangedFile }) => {
 
 // What the session has done, beside the conversation: the model's plan and the files it changed or created, newest first. A file
 // opens to its diff. At phone width it is a drawer over the conversation.
-export const SidePanel = ({ changes, plan, tasks = [], shots = [], onClose }: { changes: ChangedFile[]; plan: PlanStep[]; tasks?: BackgroundTask[]; shots?: ToolImage[]; onClose: () => void }) => {
+export const SidePanel = ({ changes, plan, tasks = [], shots = [], files, onClose }: { changes: ChangedFile[]; plan: PlanStep[]; tasks?: BackgroundTask[]; shots?: ToolImage[]; files?: { device: string; root: string; onAdd: (path: string, text: string, shortened: boolean) => void }; onClose: () => void }) => {
   const [openPath, setOpenPath] = useState<string | undefined>();
   const open = changes.find((f) => {
     return f.path === openPath;
@@ -138,6 +139,7 @@ export const SidePanel = ({ changes, plan, tasks = [], shots = [], onClose }: { 
             )
           : (
               <>
+                {files ? <FileBrowser device={files.device} root={files.root} onAdd={files.onAdd} /> : null}
                 {plan.length > 0 ? <Plan steps={plan} /> : null}
                 {tasks.length > 0 ? <Tasks tasks={tasks} /> : null}
                 {shots.length > 0 ? <Shots shots={shots} /> : null}

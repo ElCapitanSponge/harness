@@ -28,6 +28,7 @@ Use:
 - [Models, Auto mode and switching](guides/models.md)
 - [Coding sessions](guides/coding-sessions.md)
 - [Claude](guides/claude.md)
+- [The desktop app](guides/desktop.md): use this machine's folders and files, with the agent built in.
 - [Devices and their settings](guides/devices.md)
 - [Developer tools](guides/dev-tools.md)
 - [The agent browser](guides/browser.md)

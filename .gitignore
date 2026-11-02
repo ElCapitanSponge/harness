@@ -4,3 +4,4 @@ dist
 *.log
 bench-results
 storybook-static
+release

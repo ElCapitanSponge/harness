@@ -14,6 +14,7 @@ import { SidePanel } from "@/components/SidePanel";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/fields";
 import { useConversation } from "@/lib/useConversation";
+import { contextBlock } from "@/lib/desktop";
 import { useNotifications } from "@/lib/notify";
 import { useLibrary, useSessions, useSetMode, useSessionTasks, useSkills } from "@/lib/queries";
 import { parseSlash, withLibrary } from "@/lib/skills";
@@ -34,6 +35,13 @@ const Conversation = ({ id }: { id: string }) => {
   const skills = withLibrary(info?.kind === "code" ? folder.data?.[0]?.skills : undefined, library.data);
   const [panel, setPanel] = useState(false);
   const setMode = useSetMode(id);
+  // Text to add to the message being written (a file from the panel), with a counter so the same text can be added twice.
+  const [insertion, setInsertion] = useState<{ id: number; text: string } | undefined>();
+  const addContext = (path: string, text: string, shortened: boolean): void => {
+    setInsertion((current) => {
+      return { id: (current?.id ?? 0) + 1, text: contextBlock(`${path}${shortened ? " (shortened)" : ""}`, text) };
+    });
+  };
   const notifications = useNotifications(state.items);
   const tasks = useSessionTasks(id, panel && info?.kind === "code");
   const scroller = useRef<HTMLDivElement>(null);
@@ -153,6 +161,7 @@ const Conversation = ({ id }: { id: string }) => {
           busy={state.busy}
           disabled={!info || offline}
           skills={skills}
+          insertion={insertion}
           imageNote={imageNote}
           onSend={(text, images) => {
             stuck.current = true;
@@ -165,7 +174,7 @@ const Conversation = ({ id }: { id: string }) => {
       </div>
       {panel && info?.kind === "code"
         ? (
-            <SidePanel changes={state.changes} plan={state.plan} tasks={tasks.data} shots={state.shots} onClose={() => {
+            <SidePanel changes={state.changes} plan={state.plan} tasks={tasks.data} shots={state.shots} files={info.device !== "" ? { device: info.device, root: info.root, onAdd: addContext } : undefined} onClose={() => {
               setPanel(false);
             }}
             />

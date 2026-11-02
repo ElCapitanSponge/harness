@@ -1,0 +1,42 @@
+# Packaging for Windows, macOS, Ubuntu and Arch Linux. Built by `pnpm --filter @harness/desktop dist` (and by CI on each system).
+appId: au.net.brunker.torii
+productName: Torii
+copyright: MIT
+# The package is called @harness/desktop, which is no name for a file: name the files after the app.
+artifactName: "Torii-${version}-${arch}.${ext}"
+directories:
+  output: release
+files:
+  - dist/**
+  - package.json
+asar: true
+asarUnpack:
+  - dist/agent.mjs
+  - node_modules/playwright-core/**
+extraMetadata:
+  main: dist/main.cjs
+icon: resources/icon.png
+win:
+  target:
+    - nsis
+    - zip
+nsis:
+  oneClick: true
+  perMachine: false
+mac:
+  category: public.app-category.developer-tools
+  target:
+    - dmg
+    - zip
+linux:
+  executableName: torii
+  desktop:
+    entry:
+      StartupWMClass: torii
+  category: Development
+  maintainer: ElCapitanSponge
+  synopsis: Your models and this device's files, in one place
+  target:
+    - AppImage
+    - deb
+    - tar.gz
