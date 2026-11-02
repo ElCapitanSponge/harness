@@ -20,6 +20,7 @@ With `HARNESS_API_KEY` set, every route except the web page itself needs `Author
 
 | Route | What it does |
 | --- | --- |
+| `GET /whoami` | The address the caller connects from and the connected agents that connect from the same address: `{ address, devices, likelyBehindPortPublishing }`. See [Coding sessions](../guides/coding-sessions.md#new-code-session-here). |
 | `GET /nodes` | Connected devices with their models, busy state, project folders, tools and shell. |
 | `GET /catalogue` | Everything that can be chosen, for the interface: each model on each device with what choosing it would do, and Claude. |
 | `POST /devices/:nodeId/tools` | Run one read-only tool on a device: `{ root, name, args }`. Tools that change things are refused here. |

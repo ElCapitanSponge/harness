@@ -65,6 +65,19 @@ harness tool anakin proj read_file '{"path":"package.json"}'   # run one tool, f
 
 In the web page, choose **Code** on the start screen, pick the device and folder, and describe the task. Changes ask on the page (`-y` for the command line approves everything for the session; an approval nobody answers counts as no after five minutes). A session can switch model between messages, including to Claude, and can use [skills](skills.md) with `/`.
 
+## New code session here
+
+The sidebar's **New code session here** starts a coding session on the device the browser is on, with that device and the model picker already set. A browser cannot read files, so the device needs a node agent running ([Windows](windows.md), [macOS](macos.md), [Linux](linux.md)).
+
+How the page knows which device it is on:
+
+1. **By address.** Each agent's tunnel connects to the gateway from an address; `GET /whoami` compares it with the address your browser connects from. The page uses a match.
+2. **By your choice.** If nothing matches, the sidebar asks "Which device is this?" once, and the page remembers the answer in the browser. Choose **None** if there is no agent on this device: the page then says so and links to the setup guide for the browser's operating system. **Not right?** lets you correct a wrong match.
+
+The match depends on what the gateway sees. Over Tailscale both the agent and the browser show their tailnet addresses, which works. A gateway running in a container whose port is published through the container network's gateway sees the browsers as that gateway's address (typically in `172.16.0.0/12`), so nothing matches and the manual choice is used; this has not been checked on the TrueNAS app yet. Behind a reverse proxy you run, set `HARNESS_TRUST_PROXY=1` so the address in `X-Forwarded-For` is used. Never set it without a proxy: anyone could then claim to be any address (it only picks a default device, never grants access).
+
+The start screen also lists your recent folders (the last five used, kept in the browser) as one-click choices.
+
 ## The session panel
 
 In a coding session, the panel button in the header opens **This session** beside the conversation (a drawer over it on a phone). It shows:

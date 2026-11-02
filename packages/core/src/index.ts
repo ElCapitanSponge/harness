@@ -102,6 +102,8 @@ export type Heartbeat = z.infer<typeof Heartbeat>;
 
 export interface NodeRecord extends Heartbeat {
   lastSeen: number;
+  // The address the device's tunnel connected from, as the gateway sees it (loopback addresses all read as "loopback").
+  address?: string;
 }
 
 // What a write or edit did to one file, for the side panel. The device works it out when the tool runs and sends it beside the
