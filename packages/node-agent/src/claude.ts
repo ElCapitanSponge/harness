@@ -1,5 +1,5 @@
 import { ChatRequest, type RelayRequest, type TunnelMessage } from "@harness/core";
-import { ClaudeLimitError, runClaude, type ClaudeResult } from "@harness/claude";
+import { ClaudeLimitError, pruneConversations, runClaude, type ClaudeResult } from "@harness/claude";
 
 type ClaudeMessage = Extract<RelayRequest, { type: "claude" }>;
 
@@ -7,6 +7,9 @@ type ClaudeMessage = Extract<RelayRequest, { type: "claude" }>;
 // The harness never reads or forwards that login; it only starts the CLI and returns what it printed.
 export const createClaudeServer = (opts: { bin: string; enabled?: () => boolean; run?: (bin: string, req: ChatRequest) => Promise<ClaudeResult> }) => {
   const run = opts.run ?? runClaude;
+  if (!opts.run) {
+    pruneConversations();
+  }
   return {
     async handle(msg: ClaudeMessage, send: (m: TunnelMessage) => void): Promise<void> {
       if (opts.enabled && !opts.enabled()) {

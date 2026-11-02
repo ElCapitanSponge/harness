@@ -21,6 +21,12 @@ Each call runs the program from an empty folder with its own system prompt repla
 
 Models that can be told how hard to think show an **Effort** choice next to the model picker: Default, then low, medium, high, xhigh and max for Claude (the program's `--effort`), and low, medium and high for the gpt-oss models (sent as the reasoning effort). A model that cannot be told shows no control. The choice belongs to the conversation, applies from the next message, and moving to a model with fewer levels uses its nearest one. Choose Default to leave it to the model.
 
+## Which models, and what they cost
+
+`claude` uses your account's default; `claude:sonnet`, `claude:opus` and `claude:haiku` ask the program for that alias, which it resolves to the newest version of the family it has. At the time of writing that is Claude Sonnet 5.5 (`claude-sonnet-5-5`), Opus 5.5 (`claude-opus-5-5`) and Haiku 5.5 (`claude-haiku-5-5`), and the default is Sonnet 5.5. The reply names the exact model that answered.
+
+A coding session takes several model calls for one request (each tool result is another call). So that those do not each pay for the whole conversation again, the gateway keeps the program's own conversation for each Torii conversation and sends only what is new at each step, through the program's `--resume`; its prompt cache then covers everything before. The conversation starts again, with the whole transcript, when the history changed (compaction, rewind, an edit), when the model or device differs, or after a gateway restart, so those steps cost more once. The program keeps the conversation files in its usual place under a folder named for Torii's own working folder, and Torii removes ones unused for three days.
+
 ## Where the login lives
 
 The gateway does not run Claude itself. A device that is logged in to the official `claude` CLI answers Claude requests (turn Claude on for it on the Devices page, or start its agent with `CLAUDE_ENABLED=1`), so requests use that login and its plan limits. Claude models appear in `/v1/models` and the model picker only while such a device is connected, and a gateway in a container needs no login. The harness does not extract or proxy credentials ([ADR 0001](../adr/0001-claude-through-the-official-cli.md)). Usage is shared with everything else on that account.

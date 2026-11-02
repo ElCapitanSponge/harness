@@ -1,4 +1,5 @@
 import { execFile } from "node:child_process";
+import { randomUUID } from "node:crypto";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -18,6 +19,28 @@ export const isolatedDir = (): string => {
   return dir;
 };
 
+// Where the program keeps the conversations it was run for in the folder above: one file each, in a folder named after it.
+export const conversationsDir = (cwd: string = isolatedDir(), home: string = os.homedir()): string => {
+  return path.join(home, ".claude", "projects", cwd.replace(/[^a-zA-Z0-9]/g, "-"));
+};
+
+// Removes conversations the harness left there that have not been used for a while. Only that folder is touched, never the person's own.
+export const pruneConversations = (maxAgeMs: number = 3 * 24 * 3_600_000, dir: string = conversationsDir(), now: number = Date.now()): number => {
+  let removed = 0;
+  try {
+    for (const name of fs.readdirSync(dir)) {
+      const file = path.join(dir, name);
+      if (name.endsWith(".jsonl") && now - fs.statSync(file).mtimeMs > maxAgeMs) {
+        fs.rmSync(file, { force: true });
+        removed++;
+      }
+    }
+  } catch {
+    // Nothing kept yet, or not readable: nothing to remove.
+  }
+  return removed;
+};
+
 // Runs the official `claude` CLI in headless mode so the user's own login and plan are used.
 export const defaultExec: Exec = (bin, args, input) => {
   return new Promise((resolve, reject) => {
@@ -29,6 +52,13 @@ export const defaultExec: Exec = (bin, args, input) => {
       }
     });
     child.stdin?.end(input);
+  });
+};
+
+// The turns of a request: everything but the system messages.
+export const turnsOf = (req: ChatRequest): ChatRequest["messages"] => {
+  return req.messages.filter((m) => {
+    return m.role === "user" || m.role === "assistant" || m.role === "tool";
   });
 };
 
@@ -44,9 +74,9 @@ export const toPrompt = (req: ChatRequest): { system?: string; prompt: string } 
   ].join("\n\n");
   // A tool result names its tool only by the id of the call it answers, so the names are remembered as the calls go by.
   const names = new Map<string, string>();
-  const turns = req.messages.filter((m) => {
-    return m.role === "user" || m.role === "assistant" || m.role === "tool";
-  });
+  const turns = turnsOf(req);
+  // With a conversation of the program's own to carry on, only what it has not seen is sent.
+  const skip = Math.min(req.continuation?.seen ?? 0, turns.length - 1);
   const lines = turns.map((m) => {
     if (m.role === "tool") {
       return renderToolResult(names.get(m.tool_call_id ?? "") ?? m.name ?? "tool", textOf(m.content));
@@ -59,7 +89,7 @@ export const toPrompt = (req: ChatRequest): { system?: string; prompt: string } 
     const label = m.role === "user" ? "User" : "Assistant";
     return [`${label}: ${said}`.trimEnd(), ...calls.map(renderToolCall)].join("\n");
   });
-  const prompt = turns.length === 1 && turns[0]?.role === "user" ? textOf(turns[0].content) : lines.join("\n\n");
+  const prompt = turns.length === 1 && turns[0]?.role === "user" ? textOf(turns[0].content) : lines.slice(skip).join("\n\n");
   return { system: system || undefined, prompt };
 };
 
@@ -71,7 +101,14 @@ export const buildArgs = (req: ChatRequest, system?: string): string[] => {
   // stream-json carries the plan's usage windows (rate_limit_event) that plain json leaves out; it needs --verbose.
   // Torii supplies the whole context itself: its own system prompt replaces the program's (which describes tools it is not given here), and
   // extra tool servers and skills from the user's own setup are left out, so a chat is not coloured by them and costs less.
-  const args = ["-p", "--output-format", "stream-json", "--verbose", "--no-session-persistence", "--tools", "", "--strict-mcp-config", "--disable-slash-commands"];
+  const args = ["-p", "--output-format", "stream-json", "--verbose", "--tools", "", "--strict-mcp-config", "--disable-slash-commands"];
+  // Without a conversation to carry on, nothing is kept. With one, the program keeps it so the next step sends only what is new: sending
+  // the whole transcript again as one longer message is never found in its prompt cache, and is paid for in full every step.
+  if (req.continuation) {
+    args.push(req.continuation.seen > 0 ? "--resume" : "--session-id", req.continuation.id);
+  } else {
+    args.push("--no-session-persistence");
+  }
   if (alias) {
     args.push("--model", alias);
   }
@@ -91,6 +128,8 @@ export interface ClaudeResult {
   // What the program counted for the call. Prompt tokens include its cached input.
   usage?: { inputTokens: number; outputTokens: number };
   limits?: ClaudeLimits;
+  // Where the program's conversation stands after this call, for the next one: it holds every turn of the request and its own reply.
+  continuation?: { id: string; seen: number };
 }
 
 interface ResultEvent {
@@ -150,10 +189,23 @@ export const parseClaudeOutput = (out: string, fallbackModel: string, now = Date
   return { text: result.result, model: result.model ?? assistantModel ?? fallbackModel, ...(usage ? { usage } : {}), ...(limits ? { limits } : {}) };
 };
 
-export const runClaude = async (bin: string, req: ChatRequest, exec: Exec = defaultExec): Promise<ClaudeResult> => {
+const ask = async (bin: string, req: ChatRequest, exec: Exec): Promise<ClaudeResult> => {
   const { system, prompt } = toPrompt(req);
-  const out = await exec(bin, buildArgs(req, system), prompt);
-  const result = parseClaudeOutput(out, req.model);
+  const result = parseClaudeOutput(await exec(bin, buildArgs(req, system), prompt), req.model);
+  return req.continuation ? { ...result, continuation: { id: req.continuation.id, seen: turnsOf(req).length + 1 } } : result;
+};
+
+export const runClaude = async (bin: string, req: ChatRequest, exec: Exec = defaultExec): Promise<ClaudeResult> => {
+  let result: ClaudeResult;
+  try {
+    result = await ask(bin, req, exec);
+  } catch (err) {
+    // A conversation the program no longer has (pruned, or on another install) is started again from the whole transcript.
+    if (!req.continuation || req.continuation.seen === 0 || err instanceof ClaudeLimitError) {
+      throw err;
+    }
+    result = await ask(bin, { ...req, continuation: { id: randomUUID(), seen: 0 } }, exec);
+  }
   const tools = req.tools ?? [];
   if (tools.length === 0) {
     return result;
