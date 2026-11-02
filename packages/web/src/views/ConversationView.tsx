@@ -6,7 +6,7 @@ import type { Effort } from "@harness/core/effort";
 import { ContextMeter } from "@/components/ContextMeter";
 import { EffortPicker } from "@/components/EffortPicker";
 import { ModePicker } from "@/components/ModePicker";
-import { ModelPicker } from "@/components/ModelPicker";
+import { ModelPicker, useModels } from "@/components/ModelPicker";
 import { noImagesReason, supportsImages } from "@harness/core/image";
 import { ConversationActions } from "@/components/ConversationActions";
 import { Message, StatusLine } from "@/components/Messages";
@@ -16,7 +16,9 @@ import { Badge } from "@/components/ui/fields";
 import { useConversation } from "@/lib/useConversation";
 import { contextBlock } from "@/lib/desktop";
 import { useNotifications } from "@/lib/notify";
-import { useLibrary, useSessions, useSetMode, useSessionTasks, useSkills } from "@/lib/queries";
+import { compact as compactNumber } from "@/lib/format";
+import { INIT_PROMPT, permissionArg, resolveModel, unavailable } from "@/lib/commands";
+import { useCompactConversation, useLibrary, useSessions, useSetMode, useSessionTasks, useSkills } from "@/lib/queries";
 import { parseSlash, withLibrary } from "@/lib/skills";
 
 const Conversation = ({ id }: { id: string }) => {
@@ -35,6 +37,10 @@ const Conversation = ({ id }: { id: string }) => {
   const skills = withLibrary(info?.kind === "code" ? folder.data?.[0]?.skills : undefined, library.data);
   const [panel, setPanel] = useState(false);
   const setMode = useSetMode(id);
+  const compactNow = useCompactConversation(id);
+  const { catalogue } = useModels();
+  // What the last command said, shown above the message box until the next message.
+  const [notice, setNotice] = useState("");
   // Text to add to the message being written (a file from the panel), with a counter so the same text can be added twice.
   const [insertion, setInsertion] = useState<{ id: number; text: string } | undefined>();
   const addContext = (path: string, text: string, shortened: boolean): void => {
@@ -48,6 +54,79 @@ const Conversation = ({ id }: { id: string }) => {
   const stuck = useRef(true);
   const last = state.items.at(-1);
   const model = info?.model ?? "";
+
+  // A built-in command typed in the message box (see lib/commands).
+  const runCommand = (name: string, args: string): void => {
+    setNotice("");
+    const why = unavailable(name, { conversation: info !== undefined, code: info?.kind === "code" });
+    if (why) {
+      setNotice(why);
+      return;
+    }
+    switch (name) {
+      case "compact":
+        if (state.busy) {
+          setNotice("Wait for the reply to finish before compacting.");
+          return;
+        }
+        compactNow.mutate(undefined, {
+          onSuccess: (result) => {
+            setNotice(`Compacted ${String(result.messages)} messages: about ${compactNumber(result.tokensBefore)} tokens down to ${compactNumber(result.tokensAfter)}.`);
+          },
+          onError: (err) => {
+            setNotice(err.message);
+          },
+        });
+        return;
+      case "clear": {
+        const query = new URLSearchParams({ ...(info?.kind === "code" ? { device: info.device, root: info.root } : {}), ...(info?.model ? { model: info.model } : {}) });
+        void navigate(`/?${query.toString()}`);
+        return;
+      }
+      case "model": {
+        if (args === "") {
+          document.querySelector<HTMLSelectElement>("select[aria-label=\"Model\"]")?.focus();
+          setNotice(`The next message goes to ${picked || model}. Choose another in the model box above, or type /model and a name.`);
+          return;
+        }
+        const data = catalogue.data;
+        const ids = ["auto", ...(data?.models ?? []).filter((m) => {
+          return m.state === "loaded" || m.state === "loads-on-use";
+        }).map((m) => {
+          return m.id;
+        }), ...(data?.claude.available ? data.claude.models : [])];
+        const found = resolveModel(args, ids);
+        if ("error" in found) {
+          setNotice(found.error);
+        } else {
+          setPicked(found.id);
+          setNotice(`The next message goes to ${found.id}.`);
+        }
+        return;
+      }
+      case "permissions": {
+        const mode = permissionArg(args);
+        if (args === "" || !mode) {
+          setNotice(`${args === "" ? "" : `"${args}" is not a mode. `}This conversation is on ${info?.mode ?? "ask"}. Use /permissions ask, edits, plan or bypass.`);
+          return;
+        }
+        setMode.mutate(mode, {
+          onSuccess: () => {
+            setNotice(`Changes are now treated as: ${mode}.`);
+          },
+          onError: (err) => {
+            setNotice(err.message);
+          },
+        });
+        return;
+      }
+      case "init":
+        stuck.current = true;
+        void send(INIT_PROMPT, picked || undefined, pickedEffort);
+        setNotice("Asked the model to draft an AGENTS.md. It will show you the draft and ask before writing it.");
+        return;
+    }
+  };
 
   // Keep the newest words in view, unless the reader has scrolled up to read.
   useEffect(() => {
@@ -156,12 +235,14 @@ const Conversation = ({ id }: { id: string }) => {
           }}
           />
         </div>
+        {notice ? <p className="mx-auto w-full max-w-3xl px-4 pb-1.5 text-[13px] text-muted-foreground" role="status">{notice}</p> : null}
         <Composer
           draftKey={id}
           busy={state.busy}
           disabled={!info || offline}
           skills={skills}
           insertion={insertion}
+          onCommand={runCommand}
           project={info?.kind === "code" && info.device !== "" ? { device: info.device, root: info.root } : undefined}
           imageNote={imageNote}
           onSend={(text, images) => {

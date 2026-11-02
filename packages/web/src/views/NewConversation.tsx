@@ -6,7 +6,7 @@ import { Composer } from "@/components/Composer";
 import { effortLevels, type Effort } from "@harness/core/effort";
 import { noImagesReason, supportsImages, type ImageAttachment } from "@harness/core/image";
 import { EffortPicker } from "@/components/EffortPicker";
-import { ModelPicker } from "@/components/ModelPicker";
+import { ModelPicker, useModels } from "@/components/ModelPicker";
 import { Button } from "@/components/ui/button";
 import { Select } from "@/components/ui/fields";
 import { api } from "@/lib/api";
@@ -14,6 +14,7 @@ import { useCreateConversation, useLibrary, useNodes, useSkills } from "@/lib/qu
 import { parseSlash, withLibrary } from "@/lib/skills";
 import { pushRecent, readRecent } from "@/lib/thisdevice";
 import { addProjectFolder } from "@/lib/addfolder";
+import { resolveModel, unavailable } from "@/lib/commands";
 import { desktopApi } from "@/lib/desktop";
 import type { NodeRecord, SettingsReport } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -27,7 +28,7 @@ export const NewConversation = () => {
   const nodes = useNodes();
   const [params] = useSearchParams();
   const [mode, setMode] = useState<Mode>(params.get("mode") === "code" || params.get("root") !== null ? "code" : "chat");
-  const [model, setModel] = useState("");
+  const [model, setModel] = useState(params.get("model") ?? "");
   const [device, setDevice] = useState(params.get("device") ?? "");
   const [recent, setRecent] = useState(readRecent);
   const [root, setRoot] = useState(params.get("root") ?? "");
@@ -82,6 +83,34 @@ export const NewConversation = () => {
       setRoot(result.root);
     } else {
       setError(result.error);
+    }
+  };
+
+  // The built-in commands on the start screen: only /model has anything to act on before a conversation exists.
+  const { catalogue } = useModels();
+  const [notice, setNotice] = useState("");
+  const runCommand = (name: string, args: string): void => {
+    setNotice("");
+    const why = unavailable(name, { conversation: false, code: false });
+    if (why) {
+      setNotice(why);
+      return;
+    }
+    if (args === "") {
+      setNotice(`The first message goes to ${selected}. Choose another in the model box above, or type /model and a name.`);
+      return;
+    }
+    const data = catalogue.data;
+    const found = resolveModel(args, ["auto", ...(data?.models ?? []).filter((m) => {
+      return m.state === "loaded" || m.state === "loads-on-use";
+    }).map((m) => {
+      return m.id;
+    }), ...(data?.claude.available ? data.claude.models : [])]);
+    if ("error" in found) {
+      setNotice(found.error);
+    } else {
+      setModel(found.id);
+      setNotice(`The first message goes to ${found.id}.`);
     }
   };
 
@@ -191,10 +220,11 @@ export const NewConversation = () => {
             : null}
         </div>
         {mode === "code" && devices.length === 0 && !nodes.isPending ? <p className="max-w-xl text-center text-muted-foreground">No connected device exposes a project folder. Add one from Devices, or set PROJECT_ROOTS on a device&apos;s agent.</p> : null}
+        {notice ? <p className="max-w-xl text-center text-muted-foreground" role="status">{notice}</p> : null}
         {error ? <p className="text-destructive" role="alert">{error}</p> : null}
       </div>
 
-      <Composer draftKey="new" busy={sending} disabled={!ready} skills={skills} imageNote={selected === "auto" || supportsImages(selected) ? "" : noImagesReason(selected)} placeholder={mode === "code" ? "Describe what to do in this folder" : "Message"} onSend={(text, images) => {
+      <Composer draftKey="new" onCommand={runCommand} busy={sending} disabled={!ready} skills={skills} imageNote={selected === "auto" || supportsImages(selected) ? "" : noImagesReason(selected)} placeholder={mode === "code" ? "Describe what to do in this folder" : "Message"} onSend={(text, images) => {
         void start(text, images);
       }}
       />

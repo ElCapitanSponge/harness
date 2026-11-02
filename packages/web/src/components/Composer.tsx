@@ -8,6 +8,7 @@ import { contextBlock, desktopApi, type PickedFile } from "@/lib/desktop";
 import { pickInBrowser } from "@/lib/pickfiles";
 import { readImages } from "@/lib/images";
 import { matchSkills, slashQuery } from "@/lib/skills";
+import { asSkillInfo, BUILTIN_COMMANDS, isCommand, parseCommand } from "@/lib/commands";
 import { applyMention, type Candidate } from "@/lib/mentions";
 import type { SkillInfo } from "@/lib/types";
 import { readProjectFile, useMention, type Project } from "@/lib/useMention";
@@ -44,7 +45,7 @@ const Tool = ({ label, onClick, disabled, pressed, children }: { label: string; 
 // The message box. It takes markdown: a toolbar and the usual shortcuts (Ctrl or Cmd with B, I, E for code, K for a link), lists
 // that carry on, a live preview, and Enter that adds a line inside a code block instead of sending. What was typed and not sent
 // is kept for each conversation, so a refresh does not lose it.
-export const Composer = ({ draftKey, busy, disabled, placeholder, skills, imageNote, insertion, project, onSend, onStop }: { draftKey: string; busy: boolean; disabled?: boolean; placeholder?: string; skills?: SkillInfo[]; imageNote?: string; insertion?: { id: number; text: string }; project?: Project; onSend: (text: string, images?: ImageAttachment[]) => void; onStop?: () => void }) => {
+export const Composer = ({ draftKey, busy, disabled, placeholder, skills, imageNote, insertion, project, onCommand, onSend, onStop }: { draftKey: string; busy: boolean; disabled?: boolean; placeholder?: string; skills?: SkillInfo[]; imageNote?: string; insertion?: { id: number; text: string }; project?: Project; onCommand?: (name: string, args: string) => void; onSend: (text: string, images?: ImageAttachment[]) => void; onStop?: () => void }) => {
   const name = `harness-draft-${draftKey}`;
   const [text, setText] = useState(() => {
     return read(name);
@@ -59,7 +60,9 @@ export const Composer = ({ draftKey, busy, disabled, placeholder, skills, imageN
   const [active, setActive] = useState(0);
   const [dismissed, setDismissed] = useState(false);
   const query = slashQuery(text);
-  const matches = query !== undefined && skills ? matchSkills(skills, query) : [];
+  // The built-in commands are listed first, then the skills, when the page can run commands.
+  const listed = onCommand ? [...BUILTIN_COMMANDS.map(asSkillInfo), ...(skills ?? [])] : skills;
+  const matches = query !== undefined && listed ? matchSkills(listed, query) : [];
   const menu = matches.length > 0 && !dismissed && !preview;
   const chosen = Math.min(active, Math.max(0, matches.length - 1));
   const ref = useRef<HTMLTextAreaElement>(null);
@@ -129,6 +132,19 @@ export const Composer = ({ draftKey, busy, disabled, placeholder, skills, imageN
     write(name, value);
   };
 
+  // Choosing from the slash menu completes the name for the person to go on. A command is run at once when it takes nothing more, or when
+  // its whole name has already been typed.
+  const chooseSlash = (pick: SkillInfo): void => {
+    if (onCommand && isCommand(pick) && (!pick.hint || text.trim() === `/${pick.name}`)) {
+      write(name, "");
+      setText("");
+      onCommand(pick.name, "");
+      return;
+    }
+    change(`/${pick.name} `);
+    selection.current = { start: pick.name.length + 2, end: pick.name.length + 2 };
+  };
+
   const chooseMention = (choice: Candidate): void => {
     if (!found.mention) {
       return;
@@ -178,6 +194,14 @@ export const Composer = ({ draftKey, busy, disabled, placeholder, skills, imageN
     if (!value || busy || disabled) {
       return;
     }
+    const command = onCommand ? parseCommand(value) : undefined;
+    if (command && onCommand) {
+      write(name, "");
+      setText("");
+      setPreview(false);
+      onCommand(command.name, command.args);
+      return;
+    }
     write(name, "");
     setText("");
     setPreview(false);
@@ -222,8 +246,7 @@ export const Composer = ({ draftKey, busy, disabled, placeholder, skills, imageN
       }
       if ((ev.key === "Enter" || ev.key === "Tab") && pick && !ev.shiftKey) {
         ev.preventDefault();
-        change(`/${pick.name} `);
-        selection.current = { start: pick.name.length + 2, end: pick.name.length + 2 };
+        chooseSlash(pick);
         return;
       }
       if (ev.key === "Escape") {
@@ -331,12 +354,12 @@ export const Composer = ({ draftKey, busy, disabled, placeholder, skills, imageN
                     className={cn("cursor-pointer rounded-lg px-3 py-1.5", i === chosen && "bg-accent text-accent-foreground")}
                     onMouseDown={(ev) => {
                       ev.preventDefault();
-                      change(`/${s.name} `);
-                      selection.current = { start: s.name.length + 2, end: s.name.length + 2 };
+                      chooseSlash(s);
                     }}
                   >
                     <div className="flex items-baseline gap-2">
                       <span className="font-semibold">/{s.name}</span>
+                      {isCommand(s) ? <span className="rounded border px-1 text-[10px] uppercase tracking-wide text-muted-foreground">command</span> : null}
                       {s.hint ? <span className="text-xs text-muted-foreground">{s.hint}</span> : null}
                     </div>
                     <div className="line-clamp-2 text-xs text-muted-foreground">{s.description}</div>
@@ -483,8 +506,8 @@ export const Composer = ({ draftKey, busy, disabled, placeholder, skills, imageN
                   value={text}
                   rows={1}
                   aria-label="Message"
-                  role={skills || project ? "combobox" : undefined}
-                  aria-expanded={skills || project ? menu || mentionOpen : undefined}
+                  role={listed || project ? "combobox" : undefined}
+                  aria-expanded={listed || project ? menu || mentionOpen : undefined}
                   aria-controls={mentionOpen ? `${name}-files` : menu ? `${name}-skills` : undefined}
                   aria-activedescendant={mentionOpen && found.candidates[mentionChosen] ? `${name}-file-${found.candidates[mentionChosen].path}` : menu && matches[chosen] ? `${name}-skill-${matches[chosen].name}` : undefined}
                   placeholder={placeholder ?? "Message (markdown works)"}

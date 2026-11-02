@@ -110,6 +110,20 @@ The match depends on what the gateway sees. Over Tailscale to a gateway that see
 
 The start screen also lists your recent folders (the last five used, kept in the browser) as one-click choices.
 
+## Built-in commands
+
+Type `/` in the message box and the list shows a few commands, marked **command**, before the skills. They are chosen the same way (arrows, Enter or Tab, or a click), and run in the page instead of being sent to the model:
+
+| Command | What it does |
+|---|---|
+| `/compact` | Summarises the older turns now, like the button on the context meter, and says how many messages and tokens it covered. |
+| `/clear` | Opens a fresh conversation in the same project, on the same model. The old one stays in the sidebar. |
+| `/model [name]` | Sets the model for the next message: the exact name, or any words that fit only one model. With no name it focuses the model box. |
+| `/permissions [mode]` | Sets how changes are treated: `ask`, `edits`, `plan` or `bypass` (the same as the mode box; `bypass` can be refused by the gateway). With no mode it says the current one. |
+| `/init` | Asks the model to read the project and draft an `AGENTS.md`, and to show you the draft and ask before writing it. |
+
+A command that takes nothing more runs as soon as it is chosen; `/model` and `/permissions` complete the name so you can add the argument, and run on Enter once the name is whole. A command that does not apply says why instead of failing: `/permissions` and `/init` need a coding session, and `/compact` and `/clear` need a conversation that has started (on the start screen only `/model` works). A skill with the same name as a command is still reachable from the list; the command wins when you type it.
+
 ## Mentioning files with @
 
 In a coding session, type `@` in the message box to search the project's files, as in Claude Code. The list is the project folder on its device, read through the same read-only route as the session panel, and it narrows as you type: `@read` offers `README.md`, `@src/` lists what is in `src`. Folders come first and are chosen to go inside (the word stays open); a file is chosen with **Enter** or **Tab** (or a click), moves with the arrow keys, and **Escape** closes the list.
