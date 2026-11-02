@@ -1,10 +1,10 @@
-import { Download, MoreHorizontal, Pencil, Trash2 } from "lucide-react";
+import { Download, MoreHorizontal, Pencil, Pin, PinOff, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/fields";
 import { Dialog, DialogContent, Menu, MenuContent, MenuItem, MenuTrigger } from "@/components/ui/overlay";
 import { downloadExport } from "@/lib/download";
-import { useDeleteConversation, useRenameConversation } from "@/lib/queries";
+import { useDeleteConversation, usePinConversation, useRenameConversation } from "@/lib/queries";
 import type { SessionInfo } from "@/lib/types";
 
 // Rename and delete for one conversation, from a small menu.
@@ -13,6 +13,7 @@ export const ConversationActions = ({ info, onDeleted, className }: { info: Sess
   const [title, setTitle] = useState(info.title);
   const rename = useRenameConversation();
   const remove = useDeleteConversation();
+  const pin = usePinConversation();
 
   return (
     <>
@@ -23,6 +24,12 @@ export const ConversationActions = ({ info, onDeleted, className }: { info: Sess
           </Button>
         </MenuTrigger>
         <MenuContent>
+          <MenuItem onSelect={() => {
+            pin.mutate({ id: info.id, pinned: info.pinned !== true });
+          }}
+          >
+            {info.pinned === true ? <PinOff /> : <Pin />} {info.pinned === true ? "Unpin" : "Pin to top"}
+          </MenuItem>
           <MenuItem onSelect={() => {
             setTitle(info.title);
             setDialog("rename");

@@ -249,6 +249,19 @@ export const useRenameConversation = () => {
   });
 };
 
+// Pins a conversation to the top of the sidebar, or unpins it. The pin is kept on the gateway with the conversation.
+export const usePinConversation = () => {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { id: string; pinned: boolean }) => {
+      return api<SessionInfo>(`/sessions/${input.id}`, { method: "PATCH", body: { pinned: input.pinned } });
+    },
+    onSuccess: () => {
+      void client.invalidateQueries({ queryKey: ["sessions"] });
+    },
+  });
+};
+
 export const useDeleteConversation = () => {
   const client = useQueryClient();
   return useMutation({

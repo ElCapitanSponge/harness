@@ -40,4 +40,22 @@ describe("grouping conversations by project", () => {
   it("makes no group when there are no conversations", () => {
     expect(groupSessions([], "pc")).toEqual([]);
   });
+
+  it("puts pinned conversations in a group at the top, most recently active first, and not in their project", () => {
+    const groups = groupSessions([code("a", "pc", "p"), { ...code("b", "pc", "p"), pinned: true, updated: 5 }, { ...chat("c"), pinned: true, updated: 9 }, code("d", "pc", "p")], "pc");
+    expect(groups.map((g) => {
+      return `${g.kind}:${g.items.map((i) => {
+        return i.info.id;
+      }).join(",")}`;
+    })).toEqual(["pinned:c,b", "project:a,d"]);
+  });
+
+  it("makes no pinned group, and drops a project left empty, when nothing is pinned or everything is", () => {
+    expect(groupSessions([code("a", "pc", "p")], "pc").map((g) => {
+      return g.kind;
+    })).toEqual(["project"]);
+    expect(groupSessions([{ ...code("a", "pc", "p"), pinned: true }], "pc").map((g) => {
+      return g.kind;
+    })).toEqual(["pinned"]);
+  });
 });

@@ -2,6 +2,7 @@ import { ChevronDown, ChevronRight, Code2, MessageSquare, Plus } from "lucide-re
 import { NavLink } from "react-router";
 import { ConversationActions } from "@/components/ConversationActions";
 import { Button } from "@/components/ui/button";
+import { baseName } from "@/lib/desktop";
 import { groupKey, type Group } from "@/lib/groups";
 import type { SessionInfo } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -23,26 +24,30 @@ export const ProjectGroups = ({ groups, collapsed, pathname, onToggle, onNew, on
   return (
     <div className="grid gap-2">
       {groups.map((group) => {
-        const closed = collapsed.has(group.key);
+        const closed = group.kind === "project" || group.kind === "chats" ? collapsed.has(group.key) : false;
         const Chevron = closed ? ChevronRight : ChevronDown;
         return (
-          <section key={group.key || "chats"} aria-label={group.key === "" ? "Chats" : `${group.name} on ${group.device}`}>
+          <section key={group.key || "chats"} aria-label={group.kind === "project" ? `${group.name} on ${group.device}` : group.name}>
             <div className="group/head flex items-center gap-0.5">
-              <button
-                type="button"
-                aria-expanded={!closed}
-                className="flex min-w-0 flex-1 items-center gap-1 rounded-md px-1 py-1 text-left hover:bg-muted"
-                onClick={() => {
-                  onToggle(group, !closed);
-                }}
-              >
-                <Chevron className="size-4 shrink-0 text-muted-foreground" />
-                <span className="min-w-0 flex-1">
-                  <span className="block truncate text-xs font-semibold uppercase tracking-wide text-muted-foreground">{group.name}</span>
-                  {group.key === "" ? null : <span className="block truncate text-xs font-normal text-muted-foreground" title={`${group.device}:${group.root}`}>{group.here ? "This device" : group.device}</span>}
-                </span>
-              </button>
-              {group.key === ""
+              {group.kind === "pinned"
+                ? <span className="px-1 py-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Pinned</span>
+                : (
+                    <button
+                      type="button"
+                      aria-expanded={!closed}
+                      className="flex min-w-0 flex-1 items-center gap-1 rounded-md px-1 py-1 text-left hover:bg-muted"
+                      onClick={() => {
+                        onToggle(group, !closed);
+                      }}
+                    >
+                      <Chevron className="size-4 shrink-0 text-muted-foreground" />
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate text-xs font-semibold uppercase tracking-wide text-muted-foreground">{group.name}</span>
+                        {group.kind !== "project" ? null : <span className="block truncate text-xs font-normal text-muted-foreground" title={`${group.device}:${group.root}`}>{group.here ? "This device" : group.device}</span>}
+                      </span>
+                    </button>
+                  )}
+              {group.kind !== "project"
                 ? null
                 : (
                     <Button variant="subtle" size="icon" className="size-7 opacity-0 focus-visible:opacity-100 group-hover/head:opacity-100" aria-label={`New session in ${group.name}`} title="New session in this project" onClick={() => {
@@ -70,7 +75,8 @@ export const ProjectGroups = ({ groups, collapsed, pathname, onToggle, onNew, on
                             {c.kind === "code" ? <Code2 className="size-4 shrink-0 text-muted-foreground" /> : <MessageSquare className="size-4 shrink-0 text-muted-foreground" />}
                             <span className="min-w-0 flex-1">
                               <span className="block truncate">{c.title || "New conversation"}</span>
-                              {c.kind === "code" && !c.deviceConnected ? <span className="block truncate text-xs font-normal text-muted-foreground">offline</span> : null}
+                              {group.kind === "pinned" && c.kind === "code" ? <span className="block truncate text-xs font-normal text-muted-foreground">{baseName(c.root)} · {c.device}{c.deviceConnected ? "" : " (offline)"}</span> : null}
+                              {group.kind !== "pinned" && c.kind === "code" && !c.deviceConnected ? <span className="block truncate text-xs font-normal text-muted-foreground">offline</span> : null}
                             </span>
                           </NavLink>
                           <ConversationActions

@@ -90,6 +90,7 @@ Whatever the mode or a remembered rule says, **the device's own allow list has t
 The sidebar groups conversations by project, as Claude Code does: one group for each folder on each device, headed by the folder's name and either **This device** or the name of the device it is on. Chats, which have no project, are gathered under **Chats** at the end. A sub-agent's conversation stays under the one that started it.
 
 - Click a group's heading to collapse or expand it. Which groups are collapsed is kept on the gateway, so the browser and the [desktop app](desktop.md) agree and it survives a restart.
+- **Pin to top** in a conversation's menu moves it to a **Pinned** group above the projects (where it still says which folder and device it belongs to); **Unpin** puts it back. The pin is stored with the conversation on the gateway, so it shows in every client and survives a restart. Pinned conversations are ordered by when they were last active.
 - The **+** on a group's heading opens the start screen with that device and folder already chosen.
 - "This device" comes from the same match as [New code session here](#new-code-session-here): the desktop app always knows its own device; a browser uses the gateway's match or your choice.
 

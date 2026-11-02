@@ -268,7 +268,10 @@ export const LibraryImport = z.object({
 }).refine((v) => {
   return (v.zip !== undefined) !== (v.files !== undefined);
 }, { message: "send either a zip or files" });
-export const SessionRename = z.object({ title: z.string().trim().min(1).max(120) });
+// Changes to a conversation: a new title, and/or pinning it to the top of the sidebar.
+export const SessionRename = z.object({ title: z.string().trim().min(1).max(120).optional(), pinned: z.boolean().optional() }).refine((v) => {
+  return v.title !== undefined || v.pinned !== undefined;
+}, { message: "send a title or pinned" });
 
 // What happens in a coding session, in order. Sent to clients as server-sent events.
 export type SessionEvent
@@ -403,6 +406,8 @@ export interface SessionInfo {
   chosen?: { model: string; device: string; reason: string };
   // The conversation that started this one as a sub-agent, if any.
   parent?: string;
+  // Pinned to the top of the sidebar.
+  pinned?: boolean;
 }
 
 // Loading or unloading a model on a device.

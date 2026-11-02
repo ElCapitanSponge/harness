@@ -364,7 +364,12 @@ export const createApp = ({ registry, apiKey, relay, sessions, library, rules, g
     if (!parsed.success) {
       return c.json({ error: flattenError(parsed.error) }, 400);
     }
-    session.rename(parsed.data.title);
+    if (parsed.data.title !== undefined) {
+      session.rename(parsed.data.title);
+    }
+    if (parsed.data.pinned !== undefined) {
+      session.setPinned(parsed.data.pinned);
+    }
     return c.json(session.info());
   });
 
