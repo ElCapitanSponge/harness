@@ -61,6 +61,9 @@ const MIGRATIONS: string[] = [
    ) STRICT;`,
   // Conversations pinned to the top of the sidebar.
   `ALTER TABLE conversations ADD COLUMN pinned INTEGER NOT NULL DEFAULT 0;`,
+  // How many of a conversation's events the person has read. What was there before this is counted as read, so nothing old shows as new.
+  `ALTER TABLE conversations ADD COLUMN read_events INTEGER NOT NULL DEFAULT 0;
+   UPDATE conversations SET read_events = (SELECT COUNT(*) FROM events WHERE events.conversation_id = conversations.id);`,
 ];
 
 // Opens (creating if need be) the gateway's database on its data volume, in write-ahead mode so reads never wait for a write,
@@ -106,14 +109,15 @@ interface ConversationRow {
   depth: number;
   mode: string | null;
   pinned: number;
+  read_events: number;
 }
 
 // Stores conversations as a row each, with their events appended one row at a time. A turn adds events and never rewrites old ones.
 export const sqliteStore = (db: DatabaseSync): SessionStore & { loadAll(): StoredSession[] } => {
   const upsert = db.prepare(
-    `INSERT INTO conversations (id, kind, title, model, device, root, created, updated, history, effort, parent, depth, mode, pinned)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-     ON CONFLICT (id) DO UPDATE SET title = excluded.title, model = excluded.model, updated = excluded.updated, history = excluded.history, effort = excluded.effort, mode = excluded.mode, pinned = excluded.pinned`,
+    `INSERT INTO conversations (id, kind, title, model, device, root, created, updated, history, effort, parent, depth, mode, pinned, read_events)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+     ON CONFLICT (id) DO UPDATE SET title = excluded.title, model = excluded.model, updated = excluded.updated, history = excluded.history, effort = excluded.effort, mode = excluded.mode, pinned = excluded.pinned, read_events = excluded.read_events`,
   );
   const count = db.prepare("SELECT COUNT(*) AS n FROM events WHERE conversation_id = ?");
   const append = db.prepare("INSERT INTO events (conversation_id, seq, data) VALUES (?, ?, ?)");
@@ -140,6 +144,7 @@ export const sqliteStore = (db: DatabaseSync): SessionStore & { loadAll(): Store
           session.depth ?? 0,
           session.mode ?? null,
           session.pinned === true ? 1 : 0,
+          session.read ?? 0,
         );
         const have = (count.get(session.id) as { n: number }).n;
         for (let seq = have; seq < session.events.length; seq++) {
@@ -173,6 +178,7 @@ export const sqliteStore = (db: DatabaseSync): SessionStore & { loadAll(): Store
           }),
           ...(row.parent ? { parent: row.parent } : {}),
           ...(row.pinned === 1 ? { pinned: true } : {}),
+          read: row.read_events,
           ...(PERMISSION_MODES.find((m) => {
             return m === row.mode;
           })

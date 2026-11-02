@@ -37,6 +37,9 @@ The connected device the browser is on, found by address or chosen by the person
 **Project group**:
 The sidebar gathers conversations by project, a folder on a device, with chats in a group of their own. A group names its folder and says "This device" or the other device's name, collapses and expands (kept on the gateway so every client agrees), and has a button to start a new session in that project. A conversation can be pinned to a **Pinned** group above the projects; the pin is stored on the gateway with the conversation. See docs/guides/coding-sessions.md.
 
+**Waiting / unread**:
+A conversation is *waiting* while it is stopped for an answer from the person (an approval or a question), and *unread* when it holds events beyond the **read position** the person last reached in any client. The gateway keeps both, and the sidebar shows them beside *working*. See docs/guides/coding-sessions.md.
+
 **Limited**:
 A device state while a call or meeting runs: the device keeps working, but only with models up to a size the owner sets. Different from busy, where nothing is sent to it. See docs/guides/devices.md.
 

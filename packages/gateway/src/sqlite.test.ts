@@ -65,7 +65,7 @@ describe("sqliteStore", () => {
   it("saves a conversation and loads it back exactly", async () => {
     const store = sqliteStore(openDatabase(":memory:"));
     await store.save(session());
-    expect(store.loadAll()).toEqual([session()]);
+    expect(store.loadAll()).toEqual([session({ read: 0 })]);
   });
 
   it("keeps the parent and depth of a sub-agent's conversation", async () => {
@@ -155,6 +155,15 @@ describe("permission modes and rules in the database", () => {
     expect(store.loadAll()[0]).toMatchObject({ pinned: true });
     await store.save(session({ pinned: false }));
     expect(store.loadAll()[0]?.pinned).toBeUndefined();
+  });
+
+  it("keeps how far a conversation has been read, and counts what was saved before as read", async () => {
+    const db = openDatabase(":memory:");
+    const store = sqliteStore(db);
+    await store.save(session({ events: [{ type: "done", stopped: false }, { type: "done", stopped: false }, { type: "done", stopped: false }], read: 1 }));
+    expect(store.loadAll()[0]).toMatchObject({ read: 1 });
+    await store.save(session({ events: [{ type: "done", stopped: false }, { type: "done", stopped: false }, { type: "done", stopped: false }], read: 3 }));
+    expect(store.loadAll()[0]).toMatchObject({ read: 3 });
   });
 
   it("remembers a tool for a folder on a device once, lists it, and removes it", () => {

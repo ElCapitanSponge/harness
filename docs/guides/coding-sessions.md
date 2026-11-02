@@ -91,6 +91,8 @@ The sidebar groups conversations by project, as Claude Code does: one group for 
 
 - Click a group's heading to collapse or expand it. Which groups are collapsed is kept on the gateway, so the browser and the [desktop app](desktop.md) agree and it survives a restart.
 - **Pin to top** in a conversation's menu moves it to a **Pinned** group above the projects (where it still says which folder and device it belongs to); **Unpin** puts it back. The pin is stored with the conversation on the gateway, so it shows in every client and survives a restart. Pinned conversations are ordered by when they were last active.
+- Each conversation shows what it is doing: a **spinner** while the model works, an **amber hand** while it is stopped for you (an approval or a question; the hover text says which), and a **dot** with a bold title when it holds messages you have not read. The conversation you are looking at is never marked unread by its own replies.
+- How far you have read is kept on the gateway, so reading a conversation in the browser clears the dot in the desktop app too. Events that arrive while the page is hidden stay unread until you come back to it. Conversations saved before this existed count as read.
 - The **+** on a group's heading opens the start screen with that device and folder already chosen.
 - "This device" comes from the same match as [New code session here](#new-code-session-here): the desktop app always knows its own device; a browser uses the gateway's match or your choice.
 

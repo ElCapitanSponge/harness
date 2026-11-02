@@ -1,8 +1,9 @@
-import { ChevronDown, ChevronRight, Code2, MessageSquare, Plus } from "lucide-react";
+import { ChevronDown, ChevronRight, Code2, HandHelping, LoaderCircle, MessageSquare, Plus } from "lucide-react";
 import { NavLink } from "react-router";
 import { ConversationActions } from "@/components/ConversationActions";
 import { Button } from "@/components/ui/button";
 import { baseName } from "@/lib/desktop";
+import { statusLabel, statusOf } from "@/lib/status";
 import { groupKey, type Group } from "@/lib/groups";
 import type { SessionInfo } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -63,6 +64,7 @@ export const ProjectGroups = ({ groups, collapsed, pathname, onToggle, onNew, on
               : (
                   <ul className="grid gap-0.5">
                     {group.items.map(({ info: c, indent }) => {
+                      const status = statusOf(c, pathname === `/c/${c.id}`);
                       return (
                         <li key={c.id} className="group relative" style={indent > 0 ? { paddingLeft: `${String(indent * 14)}px` } : undefined}>
                           <NavLink
@@ -72,12 +74,18 @@ export const ProjectGroups = ({ groups, collapsed, pathname, onToggle, onNew, on
                               return cn("flex items-center gap-2 rounded-md py-1.5 pl-2 pr-9 hover:bg-muted", isActive && "bg-accent font-semibold text-accent-foreground hover:bg-accent");
                             }}
                           >
-                            {c.kind === "code" ? <Code2 className="size-4 shrink-0 text-muted-foreground" /> : <MessageSquare className="size-4 shrink-0 text-muted-foreground" />}
+                            {status === "working"
+                              ? <LoaderCircle className="size-4 shrink-0 animate-spin text-primary" />
+                              : status === "needs-you"
+                                ? <HandHelping className="size-4 shrink-0 text-warning" />
+                                : c.kind === "code" ? <Code2 className="size-4 shrink-0 text-muted-foreground" /> : <MessageSquare className="size-4 shrink-0 text-muted-foreground" />}
                             <span className="min-w-0 flex-1">
-                              <span className="block truncate">{c.title || "New conversation"}</span>
+                              <span className={cn("block truncate", status === "unread" && "font-semibold")}>{c.title || "New conversation"}</span>
                               {group.kind === "pinned" && c.kind === "code" ? <span className="block truncate text-xs font-normal text-muted-foreground">{baseName(c.root)} · {c.device}{c.deviceConnected ? "" : " (offline)"}</span> : null}
                               {group.kind !== "pinned" && c.kind === "code" && !c.deviceConnected ? <span className="block truncate text-xs font-normal text-muted-foreground">offline</span> : null}
                             </span>
+                            {status === undefined ? null : <span className="sr-only">{statusLabel(status, c)}</span>}
+                            {status === "unread" ? <span aria-hidden className="size-2 shrink-0 rounded-full bg-primary" /> : null}
                           </NavLink>
                           <ConversationActions
                             info={c}
