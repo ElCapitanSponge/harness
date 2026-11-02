@@ -99,7 +99,7 @@ export const createToolServer = (opts: { roots: Record<string, string>; allowed:
       try {
         // What a write or edit changed goes beside the result, for the person; the model only gets the result.
         let change: FileChange | undefined;
-        const output = truncate(await tool.run(msg.args, { cwd, report: (c) => {
+        const output = truncate(await tool.run(msg.args, { cwd, session: msg.session, report: (c) => {
           change = c;
         } }));
         finish(true, output, "ok", summary, change);

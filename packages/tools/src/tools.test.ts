@@ -161,6 +161,10 @@ describe("tool metadata", () => {
       skill: false,
       start_skill: false,
       project_context: false,
+      task_output: false,
+      task_stop: false,
+      tasks_list: false,
+      tasks_stop_all: false,
     });
   });
 });

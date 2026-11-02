@@ -42,6 +42,7 @@ With `HARNESS_API_KEY` set, every route except the web page itself needs `Author
 | `POST /sessions/:id/approvals/:approvalId` | Answer an approval: `{ approve, always? }`. |
 | `POST /sessions/:id/cancel` | Stop the running turn. |
 | `POST /sessions/:id/compact` | Summarise the older turns now. |
+| `GET /sessions/:id/tasks` | The commands the session has running in the background, as its device reports them; empty for a chat or an unreachable device. |
 | `GET /sessions/:id/usage` | The context meter and what each model has used in this conversation. |
 | `GET /sessions/:id/export` | The conversation as markdown. |
 | `POST /import/parse` | Split pasted text or a file's content into conversations: `{ name?, content }`. Saves nothing. |

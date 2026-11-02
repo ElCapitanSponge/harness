@@ -70,11 +70,16 @@ In the web page, choose **Code** on the start screen, pick the device and folder
 In a coding session, the panel button in the header opens **This session** beside the conversation (a drawer over it on a phone). It shows:
 
 - **Plan.** The model can keep a short plan with the `plan` tool, marking each step to do, in progress or done as it works. The plan shows live and is saved with the conversation. The tool needs no approval and touches nothing: the gateway keeps the plan and no device is asked.
+- **Running in the background.** Commands started with `run_command`'s `background` option (a dev server, a long build), with their state. The panel refreshes every few seconds while it is open.
 - **Files.** Every file the session changed or created, newest first, with lines added and removed. Opening one shows its diff. When a file is written or edited, the device works out the diff and sends it beside the result; the model is only told the result (such as `wrote 120 characters to a.txt`), never the diff. A binary or very large file (over 5,000 lines, or a diff over 60,000 characters) is listed with a note instead of a diff.
 
 Both are stored as events of the conversation, so reopening it shows the panel as it was.
 
-Not built yet from the same plan: running commands in the background, and attaching images for models that can read them ([#28](https://github.com/ElCapitanSponge/harness/issues/28)).
+Not built yet from the same plan: attaching images for models that can read them ([#28](https://github.com/ElCapitanSponge/harness/issues/28)).
+
+## Commands in the background
+
+With tools on the device set to **Can change**, `run_command` takes `background: true`. It asks first, like any command, then starts the command and returns a task id at once instead of waiting. The model can read the latest output with `task_output` (`id`, `lines`) and stop the task, and everything it started, with `task_stop`. Tasks belong to the session that started them: another session cannot read or stop them, up to 8 run at once, the last 20 finished ones are kept, and the last 200,000 characters of output. They are stopped when the session is deleted and when the agent exits. They run in the device's shell and are not sandboxed, exactly like `run_command`.
 
 ## Loading models on another device
 

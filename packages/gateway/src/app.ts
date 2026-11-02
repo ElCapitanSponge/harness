@@ -285,7 +285,32 @@ export const createApp = ({ registry, apiKey, relay, sessions, ledger, claude = 
     return c.json(session.info());
   });
 
+  // The commands a coding session has running in the background, as its device reports them. A chat, or a device that is offline or
+  // too old to answer, has none.
+  app.get("/sessions/:id/tasks", async (c) => {
+    const session = sessions.get(c.req.param("id"));
+    if (!session) {
+      return c.json({ error: { message: "no such session" } }, 404);
+    }
+    if (session.device === "") {
+      return c.json([]);
+    }
+    try {
+      const result = await relay.callTool(session.device, session.root, "tasks_list", {}, { session: session.id, timeoutMs: 10_000 });
+      return c.json(result.ok ? JSON.parse(result.output) as unknown : []);
+    } catch {
+      return c.json([]);
+    }
+  });
+
   app.delete("/sessions/:id", async (c) => {
+    // Whatever the session left running on its device stops with it, as far as the device can be reached.
+    const doomed = sessions.get(c.req.param("id"));
+    if (doomed && doomed.device !== "") {
+      await relay.callTool(doomed.device, doomed.root, "tasks_stop_all", {}, { session: doomed.id, timeoutMs: 10_000 }).catch(() => {
+        return undefined;
+      });
+    }
     if (!(await sessions.delete(c.req.param("id")))) {
       return c.json({ error: { message: "no such session" } }, 404);
     }
