@@ -1,9 +1,11 @@
-import { ArrowUp, Bold, Braces, Code, Eye, Italic, Link, List, ListOrdered, Paperclip, Pencil, Quote, Square, X } from "lucide-react";
-import { useLayoutEffect, useRef, useState, type KeyboardEvent, type ReactNode, type SyntheticEvent } from "react";
+import { ArrowUp, Bold, Braces, Code, Eye, Italic, Link, List, ListOrdered, FileText, Paperclip, Pencil, Quote, Square, X } from "lucide-react";
+import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent, type ReactNode, type SyntheticEvent } from "react";
 import { Markdown } from "@/components/Markdown";
 import { Button } from "@/components/ui/button";
 import { codeBlock, continueList, insideFence, link, prefixLines, wrapSelection, type Edit } from "@/lib/markdown-edit";
 import type { ImageAttachment } from "@harness/core/image";
+import { contextBlock, desktopApi, type PickedFile } from "@/lib/desktop";
+import { pickInBrowser } from "@/lib/pickfiles";
 import { readImages } from "@/lib/images";
 import { matchSkills, slashQuery } from "@/lib/skills";
 import type { SkillInfo } from "@/lib/types";
@@ -40,7 +42,7 @@ const Tool = ({ label, onClick, disabled, pressed, children }: { label: string; 
 // The message box. It takes markdown: a toolbar and the usual shortcuts (Ctrl or Cmd with B, I, E for code, K for a link), lists
 // that carry on, a live preview, and Enter that adds a line inside a code block instead of sending. What was typed and not sent
 // is kept for each conversation, so a refresh does not lose it.
-export const Composer = ({ draftKey, busy, disabled, placeholder, skills, imageNote, onSend, onStop }: { draftKey: string; busy: boolean; disabled?: boolean; placeholder?: string; skills?: SkillInfo[]; imageNote?: string; onSend: (text: string, images?: ImageAttachment[]) => void; onStop?: () => void }) => {
+export const Composer = ({ draftKey, busy, disabled, placeholder, skills, imageNote, insertion, onSend, onStop }: { draftKey: string; busy: boolean; disabled?: boolean; placeholder?: string; skills?: SkillInfo[]; imageNote?: string; insertion?: { id: number; text: string }; onSend: (text: string, images?: ImageAttachment[]) => void; onStop?: () => void }) => {
   const name = `harness-draft-${draftKey}`;
   const [text, setText] = useState(() => {
     return read(name);
@@ -75,6 +77,38 @@ export const Composer = ({ draftKey, busy, disabled, placeholder, skills, imageN
       el.style.height = `${String(Math.min(el.scrollHeight, window.innerHeight * 0.4))}px`;
     }
   }, [text, preview]);
+
+  // Files added as context: from the panel (insertion), or chosen here with the system's file picker in the desktop app (any file on this
+  // machine), or the browser's. Their text goes into the message in a code block with its path.
+  const [contextProblems, setContextProblems] = useState<string[]>([]);
+  const lastInsertion = useRef(0);
+  const append = (block: string): void => {
+    setText((current) => {
+      const next = `${current}${current === "" || current.endsWith("\n\n") ? "" : current.endsWith("\n") ? "\n" : "\n\n"}${block}\n`;
+      write(name, next);
+      return next;
+    });
+  };
+  useEffect(() => {
+    if (insertion && insertion.id !== lastInsertion.current) {
+      lastInsertion.current = insertion.id;
+      append(insertion.text);
+    }
+  });
+  const addFiles = async (): Promise<void> => {
+    setContextProblems([]);
+    const desktop = desktopApi();
+    const picked: PickedFile[] = desktop ? await desktop.pickFiles() : await pickInBrowser();
+    const problems: string[] = [];
+    for (const file of picked) {
+      if (file.content === undefined) {
+        problems.push(file.problem ?? `Could not read ${file.name}.`);
+      } else {
+        append(contextBlock(file.path, file.content));
+      }
+    }
+    setContextProblems(problems);
+  };
 
   const change = (value: string): void => {
     setActive(0);
@@ -310,6 +344,12 @@ export const Composer = ({ draftKey, busy, disabled, placeholder, skills, imageN
                     void attach(chosen);
                   }}
                   />
+                  <Tool label="Add files as context" disabled={preview} onClick={() => {
+                    void addFiles();
+                  }}
+                  >
+                    <FileText />
+                  </Tool>
                   <Tool label="Attach an image" disabled={preview} onClick={() => {
                     picker.current?.click();
                   }}
@@ -354,6 +394,7 @@ export const Composer = ({ draftKey, busy, disabled, placeholder, skills, imageN
             )
           : null}
         {images.length > 0 && imageNote ? <p className="mb-1 text-xs text-warning" role="status">{imageNote}</p> : null}
+        {contextProblems.length > 0 ? <p className="mb-1 text-xs text-destructive" role="alert">{contextProblems.join(" ")}</p> : null}
         {imageProblems.length > 0 ? <p className="mb-1 text-xs text-destructive" role="alert">{imageProblems.join(" ")}</p> : null}
 
         <div className="flex items-end gap-2">

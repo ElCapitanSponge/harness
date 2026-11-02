@@ -1,0 +1,55 @@
+name: desktop
+
+# Builds the desktop app (docs/adr/0012-...) for Windows, macOS, and Linux (Ubuntu and Arch Linux use the AppImage, the .deb or the
+# .tar.gz). Nothing is published from here: the builds are kept as artifacts of the run.
+
+on:
+  push:
+    paths:
+      - "packages/desktop/**"
+      - "packages/node-agent/**"
+      - "packages/tools/**"
+      - "packages/core/**"
+      - "scripts/build-*.ts"
+      - ".github/workflows/desktop.yml"
+  pull_request:
+    paths:
+      - "packages/desktop/**"
+      - "scripts/build-*.ts"
+      - ".github/workflows/desktop.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 26
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Build and package the app
+        run: pnpm --filter @harness/desktop dist
+        env:
+          # No signing certificate is configured, so none is looked for.
+          CSC_IDENTITY_AUTO_DISCOVERY: "false"
+      - uses: actions/upload-artifact@v7
+        with:
+          name: torii-desktop-${{ matrix.os }}
+          if-no-files-found: error
+          path: |
+            packages/desktop/release/*.exe
+            packages/desktop/release/*.dmg
+            packages/desktop/release/*.zip
+            packages/desktop/release/*.AppImage
+            packages/desktop/release/*.deb
+            packages/desktop/release/*.tar.gz

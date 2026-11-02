@@ -44,7 +44,7 @@ Everything is in [`docs/`](docs/index.md):
 
 - **Start:** [quickstart](docs/getting-started/quickstart.md) and [concepts](docs/getting-started/concepts.md).
 - **Set up:** [TrueNAS](docs/guides/truenas.md), [Tailscale](docs/guides/tailscale.md), and a device on [Windows](docs/guides/windows.md), [macOS](docs/guides/macos.md) or [Linux](docs/guides/linux.md), including starting the agent at login.
-- **Use:** [models and Auto mode](docs/guides/models.md), [coding sessions](docs/guides/coding-sessions.md) (`harness code`, working on another device's files, loading models remotely), [Claude](docs/guides/claude.md), [devices and their settings](docs/guides/devices.md), [skills](docs/guides/skills.md), [import and export](docs/guides/importing.md).
+- **Use:** [the desktop app](docs/guides/desktop.md) (this machine's folders and files, agent built in), [models and Auto mode](docs/guides/models.md), [coding sessions](docs/guides/coding-sessions.md) (`harness code`, working on another device's files, loading models remotely), [Claude](docs/guides/claude.md), [devices and their settings](docs/guides/devices.md), [skills](docs/guides/skills.md), [import and export](docs/guides/importing.md).
 - **Reference:** [configuration](docs/reference/configuration.md) (every setting and model name), [command line](docs/reference/cli.md), [HTTP API](docs/reference/http-api.md), [tunnel protocol](docs/reference/tunnel-protocol.md), [web interface](docs/reference/web-interface.md).
 - [Security model](docs/security.md), [troubleshooting](docs/troubleshooting.md), [glossary](GLOSSARY.md), and the [decisions](docs/adr/0001-claude-through-the-official-cli.md) behind the design.
 

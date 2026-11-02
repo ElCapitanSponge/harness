@@ -16,5 +16,6 @@ Everything in the repository has automated tests that run in CI. Some things als
 | **The agent itself on macOS and Linux** | The agent's code is the same on every system and is tested on Linux in CI, but it has only been run for real on Windows. | [#105](https://github.com/ElCapitanSponge/harness/issues/105) |
 | **Browser notifications** | The bell that turns on notifications when the model needs an answer and the page is in the background has component tests, but has not been seen working in a real browser. | none yet |
 | **The agent browser on macOS and Linux** | It was run for real against Chrome on Windows. The macOS and Linux paths to Chrome, Edge and Chromium are tested only as code. | [#105](https://github.com/ElCapitanSponge/harness/issues/105) |
+| **The desktop app on macOS, Ubuntu and Arch Linux** | CI builds it for each, but it has only been run for real on Windows: install, connect, the system pickers, start at login, the keyring on Linux. See [The desktop app](guides/desktop.md). | [#107](https://github.com/ElCapitanSponge/harness/issues/107) |
 
 If you set one of these up and something needed changing, say so on the follow-up, and this page will be updated when the gap is closed.

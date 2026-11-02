@@ -1,6 +1,6 @@
-import { render, screen, within } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { Composer } from "./Composer";
 
 beforeEach(() => {
@@ -217,5 +217,40 @@ describe("Composer images", () => {
     expect(screen.queryByRole("status")).not.toBeInTheDocument();
     await userEvent.upload(screen.getByLabelText("Choose images"), png());
     expect(await screen.findByRole("status")).toHaveTextContent("does not look like a model that can read images");
+  });
+});
+
+describe("Composer files as context", () => {
+  afterEach(() => {
+    delete (window as unknown as { torii?: unknown }).torii;
+  });
+
+  it("puts the text of files chosen with the desktop app's file picker into the message, with their paths", async () => {
+    (window as unknown as { torii: unknown }).torii = {
+      desktop: true,
+      nodeId: "anakin",
+      pickFiles: () => {
+        return Promise.resolve([{ path: "C:\notes\todo.md", name: "todo.md", content: "- one\n" }, { path: "C:\big.bin", name: "big.bin", problem: "big.bin looks like a binary file, not text." }]);
+      },
+    };
+    render(<Composer draftKey="ctx" busy={false} imageNote="" onSend={vi.fn()} />);
+    await userEvent.click(screen.getByRole("button", { name: "Add files as context" }));
+    const box = screen.getByLabelText("Message");
+    await waitFor(() => {
+      expect(box).toHaveValue("C:\notes\todo.md:\n```\n- one\n```\n");
+    });
+    expect(await screen.findByRole("alert")).toHaveTextContent("big.bin looks like a binary file");
+  });
+
+  it("adds text handed in from outside, such as a file chosen in the panel, once each time", async () => {
+    const { rerender } = render(<Composer draftKey="ctx2" busy={false} onSend={vi.fn()} insertion={undefined} />);
+    await userEvent.type(screen.getByLabelText("Message"), "Look at this");
+    rerender(<Composer draftKey="ctx2" busy={false} onSend={vi.fn()} insertion={{ id: 1, text: "src/a.ts:\n```\nx\n```" }} />);
+    const box = screen.getByLabelText("Message");
+    await waitFor(() => {
+      expect(box).toHaveValue("Look at this\n\nsrc/a.ts:\n```\nx\n```\n");
+    });
+    rerender(<Composer draftKey="ctx2" busy={false} onSend={vi.fn()} insertion={{ id: 1, text: "src/a.ts:\n```\nx\n```" }} />);
+    expect(box).toHaveValue("Look at this\n\nsrc/a.ts:\n```\nx\n```\n");
   });
 });

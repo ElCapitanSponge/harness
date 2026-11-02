@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Badge, Input, Switch, Textarea } from "@/components/ui/fields";
 import { Dialog, DialogContent, DialogTrigger } from "@/components/ui/overlay";
 import { keyStore } from "@/lib/api";
+import { desktopApi, rootNameFor } from "@/lib/desktop";
 import { useDeviceSettings, useNodes, useSaveSettings } from "@/lib/queries";
 import type { NodeRecord, SettingKey, SettingsReport } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -173,6 +174,22 @@ const SettingsForm = ({ node, report }: { node: NodeRecord; report: SettingsRepo
           setRoots(ev.target.value);
         }}
         />
+        {desktopApi()?.nodeId === node.nodeId && !off("projectRoots")
+          ? (
+              <Button type="button" size="sm" className="w-fit" onClick={() => {
+                void desktopApi()?.pickFolder().then((folder) => {
+                  if (folder) {
+                    setRoots((current) => {
+                      return `${current.trim()}${current.trim() === "" ? "" : "\n"}${rootNameFor(folder)}=${folder}`;
+                    });
+                  }
+                });
+              }}
+              >
+                Add a folder...
+              </Button>
+            )
+          : null}
       </Field>
       <Field name="readOnlyRoots" label="Folders that can only be read" report={report}>
         {rootNames.length === 0

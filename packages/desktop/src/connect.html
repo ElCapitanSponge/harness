@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; connect-src 'none'">
+<title>Connect to your gateway</title>
+<style>
+  :root { color-scheme: light dark; --bg: #f6f4ef; --card: #fff; --fg: #1f1d1a; --muted: #6b665e; --primary: #8f2d1f; --border: #d9d4ca; }
+  @media (prefers-color-scheme: dark) { :root { --bg: #161412; --card: #201d1a; --fg: #efebe4; --muted: #a39d92; --primary: #e0715f; --border: #3a352f; } }
+  body { margin: 0; min-height: 100vh; display: grid; place-items: center; background: var(--bg); color: var(--fg); font: 15px/1.5 system-ui, sans-serif; }
+  main { width: min(26rem, calc(100vw - 2rem)); background: var(--card); border: 1px solid var(--border); border-radius: 14px; padding: 1.5rem; display: grid; gap: 1rem; }
+  h1 { margin: 0; font-size: 1.15rem; }
+  p { margin: 0; color: var(--muted); }
+  label { display: grid; gap: .25rem; font-weight: 600; }
+  input { font: inherit; padding: .5rem .65rem; border: 1px solid var(--border); border-radius: 8px; background: transparent; color: inherit; }
+  button { font: inherit; font-weight: 600; padding: .6rem; border: 0; border-radius: 8px; background: var(--primary); color: #fff; cursor: pointer; }
+  button:disabled { opacity: .6; cursor: default; }
+  .error { color: #b3261e; min-height: 1.4em; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Connect to your gateway</h1>
+  <p>Torii shows the gateway's own interface in this window and connects this machine to it, so its files can be used in coding sessions. You only do this once.</p>
+  <form id="form" style="display: grid; gap: 1rem">
+    <label>Gateway address
+      <input id="url" name="url" placeholder="http://truenas-scale:8787" autocomplete="off" spellcheck="false" required>
+    </label>
+    <label>Key
+      <input id="key" name="key" type="password" autocomplete="off" placeholder="Leave empty if the gateway has none">
+    </label>
+    <label>Name of this machine
+      <input id="node" name="node" autocomplete="off" spellcheck="false" required>
+    </label>
+    <p class="error" id="error" role="alert"></p>
+    <button id="go" type="submit">Connect</button>
+  </form>
+</main>
+<script>
+  const connect = window.toriiConnect;
+  const url = document.getElementById("url");
+  const key = document.getElementById("key");
+  const node = document.getElementById("node");
+  const error = document.getElementById("error");
+  const go = document.getElementById("go");
+  connect.initial().then((initial) => { url.value = initial.gatewayUrl; node.value = initial.nodeId; });
+  document.getElementById("form").addEventListener("submit", async (event) => {
+    event.preventDefault();
+    error.textContent = "";
+    go.disabled = true;
+    const result = await connect.save({ gatewayUrl: url.value, key: key.value, nodeId: node.value });
+    go.disabled = false;
+    if (!result.ok) { error.textContent = result.error; }
+  });
+</script>
+</body>
+</html>

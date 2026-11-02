@@ -43,6 +43,9 @@ A throwaway headless browser a device can offer to coding sessions, in a tempora
 **Permission mode**:
 How a conversation treats changes: ask before every change (default), accept file edits, plan first (read-only until the plan is approved), or run without asking. The device's own allow list has the last word in every mode. See docs/guides/coding-sessions.md.
 
+**Desktop app**:
+Torii in its own window on a machine: the gateway's interface, plus this machine's agent run for it, with the system's folder and file pickers. The machine is the device, so nothing is matched or chosen. See docs/guides/desktop.md.
+
 **Gateway**:
 The single always-on service that every client talks to. It knows which devices are connected, routes each request, and serves the web page.
 _Avoid_: server, hub, proxy

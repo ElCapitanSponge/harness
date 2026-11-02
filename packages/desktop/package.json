@@ -1,0 +1,22 @@
+{
+  "name": "@harness/desktop",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "dist/main.cjs",
+  "description": "Torii: the web interface in a window, with this device's agent built in",
+  "author": "ElCapitanSponge",
+  "scripts": {
+    "build": "tsx ../../scripts/build-desktop.ts",
+    "start": "pnpm build && electron .",
+    "dist": "pnpm build && electron-builder"
+  },
+  "dependencies": {
+    "@harness/core": "workspace:*",
+    "playwright-core": "1.49.1"
+  },
+  "devDependencies": {
+    "electron": "45.2.1",
+    "electron-builder": "26.18.0"
+  }
+}
