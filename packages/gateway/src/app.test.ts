@@ -681,6 +681,43 @@ describe("permission modes and remembered rules over HTTP", () => {
   });
 });
 
+describe("collapsed sidebar groups over HTTP", () => {
+  const put = (body: unknown) => {
+    return { method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify(body) };
+  };
+
+  it("lists, collapses and expands a project group", async () => {
+    const store: { device: string; root: string }[] = [];
+    const app = createApp({ registry, relay: relay as never, loader: { ensure: loaderEnsure }, sessions: new Sessions({ registry, relay: relay as never, complete: (async () => {
+      return { role: "assistant", content: "ok" };
+    }) as never }), groups: { list: () => {
+      return store;
+    }, set: (device, root, collapsed) => {
+      const i = store.findIndex((g) => {
+        return g.device === device && g.root === root;
+      });
+      if (collapsed && i < 0) {
+        store.push({ device, root });
+      } else if (!collapsed && i >= 0) {
+        store.splice(i, 1);
+      }
+    } } });
+    expect(await (await app.request("/sidebar/collapsed")).json()).toEqual([]);
+    expect((await app.request("/sidebar/collapsed", put({ device: "pc", root: "proj", collapsed: true }))).status).toBe(200);
+    expect(await (await app.request("/sidebar/collapsed")).json()).toEqual([{ device: "pc", root: "proj" }]);
+    await app.request("/sidebar/collapsed", put({ device: "pc", root: "proj", collapsed: false }));
+    expect(await (await app.request("/sidebar/collapsed")).json()).toEqual([]);
+  });
+
+  it("refuses a request that does not say which group", async () => {
+    expect((await build().request("/sidebar/collapsed", put({ device: "pc" }))).status).toBe(400);
+  });
+
+  it("answers an empty list on a gateway with no group store", async () => {
+    expect(await (await build().request("/sidebar/collapsed")).json()).toEqual([]);
+  });
+});
+
 describe("which device the browser is on, behind a container network", () => {
   it("does not match when the caller and every device show as the container network's gateway", async () => {
     registry.upsert(beat({ nodeId: "anakin" }), "172.0.13.1");

@@ -1,18 +1,19 @@
 import { useSelector } from "@tanstack/react-store";
-import { BarChart3, Code2, Menu as MenuIcon, MessageSquare, Monitor, Moon, PanelLeftClose, FileUp, Plus, ShieldCheck, Sparkles, Sun, SunMoon, LogOut } from "lucide-react";
+import { BarChart3, Menu as MenuIcon, Monitor, Moon, PanelLeftClose, FileUp, Plus, ShieldCheck, Sparkles, Sun, SunMoon, LogOut } from "lucide-react";
 import { useState } from "react";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router";
 import { ClaudeMeter } from "@/components/ClaudeMeter";
-import { ConversationActions } from "@/components/ConversationActions";
+import { collapsedKeys, ProjectGroups } from "@/components/ProjectGroups";
 import { ToriiMark } from "@/components/ToriiMark";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/fields";
 import { keyStore, setKey } from "@/lib/api";
-import { useSessions } from "@/lib/queries";
+import { groupSessions } from "@/lib/groups";
+import { useCollapsedGroups, useSessions, useSetCollapsed } from "@/lib/queries";
+import { useThisDevice } from "@/lib/useThisDevice";
 import { setTheme, themeStore, type Theme } from "@/lib/theme";
 import { cn } from "@/lib/utils";
 import { ThisDevice } from "@/components/ThisDevice";
-import { nested } from "@/lib/tree";
 
 const Gate = () => {
   const [value, setValue] = useState("");
@@ -54,6 +55,11 @@ const Sidebar = ({ onNavigate }: { onNavigate: () => void }) => {
   const theme = useSelector(themeStore);
   const navigate = useNavigate();
   const { pathname } = useLocation();
+  const here = useThisDevice().here;
+  const stored = useCollapsedGroups();
+  const setCollapsed = useSetCollapsed();
+  const groups = groupSessions(sessions.data ?? [], here.state === "device" ? here.nodeId : undefined);
+  const collapsed = collapsedKeys(stored.data ?? []);
 
   return (
     <div className="flex h-full flex-col gap-2 bg-card p-3">
@@ -73,36 +79,22 @@ const Sidebar = ({ onNavigate }: { onNavigate: () => void }) => {
       <nav aria-label="Conversations" className="-mx-1 mt-1 flex-1 overflow-y-auto overflow-x-hidden px-1">
         {sessions.isPending ? <p className="px-2 py-1 text-muted-foreground">Loading...</p> : null}
         {sessions.data?.length === 0 ? <p className="px-2 py-1 text-muted-foreground">No conversations yet.</p> : null}
-        <ul className="grid gap-0.5">
-          {nested(sessions.data ?? []).map(({ info: c, indent }) => {
-            return (
-              <li key={c.id} className="group relative" style={indent > 0 ? { paddingLeft: `${String(indent * 14)}px` } : undefined}>
-                <NavLink
-                  to={`/c/${c.id}`}
-                  onClick={onNavigate}
-                  className={({ isActive }) => {
-                    return cn("flex items-center gap-2 rounded-md py-1.5 pl-2 pr-9 hover:bg-muted", isActive && "bg-accent font-semibold text-accent-foreground hover:bg-accent");
-                  }}
-                >
-                  {c.kind === "code" ? <Code2 className="size-4 shrink-0 text-muted-foreground" /> : <MessageSquare className="size-4 shrink-0 text-muted-foreground" />}
-                  <span className="min-w-0 flex-1">
-                    <span className="block truncate">{c.title || "New conversation"}</span>
-                    {c.kind === "code" ? <span className="block truncate text-xs font-normal text-muted-foreground">{c.device}:{c.root}{c.deviceConnected ? "" : " (offline)"}</span> : null}
-                  </span>
-                </NavLink>
-                <ConversationActions
-                  info={c}
-                  className="absolute right-0.5 top-1/2 size-7 -translate-y-1/2 opacity-0 focus-visible:opacity-100 group-hover:opacity-100 data-[state=open]:opacity-100"
-                  onDeleted={() => {
-                    if (pathname === `/c/${c.id}`) {
-                      void navigate("/");
-                    }
-                  }}
-                />
-              </li>
-            );
-          })}
-        </ul>
+        <ProjectGroups
+          groups={groups}
+          collapsed={collapsed}
+          pathname={pathname}
+          onToggle={(group, value) => {
+            setCollapsed.mutate({ device: group.device, root: group.root, collapsed: value });
+          }}
+          onNew={(group) => {
+            void navigate(`/?device=${encodeURIComponent(group.device)}&root=${encodeURIComponent(group.root)}`);
+            onNavigate();
+          }}
+          onNavigate={onNavigate}
+          onDeleted={() => {
+            void navigate("/");
+          }}
+        />
       </nav>
 
       <div className="grid gap-1 border-t pt-2">

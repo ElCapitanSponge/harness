@@ -21,7 +21,7 @@ The gateway serves the page at its own address. With a key set, the first screen
 | `/manage/permissions` | The tools remembered as always allowed in a project, removable. See [Coding sessions](../guides/coding-sessions.md#permissions-modes-and-approvals). |
 | `/import` | Bring in a conversation. See [Importing and exporting](../guides/importing.md). |
 
-The sidebar lists conversations and has **New conversation**, the Claude plan meter, links to Devices, Skills, Import and Usage, the theme switch (light, dark, system) and sign out. A page that fails while drawing shows a card with **Reload** instead of a blank screen; a device running an older version can cause that until it is updated.
+The sidebar lists conversations grouped by project (see [Projects in the sidebar](../guides/coding-sessions.md#projects-in-the-sidebar)) and has **New conversation**, the Claude plan meter, links to Devices, Skills, Import and Usage, the theme switch (light, dark, system) and sign out. A page that fails while drawing shows a card with **Reload** instead of a blank screen; a device running an older version can cause that until it is updated.
 
 ## In a conversation
 

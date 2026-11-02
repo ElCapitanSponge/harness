@@ -3,7 +3,7 @@ import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { StoredSession } from "./sessions.js";
-import { openDatabase, sqliteRules, sqliteStore } from "./sqlite.js";
+import { openDatabase, sqliteGroups, sqliteRules, sqliteStore } from "./sqlite.js";
 
 let dir: string;
 beforeEach(async () => {
@@ -161,5 +161,19 @@ describe("permission modes and rules in the database", () => {
     expect(rules.remove(listed[0]?.id ?? 0)).toBe(true);
     expect(rules.remove(listed[0]?.id ?? 0)).toBe(false);
     expect(rules.list()).toHaveLength(1);
+  });
+});
+
+describe("collapsed sidebar groups in the database", () => {
+  it("remembers which project groups are collapsed, once each, and forgets them when expanded", () => {
+    const db = openDatabase(":memory:");
+    const groups = sqliteGroups(db);
+    expect(groups.list()).toEqual([]);
+    groups.set("pc", "proj", true);
+    groups.set("pc", "proj", true);
+    groups.set("mac", "proj", true);
+    expect(groups.list()).toEqual([{ device: "mac", root: "proj" }, { device: "pc", root: "proj" }]);
+    groups.set("mac", "proj", false);
+    expect(groups.list()).toEqual([{ device: "pc", root: "proj" }]);
   });
 });

@@ -16,7 +16,7 @@ import { Sessions, createCompleter } from "./sessions.js";
 import { importLegacySessions } from "./legacy.js";
 import { createLibrary } from "./library.js";
 import { sqliteLedger } from "./ledger.js";
-import { openDatabase, sqliteRules, sqliteStore } from "./sqlite.js";
+import { openDatabase, sqliteGroups, sqliteRules, sqliteStore } from "./sqlite.js";
 import { attachTunnel } from "./tunnel.js";
 import { findWebDist, loadWebApp } from "./webapp.js";
 
@@ -32,6 +32,7 @@ const db = openDatabase(path.join(dataDir, "harness.db"));
 const store = sqliteStore(db);
 const ledger = sqliteLedger(db);
 const rules = sqliteRules(db);
+const groups = sqliteGroups(db);
 const claude = new ClaudeState();
 // The gateway's own skills, kept beside the database so they are available in every conversation, including chats.
 const library = createLibrary(path.join(dataDir, "skills"));
@@ -89,6 +90,7 @@ const app = createApp({
   sessions,
   library,
   rules,
+  groups,
   trustProxy: process.env.HARNESS_TRUST_PROXY === "1",
   ledger,
   claude,

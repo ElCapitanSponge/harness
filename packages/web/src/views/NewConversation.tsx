@@ -21,11 +21,11 @@ export const NewConversation = () => {
   const create = useCreateConversation();
   const nodes = useNodes();
   const [params] = useSearchParams();
-  const [mode, setMode] = useState<Mode>(params.get("mode") === "code" ? "code" : "chat");
+  const [mode, setMode] = useState<Mode>(params.get("mode") === "code" || params.get("root") !== null ? "code" : "chat");
   const [model, setModel] = useState("");
   const [device, setDevice] = useState(params.get("device") ?? "");
   const [recent, setRecent] = useState(readRecent);
-  const [root, setRoot] = useState("");
+  const [root, setRoot] = useState(params.get("root") ?? "");
   const [error, setError] = useState("");
   const [sending, setSending] = useState(false);
   const [effort, setEffort] = useState<Effort | undefined>(undefined);

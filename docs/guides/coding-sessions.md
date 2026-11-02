@@ -85,6 +85,14 @@ An approval card shows what will happen before it does: the diff of an edit, the
 
 Whatever the mode or a remembered rule says, **the device's own allow list has the last word**: a tool the device does not allow is never offered and never runs, and a read-only folder stays read-only. A sub-agent's approvals come to you through the conversation that started it, under the same mode. If the page is in the background when the model needs an answer (an approval or a question), the bell in the header turns on a notification, which the browser asks you to allow once.
 
+## Projects in the sidebar
+
+The sidebar groups conversations by project, as Claude Code does: one group for each folder on each device, headed by the folder's name and either **This device** or the name of the device it is on. Chats, which have no project, are gathered under **Chats** at the end. A sub-agent's conversation stays under the one that started it.
+
+- Click a group's heading to collapse or expand it. Which groups are collapsed is kept on the gateway, so the browser and the [desktop app](desktop.md) agree and it survives a restart.
+- The **+** on a group's heading opens the start screen with that device and folder already chosen.
+- "This device" comes from the same match as [New code session here](#new-code-session-here): the desktop app always knows its own device; a browser uses the gateway's match or your choice.
+
 ## New code session here
 
 The sidebar's **New code session here** starts a coding session on the device the browser is on, with that device and the model picker already set. A browser cannot read files, so the device needs a node agent running ([Windows](windows.md), [macOS](macos.md), [Linux](linux.md)).
