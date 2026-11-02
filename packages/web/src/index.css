@@ -2,6 +2,11 @@
 
 @custom-variant dark (&:where(.dark, .dark *));
 
+/* Tailwind 4 only applies hover: and group-hover: where the browser reports hover support (@media (hover: hover)). On a touchscreen laptop, in a
+   remote session or in some desktop shells it reports none, and everything revealed on hover (a conversation's menu, a group's + button, the
+   copy buttons) never appeared. Apply :hover plainly. */
+@custom-variant hover (&:hover);
+
 /* Torii: vermilion (shu) on washi paper in light, sumi ink in dark, in Fluent 2's structure of neutral surfaces and strokes. Names are the
    shadcn ones so the components read the same way. */
 :root {
