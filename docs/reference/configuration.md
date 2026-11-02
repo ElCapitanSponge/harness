@@ -18,6 +18,7 @@ Settings are read from the environment. For the gateway that means its container
 | `HARNESS_API_KEY` | unset | Shared secret. Required to listen on anything but loopback. Clients send `Authorization: Bearer <key>`; every route needs it, including the `/tunnel` WebSocket. |
 | `HARNESS_ALLOW_ANY_INTERFACE` | unset | `1` allows `0.0.0.0` and `::` (the container image sets it). |
 | `HARNESS_DATA_DIR` | `~/.harness/gateway` | Where the SQLite database (conversations, events, usage) is kept. `/data` in the container, so mount a volume there. |
+| `HARNESS_TRUST_PROXY` | unset | `1` believes `X-Forwarded-For`, for a reverse proxy you run, so the browser's real address is seen (used to find "this device"). |
 | `WEB_DIST` | the built `packages/web/dist` | The folder of the built web page to serve. |
 | (data volume) | | The library of skills is kept in a `skills` folder inside `HARNESS_DATA_DIR`. |
 | `HARNESS_KEEP_LOADED` | unset | `1` keeps a device's other models loaded when one is loaded (by default they are unloaded first, because two rarely fit in one graphics card). |

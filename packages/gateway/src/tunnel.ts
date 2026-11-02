@@ -2,6 +2,7 @@ import type { IncomingMessage, Server } from "node:http";
 import type { Duplex } from "node:stream";
 import { TUNNEL_PATH, TunnelMessage, rawToString } from "@harness/core";
 import { type WebSocket, WebSocketServer } from "ws";
+import { normalizeAddress } from "./address.js";
 import { safeEqual } from "./auth.js";
 import type { Registry } from "./registry.js";
 import type { Relay } from "./relay.js";
@@ -42,7 +43,8 @@ export const attachTunnel = (server: Server, opts: { registry: Registry; relay: 
     });
   });
 
-  wss.on("connection", (ws) => {
+  wss.on("connection", (ws, req) => {
+    const address = normalizeAddress(req.socket.remoteAddress);
     let nodeId: string | undefined;
     const sender = { send: (data: string) => {
       ws.send(data);
@@ -80,7 +82,7 @@ export const attachTunnel = (server: Server, opts: { registry: Registry; relay: 
         opts.relay.attach(id, sender);
         previous?.terminate();
       }
-      opts.registry.upsert(msg.heartbeat);
+      opts.registry.upsert(msg.heartbeat, address);
     });
     ws.on("close", () => {
       if (nodeId && owner.get(nodeId) === ws) {

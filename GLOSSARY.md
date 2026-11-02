@@ -31,6 +31,9 @@ A decision the model puts to the person with the ask tool, shown as a card with 
 **Sub-agent**:
 A task the model hands, with the agent tool, to a conversation of its own on the same device and folder, with a subset of its tools. Its approvals reach the person through the conversation that started it. Limited to 8 per conversation and 2 levels deep. See docs/guides/coding-sessions.md.
 
+**This device**:
+The connected device the browser is on, found by address or chosen by the person, where New code session here starts a session. It needs a node agent, since a browser cannot read files. See docs/guides/coding-sessions.md.
+
 **Gateway**:
 The single always-on service that every client talks to. It knows which devices are connected, routes each request, and serves the web page.
 _Avoid_: server, hub, proxy

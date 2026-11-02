@@ -11,6 +11,7 @@ import { keyStore, setKey } from "@/lib/api";
 import { useSessions } from "@/lib/queries";
 import { setTheme, themeStore, type Theme } from "@/lib/theme";
 import { cn } from "@/lib/utils";
+import { ThisDevice } from "@/components/ThisDevice";
 import { nested } from "@/lib/tree";
 
 const Gate = () => {
@@ -67,6 +68,7 @@ const Sidebar = ({ onNavigate }: { onNavigate: () => void }) => {
       >
         <Plus /> New conversation
       </Button>
+      <ThisDevice onNavigate={onNavigate} />
 
       <nav aria-label="Conversations" className="-mx-1 mt-1 flex-1 overflow-y-auto overflow-x-hidden px-1">
         {sessions.isPending ? <p className="px-2 py-1 text-muted-foreground">Loading...</p> : null}

@@ -84,6 +84,7 @@ const app = createApp({
   relay,
   sessions,
   library,
+  trustProxy: process.env.HARNESS_TRUST_PROXY === "1",
   ledger,
   claude,
   loader,

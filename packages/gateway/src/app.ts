@@ -10,6 +10,7 @@ import { CLAUDE_MODEL_IDS, catalogue, isClaudeModel } from "./router.js";
 import { RouteError, resolveRoute } from "./routing.js";
 import type { UsageLedger } from "./ledger.js";
 import { ClaudeState, ClaudeUnavailableError, askClaude } from "./claude.js";
+import { callerAddress, looksLikeContainerNetwork } from "./address.js";
 import { LibraryConflict, LibraryError, type Library } from "./library.js";
 import type { Sessions } from "./sessions.js";
 import { parseImportFile, toMarkdown } from "./transcripts.js";
@@ -22,6 +23,8 @@ export interface AppDeps {
   sessions: Sessions;
   // The gateway's own skills, available in every conversation. Without it the library routes answer 404.
   library?: Library;
+  // Believe X-Forwarded-For (set only behind a reverse proxy you run), so a browser's real address is seen.
+  trustProxy?: boolean;
   // Every model call, for the usage routes. Without it the routes report nothing.
   ledger?: UsageLedger;
   // What is known of the Claude plan: its windows, and whether Claude is limited right now.
@@ -31,7 +34,7 @@ export interface AppDeps {
   mountWeb?: (app: Hono) => void;
 }
 
-export const createApp = ({ registry, apiKey, relay, sessions, library, ledger, claude = new ClaudeState(), loader, mountWeb }: AppDeps): Hono => {
+export const createApp = ({ registry, apiKey, relay, sessions, library, trustProxy = false, ledger, claude = new ClaudeState(), loader, mountWeb }: AppDeps): Hono => {
   const app = new Hono();
 
   // The page holds no secrets and must load before a key can be typed, so it is registered ahead of the auth middleware.
@@ -374,6 +377,19 @@ export const createApp = ({ registry, apiKey, relay, sessions, library, ledger, 
       },
     });
     return new Response(stream, { headers: { "content-type": "text/event-stream", "cache-control": "no-store" } });
+  });
+
+  // Which connected device the browser is on, by the address it connects from: used to offer "new code session here". An empty list
+  // means no match, and the page asks the person instead.
+  app.get("/whoami", (c) => {
+    const env = c.env as { incoming?: { socket?: { remoteAddress?: string } } } | undefined;
+    const address = callerAddress(env?.incoming?.socket?.remoteAddress, c.req.header("x-forwarded-for"), trustProxy);
+    const devices = registry.live().filter((n) => {
+      return n.kind === "local" && address !== undefined && n.address === address;
+    }).map((n) => {
+      return n.nodeId;
+    });
+    return c.json({ address, devices, likelyBehindPortPublishing: devices.length === 0 && looksLikeContainerNetwork(address) });
   });
 
   // The gateway's skill library: list, add (a zip or the files of a folder), export as a zip, remove.

@@ -1,6 +1,6 @@
 import { Code2, MessageSquare } from "lucide-react";
 import { useState } from "react";
-import { useNavigate } from "react-router";
+import { useNavigate, useSearchParams } from "react-router";
 import { Composer } from "@/components/Composer";
 import { effortLevels, type Effort } from "@harness/core/effort";
 import { noImagesReason, supportsImages, type ImageAttachment } from "@harness/core/image";
@@ -10,6 +10,7 @@ import { Select } from "@/components/ui/fields";
 import { api } from "@/lib/api";
 import { useCreateConversation, useLibrary, useNodes, useSkills } from "@/lib/queries";
 import { parseSlash, withLibrary } from "@/lib/skills";
+import { pushRecent, readRecent } from "@/lib/thisdevice";
 import { cn } from "@/lib/utils";
 
 type Mode = "chat" | "code";
@@ -19,9 +20,11 @@ export const NewConversation = () => {
   const navigate = useNavigate();
   const create = useCreateConversation();
   const nodes = useNodes();
-  const [mode, setMode] = useState<Mode>("chat");
+  const [params] = useSearchParams();
+  const [mode, setMode] = useState<Mode>(params.get("mode") === "code" ? "code" : "chat");
   const [model, setModel] = useState("");
-  const [device, setDevice] = useState("");
+  const [device, setDevice] = useState(params.get("device") ?? "");
+  const [recent, setRecent] = useState(readRecent);
   const [root, setRoot] = useState("");
   const [error, setError] = useState("");
   const [sending, setSending] = useState(false);
@@ -45,6 +48,9 @@ export const NewConversation = () => {
     setError("");
     setSending(true);
     try {
+      if (mode === "code" && chosenDevice && chosenRoot) {
+        setRecent(pushRecent({ device: chosenDevice.nodeId, root: chosenRoot }));
+      }
       const info = await create.mutateAsync({ model: selected, ...(mode === "code" ? { device: chosenDevice?.nodeId, root: chosenRoot } : {}) });
       await api<unknown>(`/sessions/${info.id}/messages`, { method: "POST", body: { text, ...(images ? { images } : {}), ...(parseSlash(text, skills ?? []) ? { skill: parseSlash(text, skills ?? []) } : {}), ...(effortLevels(selected).length > 0 && effort ? { effort } : {}) } });
       await navigate(`/c/${info.id}`);
@@ -103,6 +109,32 @@ export const NewConversation = () => {
                       return <option key={r} value={r}>{r}</option>;
                     })}
                   </Select>
+                  {recent.length > 0
+                    ? (
+                        <div className="flex flex-wrap items-center gap-1.5 sm:col-span-2" role="group" aria-label="Recent folders">
+                          <span className="text-xs text-muted-foreground">Recent:</span>
+                          {recent.filter((r) => {
+                            return devices.some((d) => {
+                              return d.nodeId === r.device && d.roots?.includes(r.root);
+                            });
+                          }).map((r) => {
+                            return (
+                              <button
+                                key={`${r.device}/${r.root}`}
+                                type="button"
+                                className="rounded-full border px-2.5 py-0.5 text-xs hover:bg-muted"
+                                onClick={() => {
+                                  setDevice(r.device);
+                                  setRoot(r.root);
+                                }}
+                              >
+                                {r.device}:{r.root}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      )
+                    : null}
                 </>
               )
             : null}

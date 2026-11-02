@@ -593,3 +593,31 @@ describe("the skill library routes", () => {
     expect((await build().request("/library/skills", json({ zip: "AAAA" }))).status).toBe(404);
   });
 });
+
+describe("which device the browser is on", () => {
+  const withProxy = (trustProxy: boolean) => {
+    return createApp({ registry, relay: relay as never, loader: { ensure: loaderEnsure }, sessions: new Sessions({ registry, relay: relay as never, complete: (async () => {
+      return { role: "assistant", content: "ok" };
+    }) as never }), trustProxy });
+  };
+
+  it("lists the connected agents that connect from the caller address, and none when nothing matches", async () => {
+    registry.upsert(beat({ nodeId: "anakin" }), "100.64.0.7");
+    registry.upsert(beat({ nodeId: "bastila" }), "100.64.0.8");
+    registry.upsert(beat({ nodeId: "nas", kind: "claude" }), "100.64.0.9");
+    const app = withProxy(true);
+    const at = async (forwarded: string) => {
+      return await (await app.request("/whoami", { headers: { "x-forwarded-for": forwarded } })).json() as unknown;
+    };
+    expect(await at("100.64.0.7")).toMatchObject({ address: "100.64.0.7", devices: ["anakin"], likelyBehindPortPublishing: false });
+    expect(await at("100.64.0.99")).toMatchObject({ devices: [] });
+    // A container network address that matches nothing is probably port publishing hiding the real one.
+    expect(await at("172.17.0.1")).toMatchObject({ devices: [], likelyBehindPortPublishing: true });
+  });
+
+  it("does not believe X-Forwarded-For unless told to", async () => {
+    registry.upsert(beat({ nodeId: "anakin" }), "100.64.0.7");
+    const res = await withProxy(false).request("/whoami", { headers: { "x-forwarded-for": "100.64.0.7" } });
+    expect(await res.json()).toMatchObject({ devices: [] });
+  });
+});
