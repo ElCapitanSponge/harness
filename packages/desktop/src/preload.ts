@@ -33,6 +33,12 @@ contextBridge.exposeInMainWorld("torii", {
   pickFiles: (): Promise<{ path: string; name: string; content?: string; problem?: string }[]> => {
     return ipcRenderer.invoke("torii:pick-files") as Promise<{ path: string; name: string; content?: string; problem?: string }[]>;
   },
+  setNeedsYou: (count: number): Promise<void> => {
+    return ipcRenderer.invoke("torii:needs-you", count) as Promise<void>;
+  },
+  focus: (): Promise<void> => {
+    return ipcRenderer.invoke("torii:focus") as Promise<void>;
+  },
   agent: {
     state: (): Promise<string> => {
       return ipcRenderer.invoke("torii:agent-state") as Promise<string>;

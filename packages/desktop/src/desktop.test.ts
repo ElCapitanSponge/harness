@@ -7,6 +7,7 @@ import { linuxAutostartEntry, linuxAutostartFile, setLinuxAutostart } from "./au
 import { createConfigStore, defaultNodeId, normalizeGatewayUrl, type Crypter, type DesktopConfig } from "./config.js";
 import { MAX_CONTEXT_FILE_BYTES, readPicked } from "./files.js";
 import { checkGateway, deviceListed, type Fetch } from "./gateway-check.js";
+import { badgeBitmap, needsYouLabel } from "./badge.js";
 import { stateLabel, trayMenu, type TrayActions } from "./tray.js";
 
 let dir: string;
@@ -266,6 +267,17 @@ describe("the tray menu", () => {
     })?.checked).toBe(true);
   });
 
+  it("says at the top how many conversations need the person, and nothing when none do", () => {
+    const labels = (count: number) => {
+      return trayMenu("connected", "http://g", false, actions(), count).map((m) => {
+        return m.label;
+      });
+    };
+    expect(labels(2).slice(0, 3)).toEqual(["2 conversations need you", undefined, "Connected to the gateway"]);
+    expect(labels(1)[0]).toBe("1 conversation needs you");
+    expect(labels(0)[0]).toBe("Connected to the gateway");
+  });
+
   it("has nothing to start before a gateway is chosen", () => {
     const menu = trayMenu("stopped", undefined, false, actions());
     expect(menu.find((m) => {
@@ -309,5 +321,25 @@ describe("files chosen to add to a message", () => {
     await fs.writeFile(bin, Buffer.from([1, 0, 2]));
     expect(await readPicked(bin)).toMatchObject({ problem: expect.stringContaining("binary") as string });
     expect(await readPicked(path.join(dir, "missing.txt"))).toMatchObject({ problem: expect.stringContaining("Could not read missing.txt") as string });
+  });
+});
+
+describe("the badge for conversations that need the person", () => {
+  it("words the count", () => {
+    expect(needsYouLabel(1)).toBe("1 conversation needs you");
+    expect(needsYouLabel(5)).toBe("5 conversations need you");
+  });
+
+  it("draws an amber dot with a white rim and nothing outside it", () => {
+    const size = 16;
+    const pixels = badgeBitmap(size);
+    expect(pixels.length).toBe(size * size * 4);
+    const at = (x: number, y: number) => {
+      const i = (y * size + x) * 4;
+      return [...pixels.subarray(i, i + 4)];
+    };
+    expect(at(8, 8)).toEqual([11, 158, 245, 255]);
+    expect(at(0, 0)).toEqual([0, 0, 0, 0]);
+    expect(at(7, 1)).toEqual([255, 255, 255, 255]);
   });
 });

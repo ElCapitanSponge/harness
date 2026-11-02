@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/fields";
 import { keyStore, setKey } from "@/lib/api";
 import { groupSessions } from "@/lib/groups";
 import { useCollapsedGroups, useSessions, useSetCollapsed } from "@/lib/queries";
+import { useNeedsYou } from "@/lib/useNeedsYou";
 import { useThisDevice } from "@/lib/useThisDevice";
 import { setTheme, themeStore, type Theme } from "@/lib/theme";
 import { cn } from "@/lib/utils";
@@ -169,6 +170,12 @@ const Sidebar = ({ onNavigate }: { onNavigate: () => void }) => {
   );
 };
 
+// Tells the person when any conversation needs them (see useNeedsYou). It draws nothing.
+const NeedsYou = () => {
+  useNeedsYou();
+  return null;
+};
+
 export const Layout = () => {
   const key = useSelector(keyStore);
   const [open, setOpen] = useState(false);
@@ -179,6 +186,7 @@ export const Layout = () => {
 
   return (
     <div className="flex h-full">
+      <NeedsYou />
       <aside className="hidden w-72 shrink-0 border-r md:block">
         <Sidebar onNavigate={() => {
           setOpen(false);
