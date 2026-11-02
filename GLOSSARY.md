@@ -37,6 +37,9 @@ The connected device the browser is on, found by address or chosen by the person
 **Project group**:
 The sidebar gathers conversations by project, a folder on a device, with chats in a group of their own. A group names its folder and says "This device" or the other device's name, collapses and expands (kept on the gateway so every client agrees), and has a button to start a new session in that project. A conversation can be pinned to a **Pinned** group above the projects; the pin is stored on the gateway with the conversation. See docs/guides/coding-sessions.md.
 
+**Parity checklist**:
+The list of what Torii does that Claude Code does, and what it still lacks, kept in docs/reference/claude-code-parity.md and the tracking issue #112. A gap becomes a ticket when it is picked up.
+
 **Built-in command**:
 A slash command the page itself runs (`/compact`, `/clear`, `/model`, `/permissions`, `/init`), listed with the skills but marked as a command. See docs/guides/coding-sessions.md.
 
