@@ -1,4 +1,4 @@
-import { chromium, type Page } from "playwright-core";
+import type { Page } from "playwright-core";
 import type { BrowserLike, PageLike } from "./browser.js";
 
 // The real browser behind the agent browser: Playwright driving a Chrome, Edge or Chromium that is already on the machine. The launch
@@ -52,6 +52,8 @@ const adapt = (page: Page): PageLike => {
 };
 
 export const launchPlaywright = async (executablePath: string): Promise<BrowserLike> => {
+  // Loaded here, not at the top, so an agent that never opens a page never loads Playwright.
+  const { chromium } = await import("playwright-core");
   const browser = await chromium.launch({ executablePath, headless: true, args: LAUNCH_ARGS });
   return {
     async newContext() {

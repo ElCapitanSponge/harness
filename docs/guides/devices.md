@@ -29,6 +29,17 @@ Each device decides what the gateway may do on it. The **Devices** button on the
 
 The device name, gateway address and inference server address need a new process, so they are not changed from the page.
 
+## How much memory the agent uses
+
+`pnpm agent` is for development: pnpm and the TypeScript loader (tsx) stay running beside the agent and, together, use more memory than it does (measured on Windows with Node 22: about 88 MB for pnpm, 55 MB for the tsx launcher and 100 MB for the agent, 242 MB in all). For a device that is left running, bundle the agent and run it with plain `node`:
+
+```bash
+pnpm build:agent     # writes packages/node-agent/dist/agent.mjs
+pnpm agent:run       # node --env-file-if-exists=.env packages/node-agent/dist/agent.mjs
+```
+
+That is one process of about 70 MB, 70 percent less, and it starts faster. The Windows scheduled task, the launchd agent and the systemd unit all start it this way, rebuilding the bundle each time they start, so after a `git pull` restarting the service is enough. The browser's Playwright is only loaded when a page is first opened, which keeps about 20 MB out of an agent that never uses it. V8 flags that save memory (`--optimize-for-size`, a smaller `--max-semi-space-size`) were tried and gain little once the wrappers are gone, so none is set. A newer Node changes little; the repository's Node 26 is where to go for other reasons.
+
 ## Limited mode: small models during a call
 
 A game makes the device **busy**: nothing is sent to it. A call or meeting does not need all of it, so a program on the **limiting programs** list puts the device in **limited** mode instead. It stays in the pool, but only with models up to the size you set (8 GB by default); a model's size is read from LM Studio (`lms ls`).
