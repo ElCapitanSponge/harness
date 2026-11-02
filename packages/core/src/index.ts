@@ -49,6 +49,10 @@ export const ChatRequest = z.looseObject({
   tool_choice: z.unknown().optional(),
   // How hard the model should think, where it can be told: low, medium, high, xhigh or max. Models that cannot be told ignore it.
   effort: z.enum(EFFORTS).optional(),
+  // For Claude: the program's own conversation that earlier turns of this one were already sent into. `seen` is how many of the
+  // conversation's turns (not counting system messages) it holds, 0 for a new one. Only the turns after that are sent, so Claude's
+  // prompt cache covers everything before them.
+  continuation: z.object({ id: z.string(), seen: z.number().int().min(0) }).optional(),
 });
 export type ChatRequest = z.infer<typeof ChatRequest>;
 

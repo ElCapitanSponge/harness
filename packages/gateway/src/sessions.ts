@@ -17,6 +17,8 @@ export type { SessionEvent, SessionInfo };
 // What can be asked of a model call besides the conversation: how hard it should think, for the models that can be told.
 export interface CallOptions {
   effort?: Effort;
+  // The conversation the call is a step of, so Claude can carry on its own conversation instead of being sent everything again.
+  conversation?: string;
 }
 
 export type Complete = (model: string, messages: ChatMessage[], tools: Tool[], signal: AbortSignal, hooks?: StreamHooks, options?: CallOptions) => Promise<ChatMessage>;
@@ -60,7 +62,7 @@ export const createCompleter = (deps: { registry: Registry; relay: Pick<Relay, "
     if (isClaudeModel(model)) {
       hooks?.stage?.("waiting", "Claude");
       const claudeStarted = Date.now();
-      const { result, device } = await askClaude({ registry: deps.registry, relay: deps.relay, state: deps.claude ?? new ClaudeState() }, model, messages, { tools, effort: effortFor(model, options?.effort) });
+      const { result, device } = await askClaude({ registry: deps.registry, relay: deps.relay, state: deps.claude ?? new ClaudeState() }, model, messages, { tools, effort: effortFor(model, options?.effort), conversation: options?.conversation });
       hooks?.stage?.("writing");
       if (result.text) {
         hooks?.text?.(result.text);
@@ -909,7 +911,7 @@ export class Session {
               this.lastRoute = { model: usage.model, device: usage.device };
               this.deps.ledger?.record({ time: Date.now(), conversationId: this.id, ...usage });
             },
-          }, { effort: this.effort });
+          }, { effort: this.effort, conversation: this.id });
         },
         run: async (name, args) => {
           if (name === "ask") {

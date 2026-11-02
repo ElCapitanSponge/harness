@@ -1,3 +1,4 @@
+import { createHash, randomUUID } from "node:crypto";
 import type { ChatMessage, ClaudeLimits, ClaudeStatus, Effort, Tool } from "@harness/core";
 import type { ClaudeResult } from "@harness/claude";
 import type { Registry } from "./registry.js";
@@ -20,6 +21,7 @@ export class ClaudeState {
   private limits?: ClaudeLimits;
   private device?: string;
   private until = 0;
+  readonly conversations = new ClaudeConversations();
 
   observe(device: string, limits: ClaudeLimits | undefined): void {
     if (limits) {
@@ -56,6 +58,57 @@ export class ClaudeState {
   }
 }
 
+interface Kept {
+  id: string;
+  // Turns the program's conversation holds, counting its own last reply.
+  seen: number;
+  // Of the turns before that reply, to tell whether the conversation still begins the same way.
+  digest: string;
+  device: string;
+  model: string;
+}
+
+const turnsOf = (messages: ChatMessage[]): ChatMessage[] => {
+  return messages.filter((m) => {
+    return m.role !== "system";
+  });
+};
+
+const digestOf = (turns: ChatMessage[]): string => {
+  return createHash("sha256").update(JSON.stringify(turns)).digest("hex");
+};
+
+// The program's own conversation for each of ours, so a step of a coding session sends only what is new. Sending the whole transcript
+// as one longer message each step is never found in Claude's prompt cache and is paid for in full, so a long session costs far more
+// than the same work in Claude Code. In memory only: after a restart the first step starts a conversation again, as one does when the
+// history was changed (compacted, rewound, edited), the model or the device differs, or the program no longer has it.
+export class ClaudeConversations {
+  private readonly kept = new Map<string, Kept>();
+
+  // What to ask for the next step of `conversation`.
+  plan(conversation: string, device: string, model: string, messages: ChatMessage[]): { id: string; seen: number } {
+    const turns = turnsOf(messages);
+    const kept = this.kept.get(conversation);
+    if (kept?.device === device && kept.model === model && kept.seen <= turns.length && turns[kept.seen - 1]?.role === "assistant" && digestOf(turns.slice(0, kept.seen - 1)) === kept.digest) {
+      return { id: kept.id, seen: kept.seen };
+    }
+    return { id: randomUUID(), seen: 0 };
+  }
+
+  // Notes where the program's conversation stands after a step (or that it could not be used).
+  remember(conversation: string, device: string, model: string, messages: ChatMessage[], after: { id: string; seen: number } | undefined): void {
+    if (!after) {
+      this.kept.delete(conversation);
+      return;
+    }
+    this.kept.set(conversation, { id: after.id, seen: after.seen, digest: digestOf(turnsOf(messages).slice(0, after.seen - 1)), device, model });
+  }
+
+  forget(conversation: string): void {
+    this.kept.delete(conversation);
+  }
+}
+
 interface AskDeps {
   registry: Registry;
   relay: Pick<Relay, "callClaude">;
@@ -66,7 +119,7 @@ interface AskDeps {
 // windows from each reply, and turns a refusal for hitting a limit into the time it ends.
 // `tools` are the ones Claude may ask for, and `effort` how hard it should think. A caller that already has the whole request as JSON
 // (the OpenAI-style route) passes it as `body` instead.
-export const askClaude = async (deps: AskDeps, model: string, messages: ChatMessage[], options: { tools?: Tool[]; effort?: Effort; body?: string } = {}): Promise<{ result: ClaudeResult; device: string }> => {
+export const askClaude = async (deps: AskDeps, model: string, messages: ChatMessage[], options: { tools?: Tool[]; effort?: Effort; body?: string; conversation?: string } = {}): Promise<{ result: ClaudeResult; device: string }> => {
   const until = deps.state.limitedUntil();
   if (until !== undefined) {
     throw new ClaudeUnavailableError(until);
@@ -78,8 +131,12 @@ export const askClaude = async (deps: AskDeps, model: string, messages: ChatMess
     throw new Error("no connected device is logged in to Claude. Turn Claude on for a device where `claude` is logged in (Devices page, or CLAUDE_ENABLED=1)");
   }
   const tools = options.tools !== undefined && options.tools.length > 0 ? options.tools : undefined;
-  const reply = await deps.relay.callClaude(device.nodeId, options.body ?? JSON.stringify({ model, messages, tools, effort: options.effort }));
+  const continuation = options.conversation && options.body === undefined ? deps.state.conversations.plan(options.conversation, device.nodeId, model, messages) : undefined;
+  const reply = await deps.relay.callClaude(device.nodeId, options.body ?? JSON.stringify({ model, messages, tools, effort: options.effort, continuation }));
   if (!reply.ok) {
+    if (options.conversation) {
+      deps.state.conversations.forget(options.conversation);
+    }
     const refusal = parseRefusal(reply.output);
     if (refusal) {
       deps.state.markLimited(device.nodeId, refusal.limits);
@@ -88,6 +145,9 @@ export const askClaude = async (deps: AskDeps, model: string, messages: ChatMess
     throw new Error(reply.output);
   }
   const result = JSON.parse(reply.output) as ClaudeResult;
+  if (options.conversation && options.body === undefined) {
+    deps.state.conversations.remember(options.conversation, device.nodeId, model, messages, result.continuation);
+  }
   deps.state.observe(device.nodeId, result.limits);
   return { result, device: device.nodeId };
 };

@@ -151,3 +151,70 @@ describe("the gateway while Claude is limited", () => {
     expect(models).toContain("claude");
   });
 });
+
+describe("carrying on Claude's own conversation across the steps of a session", () => {
+  const user = (content: string): ChatMessage => {
+    return { role: "user", content };
+  };
+  const assistant = (content: string): ChatMessage => {
+    return { role: "assistant", content };
+  };
+  // A device that answers like the program: its conversation then holds every turn sent, and its reply.
+  const run = () => {
+    const sent: { continuation?: { id: string; seen: number }; messages: ChatMessage[] }[] = [];
+    const callClaude = vi.fn<Relay["callClaude"]>((_device, body) => {
+      const req = JSON.parse(body) as { continuation?: { id: string; seen: number }; messages: ChatMessage[] };
+      sent.push(req);
+      const turns = req.messages.filter((m) => {
+        return m.role !== "system";
+      }).length;
+      return Promise.resolve({ ok: true, output: JSON.stringify({ text: "ok", model: "claude", ...(req.continuation ? { continuation: { id: req.continuation.id, seen: turns + 1 } } : {}) }) });
+    });
+    const registry = new Registry();
+    registry.upsert(mac);
+    return { sent, deps: { registry, relay: { callClaude }, state: new ClaudeState() } };
+  };
+
+  it("starts a conversation, then resumes it with the turns it has not seen", async () => {
+    const { sent, deps } = run();
+    const first = [user("a")];
+    await askClaude(deps, "claude", first, { conversation: "c1" });
+    expect(sent[0]?.continuation?.seen).toBe(0);
+    await askClaude(deps, "claude", [...first, assistant("ok"), user("b")], { conversation: "c1" });
+    expect(sent[1]?.continuation).toEqual({ id: sent[0]?.continuation?.id, seen: 2 });
+  });
+
+  it("starts again when the earlier turns changed, as after compaction or a rewind", async () => {
+    const { sent, deps } = run();
+    await askClaude(deps, "claude", [user("a")], { conversation: "c1" });
+    await askClaude(deps, "claude", [user("a, edited"), assistant("ok"), user("b")], { conversation: "c1" });
+    expect(sent[1]?.continuation?.seen).toBe(0);
+    expect(sent[1]?.continuation?.id).not.toBe(sent[0]?.continuation?.id);
+  });
+
+  it("starts again for another model, and keeps conversations apart", async () => {
+    const { sent, deps } = run();
+    await askClaude(deps, "claude:sonnet", [user("a")], { conversation: "c1" });
+    await askClaude(deps, "claude:opus", [user("a"), assistant("ok"), user("b")], { conversation: "c1" });
+    expect(sent[1]?.continuation?.seen).toBe(0);
+    await askClaude(deps, "claude:opus", [user("z")], { conversation: "c2" });
+    expect(sent[2]?.continuation?.seen).toBe(0);
+  });
+
+  it("sends nothing of the kind without a conversation, or for a caller that supplies its own body", async () => {
+    const { sent, deps } = run();
+    await askClaude(deps, "claude", [user("a")]);
+    expect(sent[0]?.continuation).toBeUndefined();
+    await askClaude(deps, "claude", [user("a")], { conversation: "c1", body: JSON.stringify({ model: "claude", messages: [user("a")] }) });
+    expect(sent[1]?.continuation).toBeUndefined();
+  });
+
+  it("forgets the conversation when a step fails, so the next one starts clean", async () => {
+    const { sent, deps } = run();
+    await askClaude(deps, "claude", [user("a")], { conversation: "c1" });
+    deps.relay.callClaude.mockResolvedValueOnce({ ok: false, output: "boom" });
+    await expect(askClaude(deps, "claude", [user("a"), assistant("ok"), user("b")], { conversation: "c1" })).rejects.toThrow("boom");
+    await askClaude(deps, "claude", [user("a"), assistant("ok"), user("b")], { conversation: "c1" });
+    expect(sent.at(-1)?.continuation?.seen).toBe(0);
+  });
+});
