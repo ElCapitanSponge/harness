@@ -48,6 +48,7 @@ Use:
 
 - [Security model](security.md)
 - [Troubleshooting](troubleshooting.md)
+- [What has been tested, and what has not](status.md)
 - [Contributing](contributing.md): a feature is not done until its docs page is.
 - [Decisions](adr/0001-claude-through-the-official-cli.md): the architecture decision records, in order.
 - [Specifications](specs/web-experience-v2.md)

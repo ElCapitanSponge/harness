@@ -9,7 +9,7 @@ sidebar:
 
 A device appears in the pool while its node agent runs. This guide installs the agent, points it at the gateway and runs it as a systemd user service that restarts after a crash.
 
-The systemd unit has been written but **not yet run on a Linux machine** (see [#14](https://github.com/ElCapitanSponge/harness/issues/14)). After setting it up, confirm the device appears, and tell us if a step needed changing.
+The systemd unit has been written but is **untested on a real Linux machine** (the owner's follow-up is [#105](https://github.com/ElCapitanSponge/harness/issues/105); see [what has not been tested](../status.md)). After setting it up, confirm the device appears, and tell us if a step needed changing.
 
 ## Install
 
