@@ -13,3 +13,7 @@ The skills speak in terms of five canonical triage roles. This file maps those r
 When a skill mentions a role (e.g. "apply the AFK-ready triage label"), use the corresponding label string from this table.
 
 Edit the "Label in our tracker" column to match whatever vocabulary you actually use.
+
+## Claim label (not a triage role)
+
+`in-progress-agent` is not one of the skills' roles. It marks an issue that an agent has claimed and is working on, so another agent does not start the same work. It sits alongside `ready-for-agent`, not in place of it. How to use it is in [claiming.md](claiming.md).

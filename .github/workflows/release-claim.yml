@@ -1,0 +1,35 @@
+name: release-claim
+
+# Removes the in-progress-agent claim label when the work ends: the issue was closed, or a pull request that says it closes the issue
+# was closed (merged or not). See docs/agents/claiming.md.
+on:
+  issues:
+    types: [closed]
+  pull_request:
+    types: [closed]
+
+permissions:
+  issues: write
+  pull-requests: read
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Remove the claim label
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          EVENT: ${{ github.event_name }}
+          ISSUE: ${{ github.event.issue.number }}
+          # Untrusted text: only ever read from the environment, never put into the script.
+          PR_BODY: ${{ github.event.pull_request.body }}
+        run: |
+          if [ "$EVENT" = "issues" ]; then
+            numbers="$ISSUE"
+          else
+            numbers=$(printf '%s' "$PR_BODY" | grep -oiE '(close[sd]?|fix(e[sd])?|resolve[sd]?) +#[0-9]+' | grep -oE '[0-9]+' | sort -u)
+          fi
+          for n in $numbers; do
+            gh issue edit "$n" --remove-label in-progress-agent || true
+          done

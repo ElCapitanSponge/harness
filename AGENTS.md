@@ -10,7 +10,11 @@ Issues live in GitHub Issues for ElCapitanSponge/harness, via the `gh` CLI. See 
 
 ### Triage labels
 
-Default five-role vocabulary (needs-triage, needs-info, ready-for-agent, ready-for-human, wontfix). See `docs/agents/triage-labels.md`.
+Default five-role vocabulary (needs-triage, needs-info, ready-for-agent, ready-for-human, wontfix), plus the `in-progress-agent` claim label. See `docs/agents/triage-labels.md`.
+
+### Claiming issues
+
+Before you start an issue, claim it so no other agent takes it, and release it when you stop: follow `docs/agents/claiming.md`. Skip any issue that already has `in-progress-agent`.
 
 ### Domain docs
 
