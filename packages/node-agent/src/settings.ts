@@ -16,6 +16,7 @@ export const SETTING_ENV: Record<SettingKey, string> = {
   claude: "CLAUDE_ENABLED",
   gameProcesses: "GAME_PROCESSES",
   idleUnloadMinutes: "IDLE_UNLOAD_MINUTES",
+  skillFolders: "SKILL_FOLDERS",
 };
 
 const DEFAULTS: DeviceSettings = {
@@ -28,6 +29,7 @@ const DEFAULTS: DeviceSettings = {
   claude: false,
   gameProcesses: ["RocketLeague.exe", "Fortnite.exe", "eldenring.exe", "cs2.exe", "Cyberpunk2077.exe"],
   idleUnloadMinutes: 20,
+  skillFolders: [],
 };
 
 const list = (value: string): string[] => {
@@ -86,6 +88,19 @@ const checkValue = async (key: SettingKey, value: unknown): Promise<string | und
       });
       if (!stat?.isDirectory()) {
         return `project root "${name}" is not a folder on this device: ${dir}`;
+      }
+    }
+  }
+  if (key === "skillFolders") {
+    for (const dir of value as string[]) {
+      if (!path.isAbsolute(dir)) {
+        return `skill folder "${dir}" must be a full path`;
+      }
+      const stat = await fs.stat(dir).catch(() => {
+        return undefined;
+      });
+      if (!stat?.isDirectory()) {
+        return `skill folder "${dir}" is not a folder on this device`;
       }
     }
   }

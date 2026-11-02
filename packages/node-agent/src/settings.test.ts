@@ -213,3 +213,23 @@ describe("the settings server", () => {
     expect(send.mock.calls[2]?.[0]).toMatchObject({ id: "3", ok: false });
   });
 });
+
+describe("skill folders", () => {
+  it("are empty by default, can be set to folders that exist, and are refused when they are not full paths or not folders", async () => {
+    const { settings } = await make();
+    expect(settings.current().skillFolders).toEqual([]);
+    expect(await settings.apply({ skillFolders: ["relative/skills"] })).toMatchObject({ ok: false, error: expect.stringContaining("must be a full path") as string });
+    expect(await settings.apply({ skillFolders: [path.join(dir, "missing")] })).toMatchObject({ ok: false, error: expect.stringContaining("is not a folder on this device") as string });
+
+    const skills = path.join(dir, "skills");
+    await fs.mkdir(skills);
+    expect(await settings.apply({ skillFolders: [skills] })).toMatchObject({ ok: true });
+    expect(settings.current().skillFolders).toEqual([skills]);
+  });
+
+  it("can be fixed by SKILL_FOLDERS, which locks the setting", async () => {
+    const { settings } = await make({ env: { SKILL_FOLDERS: "/a/skills, /b/skills" } });
+    expect(settings.current().skillFolders).toEqual(["/a/skills", "/b/skills"]);
+    expect(await settings.apply({ skillFolders: [] })).toMatchObject({ ok: false });
+  });
+});

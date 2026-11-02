@@ -20,6 +20,7 @@ const SETTING_ENV: Record<SettingKey, string> = {
   claude: "CLAUDE_ENABLED",
   gameProcesses: "GAME_PROCESSES",
   idleUnloadMinutes: "IDLE_UNLOAD_MINUTES",
+  skillFolders: "SKILL_FOLDERS",
 };
 
 const ACCESS: { value: Access; label: string }[] = [
@@ -118,6 +119,7 @@ const SettingsForm = ({ node, report }: { node: NodeRecord; report: SettingsRepo
   const [claude, setClaude] = useState(report.settings.claude);
   const [games, setGames] = useState(report.settings.gameProcesses.join(", "));
   const [idle, setIdle] = useState(String(report.settings.idleUnloadMinutes));
+  const [skillFolders, setSkillFolders] = useState(report.settings.skillFolders.join(", "));
   const off = (name: SettingKey): boolean => {
     return !report.remoteConfig || report.locked.includes(name);
   };
@@ -135,6 +137,9 @@ const SettingsForm = ({ node, report }: { node: NodeRecord; report: SettingsRepo
       modelControl,
       claude,
       idleUnloadMinutes: Math.max(0, Math.floor(Number(idle) || 0)),
+      skillFolders: skillFolders.split(",").map((s) => {
+        return s.trim();
+      }).filter(Boolean),
       gameProcesses: games.split(",").map((s) => {
         return s.trim();
       }).filter(Boolean),
@@ -195,6 +200,13 @@ const SettingsForm = ({ node, report }: { node: NodeRecord; report: SettingsRepo
         />
         <p className="text-xs text-muted-foreground">Frees the graphics card for other things. Only models Torii used are unloaded, and only if model control is on. The next message loads it again.</p>
       </Field>
+      <Field name="skillFolders" label="More folders to look for skills in" report={report}>
+        <Input disabled={off("skillFolders")} value={skillFolders} aria-label="Skill folders, full paths, comma separated" onChange={(ev) => {
+          setSkillFolders(ev.target.value);
+        }}
+        />
+        <p className="text-xs text-muted-foreground">Looked in as well as ~/.claude/skills, ~/.agents/skills and the project's own .claude/skills and .agents/skills.</p>
+      </Field>
       <Field name="gameProcesses" label="Game programs that make the device busy" report={report}>
         <Input disabled={off("gameProcesses")} value={games} aria-label="Game programs, comma separated" onChange={(ev) => {
           setGames(ev.target.value);
@@ -218,7 +230,7 @@ const SettingsForm = ({ node, report }: { node: NodeRecord; report: SettingsRepo
 // An agent started before a setting existed does not send it. The form needs them all, so it is not shown for an older agent.
 const isCurrent = (report: SettingsReport): boolean => {
   const s = report.settings as Partial<SettingsReport["settings"]>;
-  return Array.isArray(s.readOnlyRoots) && typeof s.onDeviceTools === "string" && typeof s.remoteTools === "string" && typeof s.idleUnloadMinutes === "number";
+  return Array.isArray(s.readOnlyRoots) && typeof s.onDeviceTools === "string" && typeof s.remoteTools === "string" && typeof s.idleUnloadMinutes === "number" && Array.isArray(s.skillFolders);
 };
 
 const DeviceCard = ({ node }: { node: NodeRecord }) => {

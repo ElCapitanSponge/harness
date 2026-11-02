@@ -149,19 +149,23 @@ const scan = async (dir: string, source: string, found: Map<string, FoundSkill>,
 };
 
 // The folders skills are looked for in: the person's own, then the project's.
-export const skillFolders = (root: string, home: string, rootName = path.basename(root)): { dir: string; source: string }[] => {
+export const skillFolders = (root: string, home: string, extra: string[] = [], rootName = path.basename(root)): { dir: string; source: string }[] => {
   return [
     { dir: path.join(home, ".claude", "skills"), source: "user" },
     { dir: path.join(home, ".agents", "skills"), source: "user" },
+    // Folders the owner added for this device count as their own.
+    ...extra.map((dir) => {
+      return { dir, source: "user" };
+    }),
     { dir: path.join(root, ".claude", "skills"), source: rootName },
     { dir: path.join(root, ".agents", "skills"), source: rootName },
   ];
 };
 
-export const discoverSkills = async (root: string, home: string): Promise<{ skills: FoundSkill[]; skipped: SkippedSkill[] }> => {
+export const discoverSkills = async (root: string, home: string, extra: string[] = []): Promise<{ skills: FoundSkill[]; skipped: SkippedSkill[] }> => {
   const found = new Map<string, FoundSkill>();
   const skipped: SkippedSkill[] = [];
-  for (const { dir, source } of skillFolders(root, home)) {
+  for (const { dir, source } of skillFolders(root, home, extra)) {
     await scan(dir, source, found, skipped);
   }
   return { skills: [...found.values()].sort((a, b) => {
@@ -221,8 +225,8 @@ export const loadInstructions = async (root: string, home: string): Promise<Inst
   return out;
 };
 
-export const projectContext = async (root: string, home: string = os.homedir()): Promise<ProjectContext> => {
-  const [instructions, { skills, skipped }] = await Promise.all([loadInstructions(root, home), discoverSkills(root, home)]);
+export const projectContext = async (root: string, home: string = os.homedir(), extra: string[] = []): Promise<ProjectContext> => {
+  const [instructions, { skills, skipped }] = await Promise.all([loadInstructions(root, home), discoverSkills(root, home, extra)]);
   return {
     instructions,
     skills: skills.map((s) => {
@@ -298,7 +302,7 @@ const skillTool: ToolSpec = {
   },
   async run(a, ctx) {
     const name = str(a, "name");
-    const { skills } = await discoverSkills(ctx.cwd, homeOf(ctx));
+    const { skills } = await discoverSkills(ctx.cwd, homeOf(ctx), ctx.skillFolders);
     const skill = skills.find((s) => {
       return s.name === name;
     });
@@ -324,7 +328,7 @@ const startSkillTool: ToolSpec = {
   },
   async run(a, ctx) {
     const name = str(a, "name");
-    const skill = (await discoverSkills(ctx.cwd, homeOf(ctx))).skills.find((s) => {
+    const skill = (await discoverSkills(ctx.cwd, homeOf(ctx), ctx.skillFolders)).skills.find((s) => {
       return s.name === name;
     });
     if (!skill) {
@@ -345,7 +349,7 @@ const projectContextTool: ToolSpec = {
     return "read the project's instructions and skills";
   },
   async run(_a, ctx) {
-    return JSON.stringify(await projectContext(ctx.cwd, homeOf(ctx)));
+    return JSON.stringify(await projectContext(ctx.cwd, homeOf(ctx), ctx.skillFolders));
   },
 };
 

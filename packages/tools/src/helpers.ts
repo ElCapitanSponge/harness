@@ -8,6 +8,8 @@ export interface ToolContext {
   cwd: string;
   // The session the call belongs to, which owns any background task it starts.
   session?: string;
+  // Folders of skills to look in as well as the usual ones.
+  skillFolders?: string[];
   // Called with what a write or edit changed, for the person to see. It does not go back to the model.
   report?: (change: FileChange) => void;
   // The person's home folder, where their skills and CLAUDE.md are (the real one unless a test says otherwise).
