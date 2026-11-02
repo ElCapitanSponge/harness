@@ -1,6 +1,7 @@
 export * from "./agent.js";
 export * from "./tools.js";
 export { fileChange } from "./diff.js";
+export { MAX_SUBAGENTS, MAX_SUBAGENT_DEPTH, agentTool, readSubagentTask, type SubagentTask } from "./subagent.js";
 export { askTool, readQuestion, type Question } from "./ask.js";
 export { planTool, readPlan } from "./plan.js";
 export { listTasks, startTask, stopAllTasks, stopSessionTasks, stopTask, taskOutput, type TaskInfo } from "./tasks.js";

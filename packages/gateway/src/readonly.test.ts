@@ -41,7 +41,7 @@ describe("a coding session in a folder that can only be read", () => {
     await until(() => {
       return !session.busy;
     });
-    expect(seen[0]?.tools.sort()).toEqual(["ask", "git_read", "plan", "read_file"]);
+    expect(seen[0]?.tools.sort()).toEqual(["agent", "ask", "git_read", "plan", "read_file"]);
     expect(seen[0]?.system).toContain("This folder is read-only");
   });
 
@@ -52,7 +52,7 @@ describe("a coding session in a folder that can only be read", () => {
     await until(() => {
       return !session.busy;
     });
-    expect(seen[0]?.tools.sort()).toEqual(["ask", "edit_file", "git_read", "git_write", "plan", "read_file", "run_command", "write_file"]);
+    expect(seen[0]?.tools.sort()).toEqual(["agent", "ask", "edit_file", "git_read", "git_write", "plan", "read_file", "run_command", "write_file"]);
     expect(seen[0]?.system).not.toContain("read-only");
   });
 });

@@ -1,5 +1,6 @@
-import { Bot, Brain, ChevronRight, CircleHelp, Layers, Sparkles, Loader2, ShieldQuestion, Wrench } from "lucide-react";
+import { Bot, Brain, ChevronRight, CircleHelp, GitBranch, Layers, Sparkles, Loader2, ShieldQuestion, Wrench } from "lucide-react";
 import { useEffect, useState } from "react";
+import { Link } from "react-router";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/fields";
 import { Markdown } from "@/components/Markdown";
@@ -208,6 +209,25 @@ export const Message = ({ item, model, onAnswer, onReply }: { item: Item; model:
                 )
               : null}
           </div>
+        </div>
+      );
+
+    case "subagent":
+      return (
+        <div className="px-10">
+          <details className="group rounded-lg border bg-card p-2 text-[13px]">
+            <summary className="flex cursor-pointer list-none items-center gap-2">
+              <ChevronRight className="size-3.5 shrink-0 transition-transform group-open:rotate-90" />
+              <GitBranch className="size-4 shrink-0 text-primary" />
+              <span className="min-w-0 flex-1 truncate font-semibold">Sub-agent: {item.task}</span>
+              {item.status === "running" ? <Loader2 className="size-3.5 animate-spin" aria-label="running" /> : <span className={cn("text-xs", item.status === "failed" && "text-destructive")}>{item.status}</span>}
+            </summary>
+            <div className="mt-2 grid gap-1">
+              <div className="text-xs text-muted-foreground">Sub-agent {item.n} of {item.of} allowed here, nested {item.depth} deep.</div>
+              {item.result ? <div className="whitespace-pre-wrap [overflow-wrap:anywhere]">{item.result}</div> : null}
+              <Link to={`/c/${item.childId}`} className="w-fit text-primary underline">Open its conversation</Link>
+            </div>
+          </details>
         </div>
       );
 

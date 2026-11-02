@@ -33,12 +33,12 @@ With `HARNESS_API_KEY` set, every route except the web page itself needs `Author
 
 | Route | What it does |
 | --- | --- |
-| `GET /sessions` | Saved conversations, newest first. |
+| `GET /sessions` | Saved conversations, newest first. A sub-agent's conversation has a `parent`. |
 | `POST /sessions` | Start one: `{ model, device?, root?, autoApprove? }`. A chat has neither device nor root; a coding session needs both. |
 | `PATCH /sessions/:id` | Rename: `{ title }`. |
 | `DELETE /sessions/:id` | Delete it, including from disk. |
 | `POST /sessions/:id/messages` | Send a message: `{ text, model?, effort?, skill?, images? }`; `images` is up to 4 of `{ mediaType, data }` (PNG, JPEG, GIF or WebP, base64, up to 5 MB each). `model` can be `auto`; `effort` is `default`, `low`, `medium`, `high`, `xhigh` or `max`; `skill` is `{ name, arguments? }` for a skill the person started. Returns `202`; follow the events. `409` if a turn is running. |
-| `GET /sessions/:id/events?from=N` | Server-sent events from event number `N`: stored events, then live ones. The stored kinds are `user` (with its `images`), `notice`, `text`, `thinking`, `tool`, `change` (a file a write or edit changed, with its diff), `plan`, `approval`, `question` and `question-resolved`, `compacted`, `skill`, `imported`, `done`, `cancelled` and `error`; live ones (`stage`, `thinking-delta`, `text-delta`) are never stored. |
+| `GET /sessions/:id/events?from=N` | Server-sent events from event number `N`: stored events, then live ones. The stored kinds are `user` (with its `images`), `notice`, `text`, `thinking`, `tool`, `change` (a file a write or edit changed, with its diff), `plan`, `approval`, `question` and `question-resolved`, `subagent` (a sub-agent the model started, with its conversation id, state and result), `compacted`, `skill`, `imported`, `done`, `cancelled` and `error`; live ones (`stage`, `thinking-delta`, `text-delta`) are never stored. |
 | `POST /sessions/:id/approvals/:approvalId` | Answer an approval: `{ approve, always? }`. |
 | `POST /sessions/:id/questions/:questionId` | Answer a question the model asked: `{ answer }`. `404` if it was already answered or timed out. |
 | `POST /sessions/:id/cancel` | Stop the running turn. |

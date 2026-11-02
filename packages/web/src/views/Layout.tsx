@@ -11,6 +11,7 @@ import { keyStore, setKey } from "@/lib/api";
 import { useSessions } from "@/lib/queries";
 import { setTheme, themeStore, type Theme } from "@/lib/theme";
 import { cn } from "@/lib/utils";
+import { nested } from "@/lib/tree";
 
 const Gate = () => {
   const [value, setValue] = useState("");
@@ -71,9 +72,9 @@ const Sidebar = ({ onNavigate }: { onNavigate: () => void }) => {
         {sessions.isPending ? <p className="px-2 py-1 text-muted-foreground">Loading...</p> : null}
         {sessions.data?.length === 0 ? <p className="px-2 py-1 text-muted-foreground">No conversations yet.</p> : null}
         <ul className="grid gap-0.5">
-          {sessions.data?.map((c) => {
+          {nested(sessions.data ?? []).map(({ info: c, indent }) => {
             return (
-              <li key={c.id} className="group relative">
+              <li key={c.id} className="group relative" style={indent > 0 ? { paddingLeft: `${String(indent * 14)}px` } : undefined}>
                 <NavLink
                   to={`/c/${c.id}`}
                   onClick={onNavigate}

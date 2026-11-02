@@ -68,6 +68,12 @@ describe("sqliteStore", () => {
     expect(store.loadAll()).toEqual([session()]);
   });
 
+  it("keeps the parent and depth of a sub-agent's conversation", async () => {
+    const store = sqliteStore(openDatabase(":memory:"));
+    await store.save(session({ id: "11111111-2222-4333-8444-555555555555", parent: "99999999-2222-4333-8444-555555555555", depth: 1 }));
+    expect(store.loadAll()[0]).toMatchObject({ parent: "99999999-2222-4333-8444-555555555555", depth: 1 });
+  });
+
   it("records whether a conversation is a chat or code", async () => {
     const db = openDatabase(":memory:");
     const store = sqliteStore(db);

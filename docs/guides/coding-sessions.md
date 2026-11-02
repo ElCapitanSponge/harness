@@ -77,6 +77,16 @@ Both are stored as events of the conversation, so reopening it shows the panel a
 
 Messages can carry images for models that can read them; see [Images](models.md#images).
 
+## Sub-agents
+
+The model can hand a self-contained task to a sub-agent with the `agent` tool: `task` (everything the sub-agent needs, since it cannot see the conversation), optionally a `model` (default: the one in use) and `tools` (names). The sub-agent is a conversation of its own on the same device and folder, with its own context. It runs the task and its final answer comes back to the model as the tool's result.
+
+- **Never more permission than its parent.** It gets the tools asked for that its parent was offered, plus `plan` and `ask`, and never one the device does not allow or the folder's read-only state forbids.
+- **Approvals reach you.** A sub-agent's approval requests and questions appear in the thread of the conversation that started it, and you answer them there, exactly as for the parent. Declining ends the sub-agent's turn like any decline.
+- **Limits.** A conversation may start 8 sub-agents in all, and they nest 2 deep: a sub-agent may start one of its own, but that one may not start another. At the limit the model is told so and does the work itself. Each block in the thread says which sub-agent it is of the 8 and how deep.
+- **Where they show.** In the thread a collapsed block shows the task, its state and its result, with a link to its conversation. In the sidebar the sub-agent's conversation is listed under its parent. Deleting the parent deletes them, and cancelling it cancels them.
+- **Usage.** A sub-agent's model calls are counted in the usage ledger under its own conversation.
+
 ## Questions from the model
 
 In a coding session the model has an `ask` tool for a decision only you can make. The page shows a card with the question, the likely answers as buttons and a box for your own words; the answer goes back to the model as the tool's result. It needs no approval and touches no device: the gateway asks you itself. If nobody is watching the conversation, you cancel, or ten minutes pass, the model is told that nobody answered and not to guess, so it stops and says what it needs to know. The question and the answer are stored with the conversation.

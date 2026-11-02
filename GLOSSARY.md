@@ -28,6 +28,9 @@ The panel beside a coding session showing the model's plan and the files it chan
 **Question**:
 A decision the model puts to the person with the ask tool, shown as a card with options and a box for their own words. With nobody to answer, the model is told so and must not guess. See docs/guides/coding-sessions.md.
 
+**Sub-agent**:
+A task the model hands, with the agent tool, to a conversation of its own on the same device and folder, with a subset of its tools. Its approvals reach the person through the conversation that started it. Limited to 8 per conversation and 2 levels deep. See docs/guides/coding-sessions.md.
+
 **Gateway**:
 The single always-on service that every client talks to. It knows which devices are connected, routes each request, and serves the web page.
 _Avoid_: server, hub, proxy

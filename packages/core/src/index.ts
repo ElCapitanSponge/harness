@@ -246,6 +246,8 @@ export type SessionEvent
     | { type: "approval"; id: string; tool: string; summary: string }
     | { type: "approval-resolved"; id: string; approved: boolean }
     // A question the model put to the person, and what they answered (absent if nobody did).
+    // A sub-agent the model started: its conversation, its progress, and its final answer. `n` of `of` counts the ones this conversation has started.
+    | { type: "subagent"; childId: string; task: string; status: "running" | "done" | "failed"; result?: string; n: number; of: number; depth: number }
     | { type: "question"; id: string; question: string; options: string[] }
     | { type: "question-resolved"; id: string; answer?: string }
     | { type: "compacted"; messages: number; tokensBefore: number; tokensAfter: number; manual: boolean }
@@ -350,6 +352,8 @@ export interface SessionInfo {
   effort?: Effort;
   // With the model set to "auto": what was chosen for the latest turn, and why.
   chosen?: { model: string; device: string; reason: string };
+  // The conversation that started this one as a sub-agent, if any.
+  parent?: string;
 }
 
 // Loading or unloading a model on a device.

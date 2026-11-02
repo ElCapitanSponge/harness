@@ -40,6 +40,9 @@ const MIGRATIONS: string[] = [
    CREATE INDEX usage_conversation ON usage (conversation_id, id);`,
   // The effort level chosen for a conversation, when one has been.
   `ALTER TABLE conversations ADD COLUMN effort TEXT;`,
+  // The conversation that started this one as a sub-agent, and how deep it is.
+  `ALTER TABLE conversations ADD COLUMN parent TEXT;
+   ALTER TABLE conversations ADD COLUMN depth INTEGER NOT NULL DEFAULT 0;`,
 ];
 
 // Opens (creating if need be) the gateway's database on its data volume, in write-ahead mode so reads never wait for a write,
@@ -81,13 +84,15 @@ interface ConversationRow {
   updated: number;
   history: string;
   effort: string | null;
+  parent: string | null;
+  depth: number;
 }
 
 // Stores conversations as a row each, with their events appended one row at a time. A turn adds events and never rewrites old ones.
 export const sqliteStore = (db: DatabaseSync): SessionStore & { loadAll(): StoredSession[] } => {
   const upsert = db.prepare(
-    `INSERT INTO conversations (id, kind, title, model, device, root, created, updated, history, effort)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `INSERT INTO conversations (id, kind, title, model, device, root, created, updated, history, effort, parent, depth)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
      ON CONFLICT (id) DO UPDATE SET title = excluded.title, model = excluded.model, updated = excluded.updated, history = excluded.history, effort = excluded.effort`,
   );
   const count = db.prepare("SELECT COUNT(*) AS n FROM events WHERE conversation_id = ?");
@@ -111,6 +116,8 @@ export const sqliteStore = (db: DatabaseSync): SessionStore & { loadAll(): Store
           session.updated,
           JSON.stringify(session.history),
           session.effort ?? null,
+          session.parent ?? null,
+          session.depth ?? 0,
         );
         const have = (count.get(session.id) as { n: number }).n;
         for (let seq = have; seq < session.events.length; seq++) {
@@ -142,6 +149,8 @@ export const sqliteStore = (db: DatabaseSync): SessionStore & { loadAll(): Store
           effort: EFFORTS.find((e) => {
             return e === row.effort;
           }),
+          ...(row.parent ? { parent: row.parent } : {}),
+          ...(row.depth > 0 ? { depth: row.depth } : {}),
           history: JSON.parse(row.history) as ChatMessage[],
           events: (events.all(row.id) as unknown as { data: string }[]).map((e) => {
             return JSON.parse(e.data) as SessionEvent;

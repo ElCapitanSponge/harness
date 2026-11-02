@@ -175,3 +175,15 @@ describe("a question for the person", () => {
     expect(nobody.items[0]).toMatchObject({ status: "unanswered" });
   });
 });
+
+describe("a sub-agent", () => {
+  it("shows as one item that is updated when it finishes", () => {
+    const base = { childId: "c1", task: "find the config", n: 1, of: 8, depth: 1 };
+    const running = run([{ type: "subagent", status: "running", ...base }]);
+    expect(running.items).toHaveLength(1);
+    expect(running.items[0]).toMatchObject({ kind: "subagent", status: "running" });
+    const done = run([{ type: "subagent", status: "done", result: "found it", ...base }], running);
+    expect(done.items).toHaveLength(1);
+    expect(done.items[0]).toMatchObject({ status: "done", result: "found it", n: 1, of: 8 });
+  });
+});
