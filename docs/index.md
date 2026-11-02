@@ -44,6 +44,7 @@ Use:
 - [HTTP API](reference/http-api.md)
 - [Tunnel protocol](reference/tunnel-protocol.md)
 - [Web interface](reference/web-interface.md)
+- [Claude Code parity](reference/claude-code-parity.md): what matches Claude Code and what is still missing.
 
 ## Also
 
