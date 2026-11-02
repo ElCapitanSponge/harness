@@ -39,7 +39,8 @@ It checks them (a wrong key or an unreachable address is said plainly, in a sent
 - **The agent.** It starts with the app, restarts if it crashes (after 2, 5, 15 and 30 seconds, then it gives up and says so), and stops when you quit. Everything else about it is set on the Devices page, as for any agent: the settings are saved in the app's data folder, and remote configuration is on.
 - **Tray or menu bar.** It shows whether the agent is connected, and offers Open, Open in the browser, Start or Stop the agent, Change gateway, **Start at login**, and Quit. Closing the window leaves the app in the tray with the agent running.
 - **Start at login.** On Windows and macOS it is a login item; on Linux an autostart entry in `~/.config/autostart` (Ubuntu, Arch and any desktop that follows the freedesktop standard). It starts hidden in the tray.
-- **Notifications.** When the model needs an approval or an answer and the window is in the background, you get an operating system notification (allow them with the bell in the header, as in a browser).
+- **Notifications.** When the model needs an approval or an answer and the window is in the background, you get an operating system notification (allow them with the bell in the header, as in a browser). This covers **every** conversation, not only the open one: you are told when any conversation starts to need you, and clicking the notification brings the window forward on it.
+- **A badge for conversations that need you.** The count shows on the Dock icon (macOS), the launcher icon where the desktop supports badges (Linux), and as a dot over the taskbar icon (Windows); the tray's tooltip and menu say how many. It goes down as you answer.
 
 ## Where things are kept
 

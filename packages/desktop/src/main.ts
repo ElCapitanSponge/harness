@@ -3,6 +3,7 @@ import path from "node:path";
 import { BrowserWindow, Menu, Tray, app, dialog, ipcMain, nativeImage, safeStorage, shell } from "electron";
 import { createAgentHost, type AgentState, type ChildLike } from "./agent-host.js";
 import { setLinuxAutostart } from "./autostart.js";
+import { badgeBitmap, needsYouLabel } from "./badge.js";
 import { createConfigStore, defaultNodeId, normalizeGatewayUrl, type DesktopConfig } from "./config.js";
 import { readPicked } from "./files.js";
 import { checkGateway, deviceListed } from "./gateway-check.js";
@@ -31,6 +32,8 @@ let window: BrowserWindow | undefined;
 let connectWindow: BrowserWindow | undefined;
 let tray: Tray | undefined;
 let quitting = false;
+// How many conversations are waiting for the person, as the page last said.
+let needYou = 0;
 
 // The bundled agent sits beside this file; in an installed app it is unpacked from the archive so a separate process can run it.
 const agentFile = path.join(__dirname, "agent.mjs").replace("app.asar", "app.asar.unpacked");
@@ -76,7 +79,7 @@ const refreshTray = (): void => {
     return;
   }
   const state: AgentState = agent.state();
-  tray.setToolTip(`Torii: ${stateLabel(state)}`);
+  tray.setToolTip(needYou > 0 ? `Torii: ${needsYouLabel(needYou)}` : `Torii: ${stateLabel(state)}`);
   tray.setContextMenu(Menu.buildFromTemplate(trayMenu(state, config?.gatewayUrl, config?.openAtLogin ?? false, {
     open: showWindow,
     openInBrowser: () => {
@@ -96,7 +99,7 @@ const refreshTray = (): void => {
       quitting = true;
       app.quit();
     },
-  })));
+  }, needYou)));
 };
 
 const startAgent = (): void => {
@@ -126,7 +129,8 @@ const createWindow = (): BrowserWindow => {
     show: !hidden,
     title: "Torii",
     icon: path.join(__dirname, "icon.png"),
-    webPreferences: { preload: path.join(__dirname, "preload.cjs"), contextIsolation: true, nodeIntegration: false, sandbox: true },
+    // The page keeps listening for conversations that need the person while the window is hidden in the tray.
+    webPreferences: { preload: path.join(__dirname, "preload.cjs"), contextIsolation: true, nodeIntegration: false, sandbox: true, backgroundThrottling: false },
   });
   // The window shows the gateway the person chose and nothing else: any other address opens in their own browser.
   created.webContents.setWindowOpenHandler(({ url }) => {
@@ -201,6 +205,20 @@ ipcMain.handle("torii:pick-files", async () => {
   const options = { title: "Add files to this message", properties: ["openFile" as const, "multiSelections" as const] };
   const result = window && !window.isDestroyed() ? await dialog.showOpenDialog(window, options) : await dialog.showOpenDialog(options);
   return result.canceled ? [] : await Promise.all(result.filePaths.map(readPicked));
+});
+// The page says how many conversations need the person: shown as a count on the dock or launcher icon (macOS, Linux), a dot over the
+// taskbar icon (Windows), and in the tray's tooltip and menu.
+ipcMain.handle("torii:needs-you", (_event, count: unknown) => {
+  needYou = typeof count === "number" && Number.isFinite(count) && count > 0 ? Math.floor(count) : 0;
+  if (process.platform === "win32") {
+    window?.setOverlayIcon(needYou > 0 ? nativeImage.createFromBitmap(badgeBitmap(16), { width: 16, height: 16 }) : null, needYou > 0 ? needsYouLabel(needYou) : "");
+  } else {
+    app.setBadgeCount(needYou);
+  }
+  refreshTray();
+});
+ipcMain.handle("torii:focus", () => {
+  showWindow();
 });
 ipcMain.handle("torii:agent-state", () => {
   return agent.state();

@@ -1,4 +1,5 @@
 import type { AgentState } from "./agent-host.js";
+import { needsYouLabel } from "./badge.js";
 
 // The tray (or menu bar) menu, described as plain data so it can be tested; main.ts turns it into Electron's menu.
 
@@ -36,9 +37,10 @@ export const stateLabel = (state: AgentState): string => {
   }
 };
 
-export const trayMenu = (state: AgentState, gateway: string | undefined, openAtLogin: boolean, actions: TrayActions): MenuSpec[] => {
+export const trayMenu = (state: AgentState, gateway: string | undefined, openAtLogin: boolean, actions: TrayActions, needYou = 0): MenuSpec[] => {
   const on = state === "connected" || state === "running" || state === "starting";
   return [
+    ...(needYou > 0 ? [{ label: needsYouLabel(needYou), enabled: false }, { type: "separator" as const }] : []),
     { label: stateLabel(state), enabled: false },
     ...(gateway ? [{ label: gateway, enabled: false }] : []),
     { type: "separator" },

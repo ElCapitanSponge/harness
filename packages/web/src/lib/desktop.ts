@@ -15,6 +15,10 @@ export interface DesktopApi {
   version: string;
   pickFolder: () => Promise<string | undefined>;
   pickFiles: () => Promise<PickedFile[]>;
+  // Show how many conversations need the person on the app's icon (older builds of the app do not have these two).
+  setNeedsYou?: (count: number) => Promise<void>;
+  // Bring the window forward.
+  focus?: () => Promise<void>;
   agent: {
     state: () => Promise<string>;
     start: () => Promise<void>;
