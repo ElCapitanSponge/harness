@@ -91,8 +91,8 @@ export const useConversation = (id: string) => {
     });
   };
 
-  const answer = async (approvalId: string, approve: boolean, always: boolean): Promise<void> => {
-    await api<unknown>(`/sessions/${id}/approvals/${approvalId}`, { method: "POST", body: { approve, always } }).catch(() => {
+  const answer = async (approvalId: string, approve: boolean, always: boolean | "project", reason?: string): Promise<void> => {
+    await api<unknown>(`/sessions/${id}/approvals/${approvalId}`, { method: "POST", body: { approve, always, ...(reason ? { reason } : {}) } }).catch(() => {
       return undefined;
     });
   };

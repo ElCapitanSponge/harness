@@ -2,7 +2,8 @@ import { textOf, type ChatMessage, type StageName, type Tool, type ToolCall } fr
 import { shellAdvice } from "./shell.js";
 import { tools as allTools, type ToolContext, type ToolSpec } from "./tools.js";
 
-export type Approver = (tool: string, summary: string) => Promise<boolean>;
+// Asks the person whether a change may go ahead. `args` are the call's arguments, so the question can show what will happen.
+export type Approver = (tool: string, summary: string, args?: Record<string, unknown>) => Promise<boolean>;
 
 // Called as the model writes, for callers that want to show progress before the reply is complete.
 export interface StreamHooks {
@@ -28,6 +29,8 @@ export interface CallUsage {
 export interface AgentDeps {
   complete(messages: ChatMessage[], tools: Tool[], hooks?: StreamHooks): Promise<ChatMessage>;
   approve: Approver;
+  // Why the person declined the last action, if they said, so the model is told.
+  declineReason?: () => string | undefined;
   // Where tools run when `run` is not given: the local machine, inside ctx.cwd.
   ctx?: ToolContext;
   // Which tools the model is offered (default: all). A remote device may allow only some.
@@ -78,8 +81,9 @@ const execute = async (call: ToolCall, deps: AgentDeps): Promise<{ result: strin
 
   const summary = tool.describe(args);
   deps.onTool(summary);
-  if (tool.needsApproval && !(await deps.approve(call.function.name, summary))) {
-    return { result: DECLINED, declined: true };
+  if (tool.needsApproval && !(await deps.approve(call.function.name, summary, args))) {
+    const reason = deps.declineReason?.();
+    return { result: reason ? `${DECLINED} The user said: ${reason}` : DECLINED, declined: true };
   }
   try {
     if (deps.run) {
@@ -104,16 +108,19 @@ const reasoningOf = (message: ChatMessage): string => {
 // One user turn: keep calling the model and running its tool calls until it answers without any.
 // If the user declines an action the turn ends there, so a model cannot keep retrying it.
 export const runTurn = async (history: ChatMessage[], deps: AgentDeps): Promise<{ stopped: boolean; declined?: boolean }> => {
-  const defs = (deps.tools ?? allTools).filter((t) => {
-    // The tools nobody asked for are not offered: hidden ones, and opt-in ones (the browser) when no list was given.
-    return t.hidden !== true && (deps.tools !== undefined || t.optIn === undefined);
-  }).map((t) => {
-    return t.def;
-  });
+  // The tools offered are worked out at each step, so a list that changes during the turn (a plan approved, say) takes effect at once.
+  const offered = (): Tool[] => {
+    return (deps.tools ?? allTools).filter((t) => {
+      // The tools nobody asked for are not offered: hidden ones, and opt-in ones (the browser) when no list was given.
+      return t.hidden !== true && (deps.tools !== undefined || t.optIn === undefined);
+    }).map((t) => {
+      return t.def;
+    });
+  };
   const maxSteps = deps.maxSteps ?? 25;
 
   for (let step = 0; step < maxSteps; step++) {
-    const reply = await deps.complete(history, defs, { thinking: deps.onThinkingDelta, text: deps.onTextDelta });
+    const reply = await deps.complete(history, offered(), { thinking: deps.onThinkingDelta, text: deps.onTextDelta });
     const thought = reasoningOf(reply);
     if (thought && deps.onThinking) {
       deps.onThinking(thought);

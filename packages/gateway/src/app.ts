@@ -1,5 +1,5 @@
 import { toOpenAIResponse, toSse } from "@harness/claude";
-import { ChatRequest, DeviceToolRequest, ModelLoad, ModelUnload, ImportParse, LibraryImport, SessionAnswer, SessionApproval, SessionCreate, SessionImport, SessionMessage, SessionRename, flattenError } from "@harness/core";
+import { ChatRequest, DeviceToolRequest, ModelLoad, ModelUnload, ImportParse, LibraryImport, SessionAnswer, SessionApproval, SessionCreate, SessionMode, SessionImport, SessionMessage, SessionRename, flattenError } from "@harness/core";
 import { findTool, type ProjectContext } from "@harness/tools";
 import { Hono, type Context } from "hono";
 import { bearerAuth } from "./auth.js";
@@ -10,6 +10,7 @@ import { CLAUDE_MODEL_IDS, catalogue, isClaudeModel } from "./router.js";
 import { RouteError, resolveRoute } from "./routing.js";
 import type { UsageLedger } from "./ledger.js";
 import { ClaudeState, ClaudeUnavailableError, askClaude } from "./claude.js";
+import type { PermissionRule } from "./sqlite.js";
 import { callerAddress, looksLikeContainerNetwork } from "./address.js";
 import { LibraryConflict, LibraryError, type Library } from "./library.js";
 import type { Sessions } from "./sessions.js";
@@ -23,6 +24,8 @@ export interface AppDeps {
   sessions: Sessions;
   // The gateway's own skills, available in every conversation. Without it the library routes answer 404.
   library?: Library;
+  // The tools the person said to always allow in a folder on a device. Without it the rules routes answer empty.
+  rules?: { list(): PermissionRule[]; remove(id: number): boolean };
   // Believe X-Forwarded-For (set only behind a reverse proxy you run), so a browser's real address is seen.
   trustProxy?: boolean;
   // Every model call, for the usage routes. Without it the routes report nothing.
@@ -34,7 +37,7 @@ export interface AppDeps {
   mountWeb?: (app: Hono) => void;
 }
 
-export const createApp = ({ registry, apiKey, relay, sessions, library, trustProxy = false, ledger, claude = new ClaudeState(), loader, mountWeb }: AppDeps): Hono => {
+export const createApp = ({ registry, apiKey, relay, sessions, library, rules, trustProxy = false, ledger, claude = new ClaudeState(), loader, mountWeb }: AppDeps): Hono => {
   const app = new Hono();
 
   // The page holds no secrets and must load before a key can be typed, so it is registered ahead of the auth middleware.
@@ -276,6 +279,38 @@ export const createApp = ({ registry, apiKey, relay, sessions, library, trustPro
     return c.json({ ok: true });
   });
 
+  // How this conversation treats changes: ask, edits, plan or bypass.
+  app.put("/sessions/:id/mode", async (c) => {
+    const session = sessions.get(c.req.param("id"));
+    if (!session) {
+      return c.json({ error: { message: "no such session" } }, 404);
+    }
+    const parsed = SessionMode.safeParse(await c.req.json().catch(() => {
+      return undefined;
+    }));
+    if (!parsed.success) {
+      return c.json({ error: flattenError(parsed.error) }, 400);
+    }
+    try {
+      session.setMode(parsed.data.mode);
+    } catch (err) {
+      return c.json({ error: { message: (err as Error).message } }, 403);
+    }
+    return c.json(session.info());
+  });
+
+  // The tools remembered as always allowed in a folder on a device, and removing one.
+  app.get("/rules", (c) => {
+    return c.json(rules?.list() ?? []);
+  });
+
+  app.delete("/rules/:id", (c) => {
+    if (!rules?.remove(Number(c.req.param("id")))) {
+      return c.json({ error: { message: "no such rule" } }, 404);
+    }
+    return c.json({ ok: true });
+  });
+
   app.post("/sessions/:id/approvals/:approvalId", async (c) => {
     const session = sessions.get(c.req.param("id"));
     if (!session) {
@@ -287,7 +322,7 @@ export const createApp = ({ registry, apiKey, relay, sessions, library, trustPro
     if (!parsed.success) {
       return c.json({ error: flattenError(parsed.error) }, 400);
     }
-    if (!session.answer(c.req.param("approvalId"), parsed.data.approve, parsed.data.always)) {
+    if (!session.answer(c.req.param("approvalId"), parsed.data.approve, parsed.data.always, parsed.data.reason)) {
       return c.json({ error: { message: "no such pending approval" } }, 404);
     }
     return c.json({ ok: true });

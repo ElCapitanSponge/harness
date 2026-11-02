@@ -24,6 +24,20 @@ export const readPlan = (args: Record<string, unknown>): PlanStep[] => {
   });
 };
 
+// What the plan tool says in plan mode: the model can only read until the person approves the plan it sends.
+export const planToolForPlanMode = (): ToolSpec => {
+  return {
+    ...planTool,
+    def: {
+      ...planTool.def,
+      function: {
+        ...planTool.def.function,
+        description: "You are in plan mode: you can look at things but not change anything. Investigate, then send your plan with this tool. The person has to approve it before you can make changes; if they do not, you are told why, and you revise it.",
+      },
+    },
+  };
+};
+
 export const planTool: ToolSpec = {
   def: {
     type: "function",

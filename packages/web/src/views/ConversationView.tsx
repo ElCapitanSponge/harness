@@ -1,10 +1,11 @@
-import { Code2, MessageSquare, PanelRight, RotateCcw } from "lucide-react";
+import { Bell, Code2, MessageSquare, PanelRight, RotateCcw } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router";
 import { Composer } from "@/components/Composer";
 import type { Effort } from "@harness/core/effort";
 import { ContextMeter } from "@/components/ContextMeter";
 import { EffortPicker } from "@/components/EffortPicker";
+import { ModePicker } from "@/components/ModePicker";
 import { ModelPicker } from "@/components/ModelPicker";
 import { noImagesReason, supportsImages } from "@harness/core/image";
 import { ConversationActions } from "@/components/ConversationActions";
@@ -13,7 +14,8 @@ import { SidePanel } from "@/components/SidePanel";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/fields";
 import { useConversation } from "@/lib/useConversation";
-import { useLibrary, useSessions, useSessionTasks, useSkills } from "@/lib/queries";
+import { useNotifications } from "@/lib/notify";
+import { useLibrary, useSessions, useSetMode, useSessionTasks, useSkills } from "@/lib/queries";
 import { parseSlash, withLibrary } from "@/lib/skills";
 
 const Conversation = ({ id }: { id: string }) => {
@@ -31,6 +33,8 @@ const Conversation = ({ id }: { id: string }) => {
   const library = useLibrary();
   const skills = withLibrary(info?.kind === "code" ? folder.data?.[0]?.skills : undefined, library.data);
   const [panel, setPanel] = useState(false);
+  const setMode = useSetMode(id);
+  const notifications = useNotifications(state.items);
   const tasks = useSessionTasks(id, panel && info?.kind === "code");
   const scroller = useRef<HTMLDivElement>(null);
   const stuck = useRef(true);
@@ -67,6 +71,13 @@ const Conversation = ({ id }: { id: string }) => {
           {info ? <Badge tone="brand">{info.model === "auto" ? `Auto${info.chosen ? `: ${info.chosen.model}` : ""}` : info.model}</Badge> : null}
           {info ? <ContextMeter id={id} busy={state.busy} /> : null}
           {info?.kind === "code" ? <Badge tone={info.deviceConnected ? "neutral" : "warning"}>{info.device}:{info.root}{info.deviceConnected ? "" : " offline"}</Badge> : null}
+          {notifications.permission === "default"
+            ? (
+                <Button variant="subtle" size="icon" aria-label="Notify me when I am needed" title="Notify me when the model needs an answer and this page is in the background" onClick={notifications.ask}>
+                  <Bell />
+                </Button>
+              )
+            : null}
           {info?.kind === "code"
             ? (
                 <Button variant="subtle" size="sm" aria-label="Session panel" aria-pressed={panel} onClick={() => {
@@ -98,8 +109,8 @@ const Conversation = ({ id }: { id: string }) => {
           <div className="mx-auto grid max-w-3xl grid-cols-[minmax(0,1fr)] gap-4 overflow-hidden px-4 py-6">
             {state.items.map((item) => {
               return (
-                <Message key={item.id} item={item} model={model} onAnswer={(approvalId, approve, always) => {
-                  void answer(approvalId, approve, always);
+                <Message key={item.id} item={item} model={model} onAnswer={(approvalId, approve, always, reason) => {
+                  void answer(approvalId, approve, always, reason);
                 }} onReply={(questionId, text) => {
                   void reply(questionId, text);
                 }}
@@ -127,6 +138,10 @@ const Conversation = ({ id }: { id: string }) => {
         {offline ? <p className="mx-auto w-full max-w-3xl px-4 pb-2 text-[13px] text-muted-foreground">The device {info.device} is offline, so this conversation is read-only until it reconnects.</p> : null}
         <div className="mx-auto flex w-full max-w-3xl items-center gap-2 px-4 pb-1.5 text-xs text-muted-foreground">
           <span>Next message goes to</span>
+          <ModePicker className="h-7 w-auto max-w-48 text-xs" value={info?.mode ?? "ask"} disabled={!info || info.kind === "chat"} onChange={(mode) => {
+            setMode.mutate(mode);
+          }}
+          />
           <ModelPicker className="h-7 w-auto max-w-64 text-xs" value={picked || model} disabled={state.busy || !info} onChange={setPicked} />
           <EffortPicker className="h-7 w-auto max-w-40 text-xs" model={(picked || model) === "auto" ? (info?.chosen?.model ?? "auto") : (picked || model)} value={pickedEffort === "default" ? undefined : (pickedEffort ?? info?.effort)} disabled={state.busy || !info} onChange={(next) => {
             setPickedEffort(next ?? "default");

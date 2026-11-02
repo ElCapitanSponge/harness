@@ -1,5 +1,5 @@
 import { useSelector } from "@tanstack/react-store";
-import { BarChart3, Code2, Menu as MenuIcon, MessageSquare, Monitor, Moon, PanelLeftClose, FileUp, Plus, Sparkles, Sun, SunMoon, LogOut } from "lucide-react";
+import { BarChart3, Code2, Menu as MenuIcon, MessageSquare, Monitor, Moon, PanelLeftClose, FileUp, Plus, ShieldCheck, Sparkles, Sun, SunMoon, LogOut } from "lucide-react";
 import { useState } from "react";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router";
 import { ClaudeMeter } from "@/components/ClaudeMeter";
@@ -115,6 +115,15 @@ const Sidebar = ({ onNavigate }: { onNavigate: () => void }) => {
           }}
         >
           <Monitor className="size-4" /> Devices
+        </NavLink>
+        <NavLink
+          to="/manage/permissions"
+          onClick={onNavigate}
+          className={({ isActive }) => {
+            return cn("flex items-center gap-2 rounded-md px-2 py-1.5 hover:bg-muted", isActive && "bg-accent font-semibold text-accent-foreground");
+          }}
+        >
+          <ShieldCheck className="size-4" /> Permissions
         </NavLink>
         <NavLink
           to="/manage/skills"

@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import type { PermissionMode } from "@harness/core";
 import { api } from "./api";
-import type { Catalogue, ClaudeStatus, ConversationUsage, NodeRecord, BackgroundTask, LibrarySkill, SessionInfo, SettingsReport, SkillsFolder, UsageSummary } from "./types";
+import type { Catalogue, ClaudeStatus, ConversationUsage, NodeRecord, BackgroundTask, LibrarySkill, PermissionRule, SessionInfo, SettingsReport, SkillsFolder, UsageSummary } from "./types";
 
 // Every model on every device, and whether Claude is reachable. Refreshed so a device that connects shows up.
 export const useCatalogue = () => {
@@ -79,6 +80,41 @@ export const useRemoveLibrarySkill = () => {
     },
     onSuccess: () => {
       void client.invalidateQueries({ queryKey: ["library"] });
+    },
+  });
+};
+
+// The tools remembered as always allowed in a project.
+export const useRules = () => {
+  return useQuery({
+    queryKey: ["rules"],
+    queryFn: () => {
+      return api<PermissionRule[]>("/rules");
+    },
+  });
+};
+
+export const useRemoveRule = () => {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) => {
+      return api<unknown>(`/rules/${String(id)}`, { method: "DELETE" });
+    },
+    onSuccess: () => {
+      void client.invalidateQueries({ queryKey: ["rules"] });
+    },
+  });
+};
+
+// Changes how a conversation treats changes.
+export const useSetMode = (id: string) => {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (mode: PermissionMode) => {
+      return api<SessionInfo>(`/sessions/${id}/mode`, { method: "PUT", body: { mode } });
+    },
+    onSuccess: () => {
+      void client.invalidateQueries({ queryKey: ["sessions"] });
     },
   });
 };

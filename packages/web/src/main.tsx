@@ -12,6 +12,7 @@ import { Layout } from "@/views/Layout";
 import { NewConversation } from "@/views/NewConversation";
 import { ImportView } from "@/views/ImportView";
 import { RouteError } from "@/views/RouteError";
+import { PermissionsView } from "@/views/PermissionsView";
 import { SkillsView } from "@/views/SkillsView";
 
 // A rejected key sends the person back to the sign-in form.
@@ -42,6 +43,7 @@ const router = createBrowserRouter([
       { path: "c/:id", element: <ConversationView /> },
       { path: "manage/devices", element: <DevicesView /> },
       { path: "manage/skills", element: <SkillsView /> },
+      { path: "manage/permissions", element: <PermissionsView /> },
       { path: "import", element: <ImportView /> },
       // The chart library is only fetched when the page is opened.
       { path: "manage/usage", lazy: async () => {

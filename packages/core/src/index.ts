@@ -132,6 +132,13 @@ export type PlanStep = z.infer<typeof PlanStep>;
 export const ToolImage = z.object({ mediaType: z.enum(["image/png", "image/jpeg"]), data: z.string(), url: z.string() });
 export type ToolImage = z.infer<typeof ToolImage>;
 
+// What an approval card shows beyond the summary: the diff of an edit, the whole command and where it runs, or the start of a new file.
+export interface ApprovalPreview {
+  kind: "diff" | "command" | "file";
+  title: string;
+  text: string;
+}
+
 // Messages a device sends over its outbound tunnel to the gateway: its state, and replies to relayed requests.
 export const TunnelMessage = z.discriminatedUnion("type", [
   z.object({ type: z.literal("heartbeat"), heartbeat: Heartbeat }),
@@ -219,14 +226,22 @@ export type DeviceToolResult = z.infer<typeof DeviceToolResult>;
 
 // Starting a coding session, and sending it a message.
 // With no device and root it is a chat; with both it is a coding session on that device's project root.
+// How a conversation treats changes: ask before every change, accept file edits (commands still ask), plan first (read-only until the
+// person approves the plan), or run without asking.
+export const PERMISSION_MODES = ["ask", "edits", "plan", "bypass"] as const;
+export const PermissionMode = z.enum(PERMISSION_MODES);
+export type PermissionMode = z.infer<typeof PermissionMode>;
 export const SessionCreate = z.object({
   model: z.string().min(1),
   device: z.string().min(1).optional(),
   root: z.string().min(1).optional(),
   // Skip approval prompts for this session. An explicit opt-in by whoever starts it.
   autoApprove: z.boolean().optional(),
+  mode: PermissionMode.optional(),
 });
-export const SessionApproval = z.object({ approve: z.boolean(), always: z.boolean().optional() });
+export const SessionMode = z.object({ mode: PermissionMode });
+// `always` is true to allow that tool for the rest of the conversation, or "project" to remember it for that folder on that device.
+export const SessionApproval = z.object({ approve: z.boolean(), always: z.union([z.boolean(), z.literal("project")]).optional(), reason: z.string().trim().max(500).optional() });
 // `model` picks the model for this message and those after it, so one conversation can move between models, devices and Claude.
 // `skill` is a skill the person started with / in the page; `text` is what they typed (the skill's name and its arguments).
 // Pictures sent with a message: base64, within the limits in image.ts.
@@ -273,8 +288,10 @@ export type SessionEvent
     // A skill the person started: its name, what they gave it, and the instructions it put in the conversation.
     | { type: "skill"; name: string; arguments: string; text: string }
     | { type: "tool"; summary: string }
-    | { type: "approval"; id: string; tool: string; summary: string }
-    | { type: "approval-resolved"; id: string; approved: boolean }
+    | { type: "approval"; id: string; tool: string; summary: string; preview?: ApprovalPreview }
+    // The conversation's permission mode changed (or was set when it began).
+    | { type: "mode"; mode: PermissionMode }
+    | { type: "approval-resolved"; id: string; approved: boolean; reason?: string }
     // A question the model put to the person, and what they answered (absent if nobody did).
     // A sub-agent the model started: its conversation, its progress, and its final answer. `n` of `of` counts the ones this conversation has started.
     | { type: "subagent"; childId: string; task: string; status: "running" | "done" | "failed"; result?: string; n: number; of: number; depth: number }
@@ -380,6 +397,8 @@ export interface SessionInfo {
   deviceConnected: boolean;
   // How hard the model is asked to think, when one has been chosen (and the model can be told).
   effort?: Effort;
+  // How changes are treated in this conversation.
+  mode?: PermissionMode;
   // With the model set to "auto": what was chosen for the latest turn, and why.
   chosen?: { model: string; device: string; reason: string };
   // The conversation that started this one as a sub-agent, if any.

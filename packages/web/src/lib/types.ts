@@ -56,6 +56,15 @@ export interface LibrarySkill extends SkillInfo {
   bytes: number;
 }
 
+// A tool the person said to always allow in a folder on a device.
+export interface PermissionRule {
+  id: number;
+  device: string;
+  root: string;
+  tool: string;
+  created: number;
+}
+
 export type CatalogueState = "loaded" | "loads-on-use" | "cannot-load" | "busy" | "limited";
 
 export interface CatalogueEntry {

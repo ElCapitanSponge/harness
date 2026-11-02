@@ -40,6 +40,9 @@ A device state while a call or meeting runs: the device keeps working, but only 
 **Agent browser**:
 A throwaway headless browser a device can offer to coding sessions, in a temporary profile per conversation, reaching only the public web, off unless the owner turns it on. See docs/guides/browser.md.
 
+**Permission mode**:
+How a conversation treats changes: ask before every change (default), accept file edits, plan first (read-only until the plan is approved), or run without asking. The device's own allow list has the last word in every mode. See docs/guides/coding-sessions.md.
+
 **Gateway**:
 The single always-on service that every client talks to. It knows which devices are connected, routes each request, and serves the web page.
 _Avoid_: server, hub, proxy

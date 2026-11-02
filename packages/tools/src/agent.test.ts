@@ -74,7 +74,7 @@ describe("runTurn", () => {
     });
     const complete = script({ role: "assistant", content: "", tool_calls: [call("1", "write_file", { path: "n.txt", content: "x" })] });
     await runTurn(history(), deps({ complete, approve }));
-    expect(approve).toHaveBeenCalledWith("write_file", "write n.txt (1 characters)");
+    expect(approve).toHaveBeenCalledWith("write_file", "write n.txt (1 characters)", { path: "n.txt", content: "x" });
     expect(await fs.readFile(path.join(dir, "n.txt"), "utf8")).toBe("x");
   });
 
