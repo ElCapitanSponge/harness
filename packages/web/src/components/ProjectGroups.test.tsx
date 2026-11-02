@@ -87,4 +87,35 @@ describe("the sidebar's project groups", () => {
     expect(within(group).getByText(/app · anakin/)).toBeVisible();
     expect(within(group).queryByRole("button", { name: /New session in/ })).toBeNull();
   });
+
+  it("marks a working conversation, a conversation waiting for the person, and one with unread messages, in words", () => {
+    const list = [
+      { ...code("a", "anakin", "C:/work/app"), busy: true, read: 0, events: 3 },
+      { ...code("b", "anakin", "C:/work/app"), waiting: "approval" as const, read: 0, events: 3 },
+      { ...code("c", "anakin", "C:/work/app"), read: 1, events: 3 },
+      { ...code("d", "anakin", "C:/work/app"), read: 3, events: 3 },
+    ];
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        <MemoryRouter>
+          <ProjectGroups groups={groupSessions(list, "anakin")} collapsed={collapsedKeys([])} pathname="/" onToggle={vi.fn()} onNew={vi.fn()} onNavigate={vi.fn()} onDeleted={vi.fn()} />
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+    expect(screen.getByText("Working")).toBeInTheDocument();
+    expect(screen.getByText("Waiting for your approval")).toBeInTheDocument();
+    expect(screen.getByText("Has new messages")).toBeInTheDocument();
+    expect(screen.getAllByText(/Working|Waiting for|Has new messages/)).toHaveLength(3);
+  });
+
+  it("does not mark the open conversation as unread", () => {
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        <MemoryRouter>
+          <ProjectGroups groups={groupSessions([{ ...code("a", "anakin", "p"), read: 0, events: 3 }], "anakin")} collapsed={collapsedKeys([])} pathname="/c/a" onToggle={vi.fn()} onNew={vi.fn()} onNavigate={vi.fn()} onDeleted={vi.fn()} />
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+    expect(screen.queryByText("Has new messages")).toBeNull();
+  });
 });

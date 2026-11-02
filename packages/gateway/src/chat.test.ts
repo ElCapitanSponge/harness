@@ -278,6 +278,18 @@ describe("conversation routes", () => {
     expect(unpinned.pinned).toBeUndefined();
   });
 
+  it("records how far a conversation has been read, forward only, and refuses what is not a count", async () => {
+    const { app, sessions } = build();
+    const chat = sessions.create({ model: "qwen" });
+    const read = async (events: unknown) => {
+      return app.request(`/sessions/${chat.id}/read`, send("PUT", { events }));
+    };
+    expect(((await (await read(0)).json()) as { read: number }).read).toBe(0);
+    expect((await read(-1)).status).toBe(400);
+    expect((await read("many")).status).toBe(400);
+    expect((await app.request("/sessions/nope/read", send("PUT", { events: 0 }))).status).toBe(404);
+  });
+
   it("refuses a rename with no title or a title that is too long, and for a conversation that does not exist", async () => {
     const { app, sessions } = build();
     const chat = sessions.create({ model: "qwen" });

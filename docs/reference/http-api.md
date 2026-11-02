@@ -54,6 +54,7 @@ With `HARNESS_API_KEY` set, every route except the web page itself needs `Author
 | --- | --- |
 | `GET /sessions` | Saved conversations, newest first. A sub-agent's conversation has a `parent`. |
 | `POST /sessions` | Start one: `{ model, device?, root?, mode?, autoApprove? }` (`autoApprove` is the older name for mode `bypass`). A chat has neither device nor root; a coding session needs both. |
+| `PUT /sessions/:id/read` | Say how far the person has read: `{ events }`, a count that only moves forward. Conversations report `read` beside `events`, and `waiting` (`approval` or `question`) while stopped for an answer. |
 | `PATCH /sessions/:id` | Rename and/or pin: `{ title?, pinned? }` (at least one). A pinned conversation reports `pinned: true`. |
 | `DELETE /sessions/:id` | Delete it, including from disk. |
 | `POST /sessions/:id/messages` | Send a message: `{ text, model?, effort?, skill?, images? }`; `images` is up to 4 of `{ mediaType, data }` (PNG, JPEG, GIF or WebP, base64, up to 5 MB each). `model` can be `auto`; `effort` is `default`, `low`, `medium`, `high`, `xhigh` or `max`; `skill` is `{ name, arguments? }` for a skill the person started. Returns `202`; follow the events. `409` if a turn is running. |

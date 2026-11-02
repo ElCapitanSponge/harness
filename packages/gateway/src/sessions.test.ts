@@ -76,7 +76,7 @@ describe("Sessions.create", () => {
     const s = create();
     expect(sessions.get(s.id)).toBe(s);
     expect(sessions.list()).toEqual([
-      { id: s.id, model: "qwen", device: "pc", root: "proj", busy: false, events: 0, created: expect.any(Number) as number, updated: expect.any(Number) as number, kind: "code", title: "", deviceConnected: true, mode: "ask" },
+      { id: s.id, model: "qwen", device: "pc", root: "proj", busy: false, events: 0, created: expect.any(Number) as number, updated: expect.any(Number) as number, kind: "code", title: "", deviceConnected: true, mode: "ask", read: 0 },
     ]);
   });
 
@@ -715,6 +715,84 @@ describe("Session with images", () => {
     const big = { role: "user", content: [{ type: "text", text: "x" }, { type: "image_url", image_url: { url: `data:image/png;base64,${"A".repeat(4_000_000)}` } }] } as ChatMessage;
     expect(historyTokens([big])).toBeLessThan(1100);
     expect(historyTokens([big])).toBeGreaterThanOrEqual(1000);
+  });
+});
+
+describe("Session reporting what it waits for and what has been read", () => {
+  it("says it waits on an approval, then on nothing once answered", async () => {
+    script({ role: "assistant", content: null, tool_calls: [call("w1", "write_file", { path: "n.txt", content: "x" })] }, { role: "assistant", content: "Written." });
+    registry.upsert(beat({ allowedTools: ["read_file", "write_file", "edit_file", "run_command"] }));
+    const s = create();
+    expect(s.info().waiting).toBeUndefined();
+    s.send("write n.txt");
+    await until(() => {
+      return s.info().waiting === "approval";
+    });
+    const approval = s.events.find((e): e is Extract<SessionEvent, { type: "approval" }> => {
+      return e.type === "approval";
+    });
+    s.answer(approval?.id ?? "", true);
+    await until(() => {
+      return types(s).includes("done");
+    });
+    expect(s.info().waiting).toBeUndefined();
+  });
+
+  it("says it waits on a question", async () => {
+    complete.mockImplementationOnce(async () => {
+      return { role: "assistant" as const, content: null, tool_calls: [call("1", "ask", { question: "Which?" })] };
+    }).mockImplementation(async () => {
+      return { role: "assistant", content: "ok" };
+    });
+    const s = create();
+    s.subscribe(() => {
+      return undefined;
+    }, s.events.length);
+    s.send("go");
+    await until(() => {
+      return s.info().waiting === "question";
+    });
+    const question = s.events.find((e): e is Extract<SessionEvent, { type: "question" }> => {
+      return e.type === "question";
+    });
+    s.answerQuestion(question?.id ?? "", "A");
+    await until(() => {
+      return types(s).includes("done");
+    });
+    expect(s.info().waiting).toBeUndefined();
+  });
+
+  it("starts with a new conversation read, then has things to read as events arrive, until they are marked read", async () => {
+    script({ role: "assistant", content: "Hello." });
+    const s = create();
+    expect(s.info().read).toBe(0);
+    s.send("hi");
+    await until(() => {
+      return types(s).includes("done");
+    });
+    expect(s.info().events).toBeGreaterThan(0);
+    expect(s.info().read).toBe(0);
+    s.markRead(s.events.length);
+    expect(s.info().read).toBe(s.events.length);
+  });
+
+  it("only moves the read position forward and never past the events there are", async () => {
+    script({ role: "assistant", content: "Hello." });
+    const s = create();
+    s.send("hi");
+    await until(() => {
+      return types(s).includes("done");
+    });
+    s.markRead(2);
+    s.markRead(1);
+    expect(s.info().read).toBe(2);
+    s.markRead(9999);
+    expect(s.info().read).toBe(s.events.length);
+  });
+
+  it("counts everything in a stored conversation as read when it was saved before reading was kept", () => {
+    const restored = new Sessions({ registry, relay: relay, complete: complete, stored: [{ id: "old", title: "", model: "qwen", device: "pc", root: "proj", created: 1, updated: 1, history: [], events: [{ type: "done", stopped: false }, { type: "done", stopped: false }] }] });
+    expect(restored.get("old")?.info().read).toBe(2);
   });
 });
 

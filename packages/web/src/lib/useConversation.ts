@@ -71,6 +71,30 @@ export const useConversation = (id: string) => {
 
   const state = useSelector(store);
 
+  // Tell the gateway how much of this conversation has been seen, so the sidebar of every client clears it. Only while the page is
+  // in front of the person: a reply that arrives in a background tab has not been read.
+  const seen = state.cursor;
+  useEffect(() => {
+    if (seen === 0) {
+      return undefined;
+    }
+    const report = (): void => {
+      if (document.visibilityState === "visible") {
+        void api<unknown>(`/sessions/${id}/read`, { method: "PUT", body: { events: seen } }).then(() => {
+          return client.invalidateQueries({ queryKey: ["sessions"] });
+        }).catch(() => {
+          return undefined;
+        });
+      }
+    };
+    const timer = setTimeout(report, 400);
+    document.addEventListener("visibilitychange", report);
+    return () => {
+      clearTimeout(timer);
+      document.removeEventListener("visibilitychange", report);
+    };
+  }, [id, seen, client]);
+
   const send = async (text: string, model?: string, effort?: Effort | "default", skill?: { name: string; arguments: string }, images?: ImageAttachment[]): Promise<void> => {
     // Busy at once, so the button changes before the first event comes back.
     store.setState((s) => {

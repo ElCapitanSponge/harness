@@ -33,6 +33,8 @@ export interface StoredSession {
   effort?: Effort;
   // Pinned to the top of the sidebar.
   pinned?: boolean;
+  // How many of the events the person has read.
+  read?: number;
   // How changes are treated: ask (the default), edits, plan or bypass.
   mode?: PermissionMode;
   // The conversation that started this one as a sub-agent, and how deep it is (0 for an ordinary conversation).
@@ -282,6 +284,8 @@ export class Session {
   // How changes are treated in this conversation.
   private mode: PermissionMode;
   pinned = false;
+  // How many of the events the person has read, in any client.
+  read = 0;
   // Why the person declined the last action, if they said, so the model is told.
   private declined: string | undefined;
   // When the history was last compacted and how big it was after, so the meter can show that before the next reply.
@@ -298,12 +302,13 @@ export class Session {
   private compactFailedFor = 0;
 
   constructor(
-    init: Pick<StoredSession, "id" | "title" | "model" | "device" | "root" | "created" | "updated"> & { pinned?: boolean; mode?: PermissionMode; parent?: string; depth?: number; effort?: Effort; history: ChatMessage[]; events?: SessionEvent[] },
+    init: Pick<StoredSession, "id" | "title" | "model" | "device" | "root" | "created" | "updated"> & { pinned?: boolean; read?: number; mode?: PermissionMode; parent?: string; depth?: number; effort?: Effort; history: ChatMessage[]; events?: SessionEvent[] },
     private deps: SessionDeps,
     autoApprove = false,
   ) {
     this.mode = init.mode ?? (autoApprove ? "bypass" : "ask");
     this.pinned = init.pinned === true;
+    this.read = init.read ?? init.events?.length ?? 0;
     this.id = init.id;
     this.parent = init.parent;
     this.depth = init.depth ?? 0;
@@ -354,12 +359,14 @@ export class Session {
       mode: this.mode,
       ...(this.parent ? { parent: this.parent } : {}),
       ...(this.pinned ? { pinned: true } : {}),
+      ...(this.waiting() ? { waiting: this.waiting() } : {}),
+      read: this.read,
       chosen: this.current === "auto" && this.chosen ? { model: this.chosen.model, device: this.chosen.device, reason: this.chosen.reason } : undefined,
     };
   }
 
   toStored(): StoredSession {
-    return { id: this.id, title: this.title, model: this.model, device: this.device, root: this.root, created: this.created, updated: this.updated, effort: this.effort, mode: this.mode, ...(this.pinned ? { pinned: true } : {}), ...(this.parent ? { parent: this.parent } : {}), depth: this.depth, history: [...this.history], events: [...this.events] };
+    return { id: this.id, title: this.title, model: this.model, device: this.device, root: this.root, created: this.created, updated: this.updated, effort: this.effort, mode: this.mode, ...(this.pinned ? { pinned: true } : {}), read: this.read, ...(this.parent ? { parent: this.parent } : {}), depth: this.depth, history: [...this.history], events: [...this.events] };
   }
 
   // Replays what has already happened, then follows live. Returns an unsubscribe function.
@@ -377,6 +384,23 @@ export class Session {
     this.events.push(event);
     for (const listener of this.listeners) {
       listener(event);
+    }
+  }
+
+  // Whether the conversation is stopped for an answer from the person, and which kind.
+  waiting(): "approval" | "question" | undefined {
+    if (this.approvals.size > 0) {
+      return "approval";
+    }
+    return this.questions.size > 0 ? "question" : undefined;
+  }
+
+  // The person has read this many events, in some client. It only moves forward, and never past what there is.
+  markRead(events: number): void {
+    const next = Math.min(events, this.events.length);
+    if (next > this.read) {
+      this.read = next;
+      this.deps.persist?.(this);
     }
   }
 
