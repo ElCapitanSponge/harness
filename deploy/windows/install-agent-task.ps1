@@ -17,7 +17,9 @@ $taskName = "harness agent"
 # Run through cmd so the task keeps a log, and with the repo as the working directory so .env is found. It bundles the agent and runs it
 # with plain node, so pnpm and tsx do not sit beside it using more memory than the agent does.
 $log = Join-Path $env:LOCALAPPDATA "harness-agent.log"
-$action = New-ScheduledTaskAction -Execute "cmd.exe" -Argument "/c `"$pnpm`" --silent build:agent >> `"$log`" 2>&1 && `"$node`" --env-file-if-exists=.env packages\node-agent\dist\agent.mjs >> `"$log`" 2>&1" -WorkingDirectory $repo
+# cmd drops the first and last quote of a command that starts with one, so the whole command is wrapped in one more pair.
+$command = "`"$pnpm`" --silent build:agent >> `"$log`" 2>&1 && `"$node`" --env-file-if-exists=.env packages/node-agent/dist/agent.mjs >> `"$log`" 2>&1"
+$action = New-ScheduledTaskAction -Execute "cmd.exe" -Argument "/c `"$command`"" -WorkingDirectory $repo
 $trigger = New-ScheduledTaskTrigger -AtLogOn -User $env:USERNAME
 $settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -StartWhenAvailable `
   -RestartCount 999 -RestartInterval (New-TimeSpan -Minutes 1) -ExecutionTimeLimit ([TimeSpan]::Zero)
