@@ -15,6 +15,7 @@ const catalogue: Catalogue = {
     { id: "gemma-3-12b", device: "anakin", state: "loads-on-use" },
     { id: "llama-70b", device: "anakin", state: "cannot-load" },
     { id: "phi-4", device: "bastila", state: "busy", busyReason: "RocketLeague.exe" },
+    { id: "llama-34b", device: "anakin", state: "limited", busyReason: "20 GB, too big while Teams is running" },
   ],
   claude: { available: true, device: "bastila", models: ["claude", "claude:sonnet"] },
 };
@@ -37,6 +38,8 @@ export const Models: StoryObj = {
     await expect(within(picker).getByRole("option", { name: "Auto (Torii chooses)" })).toBeEnabled();
     await expect(within(picker).getByRole("option", { name: /llama-70b/ })).toBeDisabled();
     await expect(within(picker).getByRole("option", { name: /phi-4.*busy/ })).toBeDisabled();
+    // A model too big while a call is running is listed, greyed out, with the reason.
+    await expect(within(picker).getByRole("option", { name: /llama-34b.*too big while Teams is running/ })).toBeDisabled();
   },
 };
 

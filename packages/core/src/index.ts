@@ -69,6 +69,8 @@ export const ModelInfo = z.object({
   loaded: z.boolean(),
   contextLength: z.number().int().optional(),
   tokensPerSecond: z.number().optional(),
+  // The model's size on disk, in bytes, when the device can tell (from `lms ls`). Used to keep big models off a device that is limited.
+  sizeBytes: z.number().optional(),
 });
 export type ModelInfo = z.infer<typeof ModelInfo>;
 
@@ -81,6 +83,8 @@ export const Heartbeat = z.object({
   kind: NodeKind,
   busy: z.boolean(),
   busyReason: z.string().optional(),
+  // While a program on the device's limited list is running (a call, say) the device still works, but only with models up to this size.
+  limit: z.object({ reason: z.string(), maxBytes: z.number() }).optional(),
   models: z.array(ModelInfo),
   // Names of the project folders this device lets coding sessions work in. Absent or empty: no tools.
   roots: z.array(z.string()).optional(),
@@ -102,6 +106,8 @@ export type Heartbeat = z.infer<typeof Heartbeat>;
 
 export interface NodeRecord extends Heartbeat {
   lastSeen: number;
+  // Models the device has but that are too big while it is limited, so they are left out of `models`. Worked out by the gateway.
+  limitedOut?: { id: string; sizeBytes: number }[];
   // The address the device's tunnel connected from, as the gateway sees it (loopback addresses all read as "loopback").
   address?: string;
 }
@@ -178,11 +184,14 @@ export const DeviceSettings = z.object({
   gameProcesses: z.array(z.string().min(1)),
   // Unload a model nobody has used for this many minutes, to free the graphics card. Zero never unloads.
   idleUnloadMinutes: z.number().int().min(0).max(1440),
+  // Programs (a call, a meeting) that keep the device working but only with small models, and how large "small" is, in gigabytes.
+  limitedProcesses: z.array(z.string().min(1)),
+  limitedMaxGb: z.number().min(1).max(512),
   // Folders of skills to look in as well as the usual ones (~/.claude/skills, ~/.agents/skills, and the project's own).
   skillFolders: z.array(z.string().min(1)),
 });
 export type DeviceSettings = z.infer<typeof DeviceSettings>;
-export const SETTING_KEYS = ["projectRoots", "readOnlyRoots", "onDeviceTools", "remoteTools", "modelControl", "claude", "gameProcesses", "idleUnloadMinutes", "skillFolders"] as const;
+export const SETTING_KEYS = ["projectRoots", "readOnlyRoots", "onDeviceTools", "remoteTools", "modelControl", "claude", "gameProcesses", "idleUnloadMinutes", "limitedProcesses", "limitedMaxGb", "skillFolders"] as const;
 export type SettingKey = (typeof SETTING_KEYS)[number];
 
 // A device's answer about its settings: what is in effect, where each value came from, which are fixed by an

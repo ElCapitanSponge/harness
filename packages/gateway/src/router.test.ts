@@ -1,6 +1,6 @@
 import type { ChatRequest, NodeRecord } from "@harness/core";
 import { describe, expect, it } from "vitest";
-import { CLAUDE_MODEL_IDS, isClaudeModel, pickRoute } from "./router.js";
+import { CLAUDE_MODEL_IDS, catalogue, explainNoRoute, isClaudeModel, pickLoadable, pickRoute } from "./router.js";
 
 const node = (over: Partial<NodeRecord> & { nodeId: string }): NodeRecord => {
   return {
@@ -66,5 +66,38 @@ describe("isClaudeModel", () => {
 describe("claude model list", () => {
   it("advertises plain claude and the common aliases", () => {
     expect(CLAUDE_MODEL_IDS).toEqual(expect.arrayContaining(["claude", "claude:sonnet", "claude:opus", "claude:haiku"]));
+  });
+});
+
+describe("a limited device in the catalogue and in explanations", () => {
+  const limited = node({
+    nodeId: "anakin",
+    modelControl: true,
+    limit: { reason: "Teams is running", maxBytes: 8e9 },
+    models: [{ id: "small-7b", loaded: false, sizeBytes: 4e9 }],
+    limitedOut: [{ id: "big-34b", sizeBytes: 20e9 }],
+  });
+
+  it("lists the models left out as greyed out, with the size and the reason", () => {
+    const entries = catalogue([limited]);
+    expect(entries.find((e) => {
+      return e.id === "small-7b";
+    })).toMatchObject({ state: "loads-on-use" });
+    expect(entries.find((e) => {
+      return e.id === "big-34b";
+    })).toMatchObject({ state: "limited", device: "anakin", busyReason: "20 GB, too big while Teams is running" });
+  });
+
+  it("says why a model that is too big cannot be used, and what to do", () => {
+    const why = explainNoRoute([limited], { model: "big-34b", messages: [{ role: "user", content: "hi" }] });
+    expect(why).toContain("anakin has \"big-34b\" but it is too big while Teams is running");
+    expect(why).toContain("only models up to 8.0 GB");
+  });
+
+  it("does not route to a model that is too big, or load it", () => {
+    const registryLike = [limited];
+    expect(pickRoute(registryLike, { model: "big-34b", messages: [{ role: "user", content: "hi" }] })).toBeUndefined();
+    expect(pickLoadable(registryLike, { model: "big-34b", messages: [{ role: "user", content: "hi" }] })).toBeUndefined();
+    expect(pickLoadable(registryLike, { model: "small-7b", messages: [{ role: "user", content: "hi" }] })?.model).toBe("small-7b");
   });
 });

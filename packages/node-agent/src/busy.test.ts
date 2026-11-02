@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { detectBusy, parsePs, parseTasklist } from "./busy.js";
+import { detectBusy, detectLoad, parsePs, parseTasklist } from "./busy.js";
 
 describe("parseTasklist", () => {
   it("extracts lower-cased image names from csv lines, including CRLF and blanks", () => {
@@ -47,5 +47,34 @@ describe("detectBusy", () => {
       throw new Error("tasklist not found");
     };
     expect(await detectBusy(["cs2.exe"], broken)).toEqual({ busy: false });
+  });
+});
+
+describe("detectLoad", () => {
+  const running = (...names: string[]) => {
+    return () => {
+      return Promise.resolve(new Set(names.map((n) => {
+        return n.toLowerCase();
+      })));
+    };
+  };
+
+  it("limits the device while a call is running, without making it busy", async () => {
+    expect(await detectLoad(["RocketLeague.exe"], ["ms-teams.exe"], 8, running("MS-Teams.exe", "chrome.exe"))).toEqual({
+      busy: false,
+      limit: { reason: "ms-teams is running", maxBytes: 8e9 },
+    });
+  });
+
+  it("makes the device busy for a game, which wins over a call", async () => {
+    expect(await detectLoad(["RocketLeague.exe"], ["ms-teams.exe"], 8, running("RocketLeague.exe", "ms-teams.exe"))).toEqual({ busy: true, reason: "game running: RocketLeague.exe" });
+  });
+
+  it("is neither when nothing listed is running, or when the process list cannot be read", async () => {
+    expect(await detectLoad(["RocketLeague.exe"], ["ms-teams.exe"], 8, running("chrome.exe"))).toEqual({ busy: false });
+    expect(await detectLoad(["a.exe"], ["b.exe"], 8, () => {
+      return Promise.reject(new Error("no ps"));
+    })).toEqual({ busy: false });
+    expect(await detectLoad([], [], 8, running("anything"))).toEqual({ busy: false });
   });
 });

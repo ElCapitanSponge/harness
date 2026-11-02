@@ -233,3 +233,20 @@ describe("skill folders", () => {
     expect(await settings.apply({ skillFolders: [] })).toMatchObject({ ok: false });
   });
 });
+
+describe("limited mode settings", () => {
+  it("default to Teams and 8 GB, can be changed, and are checked", async () => {
+    const { settings } = await make();
+    expect(settings.current()).toMatchObject({ limitedProcesses: ["ms-teams.exe", "Teams.exe"], limitedMaxGb: 8 });
+    expect(await settings.apply({ limitedProcesses: ["Zoom.exe"], limitedMaxGb: 12 })).toMatchObject({ ok: true });
+    expect(settings.current()).toMatchObject({ limitedProcesses: ["Zoom.exe"], limitedMaxGb: 12 });
+    expect(await settings.apply({ limitedMaxGb: 0 })).toMatchObject({ ok: false });
+    expect(await settings.apply({ limitedMaxGb: 9999 })).toMatchObject({ ok: false });
+  });
+
+  it("can be fixed by LIMITED_PROCESSES and LIMITED_MAX_GB, which lock them", async () => {
+    const { settings } = await make({ env: { LIMITED_PROCESSES: "zoom.exe, slack.exe", LIMITED_MAX_GB: "6" } });
+    expect(settings.current()).toMatchObject({ limitedProcesses: ["zoom.exe", "slack.exe"], limitedMaxGb: 6 });
+    expect(await settings.apply({ limitedMaxGb: 4 })).toMatchObject({ ok: false });
+  });
+});

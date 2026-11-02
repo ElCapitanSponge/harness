@@ -13,8 +13,8 @@ const node = (over: Partial<NodeRecord> & { nodeId: string }): NodeRecord => {
 
 const report = (over: Partial<SettingsReport> = {}): SettingsReport => {
   return {
-    settings: { projectRoots: { personal: "C:\\Users\\andre\\personal", work: "C:\\Users\\andre\\work" }, readOnlyRoots: ["work"], onDeviceTools: "read", remoteTools: "off", modelControl: true, claude: true, gameProcesses: ["RocketLeague.exe"], idleUnloadMinutes: 20, skillFolders: [] },
-    sources: { projectRoots: "file", readOnlyRoots: "file", onDeviceTools: "default", remoteTools: "default", modelControl: "file", claude: "file", gameProcesses: "default", idleUnloadMinutes: "default", skillFolders: "default" },
+    settings: { projectRoots: { personal: "C:\\Users\\andre\\personal", work: "C:\\Users\\andre\\work" }, readOnlyRoots: ["work"], onDeviceTools: "read", remoteTools: "off", modelControl: true, claude: true, gameProcesses: ["RocketLeague.exe"], idleUnloadMinutes: 20, limitedProcesses: [], limitedMaxGb: 8, skillFolders: [] },
+    sources: { projectRoots: "file", readOnlyRoots: "file", onDeviceTools: "default", remoteTools: "default", modelControl: "file", claude: "file", gameProcesses: "default", idleUnloadMinutes: "default", limitedProcesses: "default", limitedMaxGb: "default", skillFolders: "default" },
     locked: [],
     remoteConfig: true,
     tools: [
@@ -105,7 +105,7 @@ export const ReadOnlyDevice: StoryObj = {
 };
 
 export const SettingFixedByTheEnvironment: StoryObj = {
-  parameters: seed([[["nodes"], [node({ nodeId: "anakin" })]], [["settings", "anakin"], report({ locked: ["claude", "remoteTools"], sources: { projectRoots: "file", readOnlyRoots: "file", onDeviceTools: "default", remoteTools: "env", modelControl: "file", claude: "env", gameProcesses: "default", idleUnloadMinutes: "default", skillFolders: "default" } })]]),
+  parameters: seed([[["nodes"], [node({ nodeId: "anakin" })]], [["settings", "anakin"], report({ locked: ["claude", "remoteTools"], sources: { projectRoots: "file", readOnlyRoots: "file", onDeviceTools: "default", remoteTools: "env", modelControl: "file", claude: "env", gameProcesses: "default", idleUnloadMinutes: "default", limitedProcesses: "default", limitedMaxGb: "default", skillFolders: "default" } })]]),
   render: () => {
     return <DevicesView />;
   },

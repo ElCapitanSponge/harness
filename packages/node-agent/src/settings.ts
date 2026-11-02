@@ -16,6 +16,8 @@ export const SETTING_ENV: Record<SettingKey, string> = {
   claude: "CLAUDE_ENABLED",
   gameProcesses: "GAME_PROCESSES",
   idleUnloadMinutes: "IDLE_UNLOAD_MINUTES",
+  limitedProcesses: "LIMITED_PROCESSES",
+  limitedMaxGb: "LIMITED_MAX_GB",
   skillFolders: "SKILL_FOLDERS",
 };
 
@@ -29,6 +31,9 @@ const DEFAULTS: DeviceSettings = {
   claude: false,
   gameProcesses: ["RocketLeague.exe", "Fortnite.exe", "eldenring.exe", "cs2.exe", "Cyberpunk2077.exe"],
   idleUnloadMinutes: 20,
+  // Calls and meetings: the device keeps working, but only with models up to this size.
+  limitedProcesses: ["ms-teams.exe", "Teams.exe"],
+  limitedMaxGb: 8,
   skillFolders: [],
 };
 
@@ -73,6 +78,10 @@ const fromEnv = (key: SettingKey, value: string): DeviceSettings[SettingKey] => 
     case "idleUnloadMinutes": {
       const minutes = Number(value);
       return Number.isFinite(minutes) ? Math.min(Math.max(Math.floor(minutes), 0), 1440) : DEFAULTS.idleUnloadMinutes;
+    }
+    case "limitedMaxGb": {
+      const gb = Number(value);
+      return Number.isFinite(gb) ? Math.min(Math.max(gb, 1), 512) : DEFAULTS.limitedMaxGb;
     }
     default:
       return list(value);

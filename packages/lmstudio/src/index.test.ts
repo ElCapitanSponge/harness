@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { cleanOutput, loadArgs, unloadArgs, validateContext, validateModel } from "./index.js";
+import { cleanOutput, loadArgs, parseModelList, unloadArgs, validateContext, validateModel } from "./index.js";
 
 describe("validateModel", () => {
   it("accepts the ids LM Studio uses", () => {
@@ -52,5 +52,19 @@ describe("arguments", () => {
     expect(loadArgs("m", 4096)).toEqual(["load", "m", "-y", "-c", "4096"]);
     expect(unloadArgs("m")).toEqual(["unload", "m"]);
     expect(unloadArgs()).toEqual(["unload", "--all"]);
+  });
+});
+
+describe("parseModelList", () => {
+  it("reads the downloaded models and their sizes from lms ls --json, leaving out embedding models and anything unreadable", () => {
+    const json = JSON.stringify([
+      { type: "llm", modelKey: "google/gemma-4-12b-qat", sizeBytes: 7151067268 },
+      { type: "embedding", modelKey: "nomic-embed", sizeBytes: 100 },
+      { type: "llm", modelKey: "no-size" },
+      null,
+    ]);
+    expect(parseModelList(json)).toEqual([{ key: "google/gemma-4-12b-qat", sizeBytes: 7151067268 }]);
+    expect(parseModelList("not json")).toEqual([]);
+    expect(parseModelList("{}")).toEqual([]);
   });
 });

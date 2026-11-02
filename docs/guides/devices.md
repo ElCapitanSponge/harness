@@ -21,9 +21,22 @@ Each device decides what the gateway may do on it. The **Devices** button on the
 | Claude | `CLAUDE_ENABLED` | Answers Claude requests with this device's logged-in `claude` CLI. |
 | Idle unload | `IDLE_UNLOAD_MINUTES` | Unload a model nobody has used for this many minutes (default 20, 0 never), so the graphics card is free for whatever else the machine is doing. |
 | Skill folders | `SKILL_FOLDERS` | More folders to look for skills in (full paths, which must exist), as well as `~/.claude/skills`, `~/.agents/skills` and the project's own. See [Skills](skills.md). |
+| Limiting programs | `LIMITED_PROCESSES` | Programs (a call or meeting: `ms-teams.exe` and `Teams.exe` by default) while which the device keeps working but only with smaller models. See [Limited mode](#limited-mode-small-models-during-a-call). |
+| Largest model while limited | `LIMITED_MAX_GB` | How large "small" is, in gigabytes (default 8). |
 | Game programs | `GAME_PROCESSES` | Programs that mark the device busy so the GPU is left alone. |
 
 The device name, gateway address and inference server address need a new process, so they are not changed from the page.
+
+## Limited mode: small models during a call
+
+A game makes the device **busy**: nothing is sent to it. A call or meeting does not need all of it, so a program on the **limiting programs** list puts the device in **limited** mode instead. It stays in the pool, but only with models up to the size you set (8 GB by default); a model's size is read from LM Studio (`lms ls`).
+
+- **Everything respects it.** Routing, Auto mode, loading on use and the model picker all see only the small models. In the picker a model that is too big is still listed, greyed out, with its size and the reason ("20 GB, too big while Teams is running"); a request for one by name gets the same explanation.
+- **A big model Torii loaded is unloaded** (when model control is on) as soon as the limit starts, so the call has the graphics card. A model with a reply being written is not touched, and neither is one you loaded in LM Studio yourself.
+- **It ends by itself.** When the program closes, the device shows all its models again; unloaded ones load on use as usual.
+- **A model whose size is not known** is not limited, since there is nothing to compare.
+- **A game still wins.** If a game and a call are both running, the device is busy.
+- The list matches program names as the operating system reports them (`tasklist` on Windows, `ps` elsewhere), case-insensitively. Add `Zoom.exe`, `slack.exe` or whatever you use.
 
 ## Models that go away when unused
 

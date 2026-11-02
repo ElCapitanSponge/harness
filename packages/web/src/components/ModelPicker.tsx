@@ -13,6 +13,8 @@ const stateLabel = (m: CatalogueEntry): string => {
       return ` - busy${m.busyReason ? ` (${m.busyReason})` : ""}`;
     case "cannot-load":
       return " - cannot load here";
+    case "limited":
+      return ` - ${m.busyReason ?? "too big right now"}`;
   }
 };
 
@@ -52,7 +54,7 @@ export const ModelPicker = ({ value, onChange, disabled, className }: { value: s
         return (
           <optgroup key={device} label={device}>
             {models.map((m) => {
-              return <option key={`${device}/${m.id}`} value={m.id} disabled={m.state === "busy" || m.state === "cannot-load"}>{m.id}{stateLabel(m)}</option>;
+              return <option key={`${device}/${m.id}`} value={m.id} disabled={m.state === "busy" || m.state === "cannot-load" || m.state === "limited"}>{m.id}{stateLabel(m)}</option>;
             })}
           </optgroup>
         );

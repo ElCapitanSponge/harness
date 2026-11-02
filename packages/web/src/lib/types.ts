@@ -56,7 +56,7 @@ export interface LibrarySkill extends SkillInfo {
   bytes: number;
 }
 
-export type CatalogueState = "loaded" | "loads-on-use" | "cannot-load" | "busy";
+export type CatalogueState = "loaded" | "loads-on-use" | "cannot-load" | "busy" | "limited";
 
 export interface CatalogueEntry {
   id: string;

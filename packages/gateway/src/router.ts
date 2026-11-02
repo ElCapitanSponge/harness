@@ -90,6 +90,14 @@ export const explainNoRoute = (nodes: NodeRecord[], req: ChatRequest): string =>
       return m.id === req.model;
     });
   });
+  const limited = local.find((n) => {
+    return n.limitedOut?.some((m) => {
+      return m.id === req.model;
+    });
+  });
+  if (having.length === 0 && limited?.limit) {
+    return `${limited.nodeId} has "${req.model}" but it is too big while ${limited.limit.reason} (only models up to ${gb(limited.limit.maxBytes)} are used then); try a smaller model, or wait`;
+  }
   if (having.length === 0) {
     return `no connected device has a model named "${req.model}"`;
   }
@@ -108,7 +116,11 @@ export const explainNoRoute = (nodes: NodeRecord[], req: ChatRequest): string =>
   return `no idle device could serve "${req.model}"`;
 };
 
-export type CatalogueState = "loaded" | "loads-on-use" | "cannot-load" | "busy";
+export type CatalogueState = "loaded" | "loads-on-use" | "cannot-load" | "busy" | "limited";
+
+const gb = (bytes: number): string => {
+  return `${(bytes / 1e9).toFixed(bytes >= 1e10 ? 0 : 1)} GB`;
+};
 
 export interface CatalogueEntry {
   id: string;
@@ -126,7 +138,11 @@ export const catalogue = (nodes: NodeRecord[]): CatalogueEntry[] => {
       return n.kind === "local";
     })
     .flatMap((node) => {
-      return node.models.map((m): CatalogueEntry => {
+      // Models left out while the device is limited are still listed, greyed out, with the reason.
+      const left = (node.limitedOut ?? []).map((m): CatalogueEntry => {
+        return { id: m.id, device: node.nodeId, state: "limited", busyReason: `${gb(m.sizeBytes)}, too big while ${node.limit?.reason ?? "limited"}` };
+      });
+      return [...node.models.map((m): CatalogueEntry => {
         let state: CatalogueState = "cannot-load";
         if (node.busy) {
           state = "busy";
@@ -136,6 +152,6 @@ export const catalogue = (nodes: NodeRecord[]): CatalogueEntry[] => {
           state = "loads-on-use";
         }
         return { id: m.id, device: node.nodeId, state, contextLength: m.contextLength, busyReason: node.busy ? node.busyReason : undefined };
-      });
+      }), ...left];
     });
 };

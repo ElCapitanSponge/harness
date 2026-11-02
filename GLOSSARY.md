@@ -34,6 +34,9 @@ A task the model hands, with the agent tool, to a conversation of its own on the
 **This device**:
 The connected device the browser is on, found by address or chosen by the person, where New code session here starts a session. It needs a node agent, since a browser cannot read files. See docs/guides/coding-sessions.md.
 
+**Limited**:
+A device state while a call or meeting runs: the device keeps working, but only with models up to a size the owner sets. Different from busy, where nothing is sent to it. See docs/guides/devices.md.
+
 **Gateway**:
 The single always-on service that every client talks to. It knows which devices are connected, routes each request, and serves the web page.
 _Avoid_: server, hub, proxy
