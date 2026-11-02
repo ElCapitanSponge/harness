@@ -2,6 +2,8 @@
 appId: au.net.brunker.torii
 productName: Torii
 copyright: MIT
+# The package is called @harness/desktop, which is no name for a file: name the files after the app.
+artifactName: "Torii-${version}-${arch}.${ext}"
 directories:
   output: release
 files:
@@ -27,6 +29,10 @@ mac:
     - dmg
     - zip
 linux:
+  executableName: torii
+  desktop:
+    entry:
+      StartupWMClass: torii
   category: Development
   maintainer: ElCapitanSponge
   synopsis: Your models and this device's files, in one place
