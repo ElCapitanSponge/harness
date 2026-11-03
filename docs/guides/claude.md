@@ -17,6 +17,8 @@ Claude is a choice in every kind of conversation, coding sessions included. The 
 
 Each call runs the program from an empty folder with its own system prompt replaced by Torii's, with no extra tool servers or skills from your own setup, and with its own built-in tools off. So a chat is not coloured by your personal Claude Code configuration or memory files, and a call carries about 1,300 input tokens of overhead where the default carries over 20,000.
 
+A long system prompt (over 6,000 characters, which happens when many tools are offered) is not put on the command line, where the operating system would refuse it with `spawn ENAMETOOLONG`. It is written to a temporary file in that same folder, handed over with `--system-prompt-file`, and deleted when the call ends. A short one is passed inline.
+
 ## Effort
 
 Models that can be told how hard to think show an **Effort** choice next to the model picker: Default, then low, medium, high, xhigh and max for Claude (the program's `--effort`), and low, medium and high for the gpt-oss models (sent as the reasoning effort). A model that cannot be told shows no control. The choice belongs to the conversation, applies from the next message, and moving to a model with fewer levels uses its nearest one. Choose Default to leave it to the model.

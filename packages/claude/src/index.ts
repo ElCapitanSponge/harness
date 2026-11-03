@@ -96,7 +96,11 @@ export const toPrompt = (req: ChatRequest): { system?: string; prompt: string } 
 // Used when the conversation has no system message of its own.
 const DEFAULT_SYSTEM = "You are a helpful assistant. Answer clearly and say so when you are not sure.";
 
-export const buildArgs = (req: ChatRequest, system?: string): string[] => {
+// A system prompt longer than this goes to the program in a file, not on its command line. The tool instructions grow with the tools offered,
+// and a command line over the operating system's limit (about 8,000 characters through a .cmd shim on Windows) fails with spawn ENAMETOOLONG.
+export const MAX_INLINE_SYSTEM = 6000;
+
+export const buildArgs = (req: ChatRequest, system?: string, systemFile?: string): string[] => {
   const alias = req.model.replace(/^claude:?/, "");
   // stream-json carries the plan's usage windows (rate_limit_event) that plain json leaves out; it needs --verbose.
   // Torii supplies the whole context itself: its own system prompt replaces the program's (which describes tools it is not given here), and
@@ -116,7 +120,7 @@ export const buildArgs = (req: ChatRequest, system?: string): string[] => {
   if (req.effort) {
     args.push("--effort", req.effort);
   }
-  args.push("--system-prompt", system ?? DEFAULT_SYSTEM);
+  args.push(...(systemFile ? ["--system-prompt-file", systemFile] : ["--system-prompt", system ?? DEFAULT_SYSTEM]));
   return args;
 };
 
@@ -212,7 +216,19 @@ export const parseClaudeOutput = (out: string, fallbackModel: string, now = Date
 
 const ask = async (bin: string, req: ChatRequest, exec: Exec): Promise<ClaudeResult> => {
   const { system, prompt } = toPrompt(req);
-  const result = parseClaudeOutput(await exec(bin, buildArgs(req, system), prompt), req.model);
+  const systemFile = system !== undefined && system.length > MAX_INLINE_SYSTEM ? path.join(isolatedDir(), `system-${randomUUID()}.txt`) : undefined;
+  let out: string;
+  try {
+    if (systemFile) {
+      fs.writeFileSync(systemFile, system ?? "");
+    }
+    out = await exec(bin, buildArgs(req, system, systemFile), prompt);
+  } finally {
+    if (systemFile) {
+      fs.rmSync(systemFile, { force: true });
+    }
+  }
+  const result = parseClaudeOutput(out, req.model);
   return req.continuation ? { ...result, continuation: { id: req.continuation.id, seen: turnsOf(req).length + 1 } } : result;
 };
 

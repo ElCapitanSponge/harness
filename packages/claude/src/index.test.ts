@@ -81,6 +81,12 @@ describe("buildArgs", () => {
     expect(buildArgs(req("claude", [{ role: "user", content: "x" }]))).toEqual(expect.arrayContaining(["--system-prompt", "You are a helpful assistant. Answer clearly and say so when you are not sure."]));
   });
 
+  it("points the program at a file for the system prompt when one is given", () => {
+    const args = buildArgs(req("claude", [{ role: "user", content: "x" }]), "long", "C:\\tmp\\system.txt");
+    expect(args).toEqual(expect.arrayContaining(["--system-prompt-file", "C:\\tmp\\system.txt"]));
+    expect(args).not.toContain("--system-prompt");
+  });
+
   it("passes the effort on when one is chosen", () => {
     expect(buildArgs({ ...req("claude", [{ role: "user", content: "x" }]), effort: "high" })).toEqual(expect.arrayContaining(["--effort", "high"]));
     expect(buildArgs(req("claude", [{ role: "user", content: "x" }]))).not.toContain("--effort");
@@ -94,6 +100,21 @@ describe("runClaude", () => {
     const exec = vi.fn().mockResolvedValue(JSON.stringify({ result: "hello!", model: "claude-sonnet" }));
     await expect(runClaude("claude", r, exec)).resolves.toEqual({ text: "hello!", model: "claude-sonnet", reportedModel: "claude-sonnet" });
     expect(exec).toHaveBeenCalledWith("claude", expect.any(Array), "hi");
+  });
+
+  it("keeps a long system prompt off the command line, in a file that is removed afterwards", async () => {
+    const long = "x".repeat(20_000);
+    let file = "";
+    const exec = vi.fn().mockImplementation((_bin: string, args: string[]) => {
+      expect(args).not.toContain("--system-prompt");
+      expect(args.join(" ").length).toBeLessThan(2000);
+      file = args[args.indexOf("--system-prompt-file") + 1] ?? "";
+      expect(fs.readFileSync(file, "utf8")).toBe(long);
+      return Promise.resolve(JSON.stringify({ result: "ok" }));
+    });
+    await runClaude("claude", { model: "claude", messages: [{ role: "system", content: long }, { role: "user", content: "hi" }] }, exec);
+    expect(file).not.toBe("");
+    expect(fs.existsSync(file)).toBe(false);
   });
 
   it("throws when the CLI reports an error", async () => {
