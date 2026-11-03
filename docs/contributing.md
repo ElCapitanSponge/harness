@@ -81,6 +81,10 @@ These are enforced by the linter, not by review. A rule is an error or it is off
 
 `packages/web` is the page the gateway serves. `pnpm web` runs it with hot reload against a gateway on `localhost:8787` (set `GATEWAY_URL` for another); `pnpm build:web` builds it into `packages/web/dist`, which the gateway serves in preference to its built-in page. The same standards apply (arrow functions, braces, no `any`), plus the React hooks and React Compiler lint rules. See [ADR 0009](adr/0009-web-app-is-react-built-with-vite-served-by-the-gateway.md).
 
+### Asking the person to confirm
+
+Never call `window.confirm`, `alert` or `prompt` (ESLint `no-alert` fails on them). To ask for a yes or no, use `ConfirmDialog` from `components/ui/overlay.tsx`: it is a Radix alert dialog that takes focus on Cancel, closes on Escape and ignores a click outside. Pick `tone="destructive"` for something that cannot be undone and `tone="risky"` for something that lowers a safeguard. The caller owns `open`, so keep the dialog open while the action runs and show its error in the dialog.
+
 ### Storybook and front-end tests
 
 `pnpm storybook` opens Storybook 10 on port 6006 with the app's theme and a light/dark toggle in the toolbar. `pnpm --filter @harness/web build-storybook` builds a static copy (CI checks it builds).

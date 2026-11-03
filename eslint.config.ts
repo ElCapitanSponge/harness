@@ -40,6 +40,9 @@ export default defineConfig(
       "arrow-body-style": ["error", "always"],
       "curly": ["error", "all"],
 
+      // No alert, confirm or prompt: a question for the person is a ConfirmDialog, which can be styled and tested.
+      "no-alert": "error",
+
       "@typescript-eslint/consistent-type-imports": "error",
 
       // Printing a number in a message is safe; the strict default would make every count and port a String() call.
