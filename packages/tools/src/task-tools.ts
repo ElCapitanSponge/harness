@@ -1,5 +1,5 @@
 import { num, show, str, truncate, type ToolSpec } from "./helpers.js";
-import { listTasks, stopSessionTasks, stopTask, taskOutput } from "./tasks.js";
+import { clearFinishedTasks, listTasks, stopSessionTasks, stopTask, taskOutput } from "./tasks.js";
 
 // Tools for commands started with run_command's background option. They only act on the session's own tasks.
 
@@ -91,4 +91,19 @@ const tasksStopAllTool: ToolSpec = {
   },
 };
 
-export const taskTools: ToolSpec[] = [taskOutputTool, taskStopTool, tasksListTool, tasksStopAllTool];
+// Not offered to the model: the person's Clear finished button in the side panel. Running tasks are kept.
+const tasksClearFinishedTool: ToolSpec = {
+  def: { type: "function", function: { name: "tasks_clear_finished", description: "Forget the background tasks of this session that have ended.", parameters: { type: "object", properties: {} } } },
+  needsApproval: false,
+  group: "device",
+  level: "read",
+  hidden: true,
+  describe: () => {
+    return "clear finished background tasks";
+  },
+  run(_a, ctx) {
+    return Promise.resolve(`cleared ${String(clearFinishedTasks(owner(ctx.session)))} tasks`);
+  },
+};
+
+export const taskTools: ToolSpec[] = [taskOutputTool, taskStopTool, tasksListTool, tasksStopAllTool, tasksClearFinishedTool];

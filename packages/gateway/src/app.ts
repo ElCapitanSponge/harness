@@ -454,6 +454,42 @@ export const createApp = ({ registry, apiKey, relay, sessions, library, rules, g
     }
   });
 
+  // Forget the session's background tasks that have ended, on its device. Running ones are kept. A device on an older agent has no such tool.
+  app.delete("/sessions/:id/tasks/finished", async (c) => {
+    const session = sessions.get(c.req.param("id"));
+    if (!session) {
+      return c.json({ error: { message: "no such session" } }, 404);
+    }
+    if (session.device === "") {
+      return c.json({ cleared: 0 });
+    }
+    try {
+      const result = await relay.callTool(session.device, session.root, "tasks_clear_finished", {}, { session: session.id, timeoutMs: 10_000 });
+      if (result.output.includes("unknown tool")) {
+        return c.json({ error: { message: "This device runs an older agent that cannot clear finished tasks. Update the agent on it." } }, 501);
+      }
+      if (!result.ok) {
+        return c.json({ error: { message: result.output } }, 502);
+      }
+      return c.json({ cleared: Number(/cleared (\d+)/.exec(result.output)?.[1] ?? 0) });
+    } catch {
+      return c.json({ cleared: 0 });
+    }
+  });
+
+  // Take the steps that are done off the plan. The model is told, and a reload shows the cleared plan.
+  app.delete("/sessions/:id/plan/done", (c) => {
+    const session = sessions.get(c.req.param("id"));
+    if (!session) {
+      return c.json({ error: { message: "no such session" } }, 404);
+    }
+    const result = session.clearDonePlan();
+    if (!result.ok) {
+      return c.json({ error: { message: result.reason } }, 409);
+    }
+    return c.json({ cleared: result.cleared });
+  });
+
   app.delete("/sessions/:id", async (c) => {
     // Whatever the session left running on its device stops with it, as far as the device can be reached.
     const doomed = sessions.get(c.req.param("id"));

@@ -49,6 +49,28 @@ export const useSessionTasks = (id: string, enabled: boolean) => {
   });
 };
 
+// Forget the background tasks that have ended, on the device. Running ones are kept.
+export const useClearFinishedTasks = (id: string) => {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: () => {
+      return api<{ cleared: number }>(`/sessions/${id}/tasks/finished`, { method: "DELETE" });
+    },
+    onSuccess: () => {
+      void client.invalidateQueries({ queryKey: ["tasks", id] });
+    },
+  });
+};
+
+// Take the steps that are done off the plan. The new plan arrives with the conversation's events, so nothing is refetched here.
+export const useClearDonePlan = (id: string) => {
+  return useMutation({
+    mutationFn: () => {
+      return api<{ cleared: number }>(`/sessions/${id}/plan/done`, { method: "DELETE" });
+    },
+  });
+};
+
 // The skills in the gateway's own library, available in every conversation including chats.
 export const useLibrary = () => {
   return useQuery({

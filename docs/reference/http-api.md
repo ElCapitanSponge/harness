@@ -65,6 +65,8 @@ With `HARNESS_API_KEY` set, every route except the web page itself needs `Author
 | `POST /sessions/:id/cancel` | Stop the running turn. |
 | `POST /sessions/:id/compact` | Summarise the older turns now. |
 | `GET /sessions/:id/tasks` | The commands the session has running in the background, as its device reports them; empty for a chat or an unreachable device. |
+| `DELETE /sessions/:id/tasks/finished` | Forget the session's background tasks that have ended, on its device; running ones stay. Answers `{ cleared }`: `0` for a chat or an unreachable device, `404` for an unknown session, `501` when the device's agent is too old to have the tool. |
+| `DELETE /sessions/:id/plan/done` | Take the steps that are done off the session's plan: a new `plan` event, and the model is told. Answers `{ cleared }`; `409` while a turn is running, `404` for an unknown session. |
 | `GET /sessions/:id/usage` | The context meter and what each model has used in this conversation. |
 | `GET /sessions/:id/export` | The conversation as markdown. |
 | `POST /import/parse` | Split pasted text or a file's content into conversations: `{ name?, content }`. Saves nothing. |

@@ -19,7 +19,7 @@ import { contextBlock } from "@/lib/desktop";
 import { useNotifications } from "@/lib/notify";
 import { compact as compactNumber } from "@/lib/format";
 import { INIT_PROMPT, permissionArg, resolveModel, unavailable } from "@/lib/commands";
-import { useCompactConversation, useLibrary, useSessions, useSetMode, useSessionTasks, useSkills } from "@/lib/queries";
+import { useClearDonePlan, useClearFinishedTasks, useCompactConversation, useLibrary, useSessions, useSetMode, useSessionTasks, useSkills } from "@/lib/queries";
 import { parseSlash, withLibrary } from "@/lib/skills";
 
 const Conversation = ({ id }: { id: string }) => {
@@ -51,6 +51,16 @@ const Conversation = ({ id }: { id: string }) => {
   };
   const notifications = useNotifications(state.items);
   const tasks = useSessionTasks(id, panel && info?.kind === "code");
+  const clearTasks = useClearFinishedTasks(id);
+  const clearPlan = useClearDonePlan(id);
+  const clearFinishedTasks = (): void => {
+    clearPlan.reset();
+    clearTasks.mutate();
+  };
+  const clearDonePlan = (): void => {
+    clearTasks.reset();
+    clearPlan.mutate();
+  };
   const scroller = useRef<HTMLDivElement>(null);
   const stuck = useRef(true);
   const last = state.items.at(-1);
@@ -271,7 +281,7 @@ const Conversation = ({ id }: { id: string }) => {
       </div>
       {panel && info?.kind === "code"
         ? (
-            <SidePanel changes={state.changes} plan={state.plan} tasks={tasks.data} shots={state.shots} files={info.device !== "" ? { device: info.device, root: info.root, onAdd: addContext } : undefined} onClose={() => {
+            <SidePanel changes={state.changes} plan={state.plan} tasks={tasks.data} shots={state.shots} clearError={clearTasks.error?.message ?? clearPlan.error?.message} onClearTasks={clearFinishedTasks} onClearPlan={clearDonePlan} files={info.device !== "" ? { device: info.device, root: info.root, onAdd: addContext } : undefined} onClose={() => {
               setPanel(false);
             }}
             />

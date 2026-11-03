@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { effortFor, noImagesReason, type ApprovalPreview, type PermissionMode, sseData, supportsImages, type ImageAttachment, textOf, type ChatMessage, type Effort, type NodeRecord, type LiveSessionEvent, type QueuedInfo, type SessionEvent, type SessionInfo, type Tool, type ToolCall } from "@harness/core";
+import { effortFor, noImagesReason, type ApprovalPreview, type PermissionMode, sseData, supportsImages, type ImageAttachment, textOf, type ChatMessage, type Effort, type NodeRecord, type PlanStep, type LiveSessionEvent, type QueuedInfo, type SessionEvent, type SessionInfo, type Tool, type ToolCall } from "@harness/core";
 import { MAX_SUBAGENTS, MAX_SUBAGENT_DEPTH, agentTool, askTool, contextPrompt, fileChange, planTool, planToolForPlanMode, readQuestion, readPlan, readSubagentTask, runTurn, systemPrompt, type ProjectContext, type SkillSummary, tools as allTools, type StreamHooks, type ToolSpec } from "@harness/tools";
 import type { Registry } from "./registry.js";
 import type { Relay } from "./relay.js";
@@ -457,6 +457,43 @@ export class Session {
       }
       this.deps.persist?.(this);
     }
+  }
+
+  // The plan as the model last sent it, or as the person last cleared it: the latest plan event.
+  plan(): PlanStep[] {
+    for (let i = this.events.length - 1; i >= 0; i--) {
+      const event = this.events[i];
+      if (event?.type === "plan") {
+        return event.steps;
+      }
+    }
+    return [];
+  }
+
+  // The person clears the steps that are done. That is a new plan event (history is never edited), and the model is told, because it sends the
+  // whole plan each time and would otherwise bring the steps back. Refused while a turn is running, so the note cannot land inside a tool exchange.
+  clearDonePlan(): { ok: true; cleared: number } | { ok: false; reason: string } {
+    if (this.abort) {
+      return { ok: false, reason: "the conversation is busy with a turn" };
+    }
+    const steps = this.plan();
+    const kept = steps.filter((s) => {
+      return s.status !== "done";
+    });
+    const cleared = steps.length - kept.length;
+    if (cleared === 0) {
+      return { ok: true, cleared };
+    }
+    this.emit({ type: "plan", steps: kept });
+    const listed = kept.map((s, i) => {
+      return `${String(i + 1)}. ${s.text} (${s.status})`;
+    }).join("\n");
+    const left = kept.length === 0
+      ? "No steps are left."
+      : `The steps left are:\n${listed}`;
+    this.history.push({ role: "system", content: `The person cleared the finished steps from the plan. Do not add them back. ${left}` });
+    this.deps.persist?.(this);
+    return { ok: true, cleared };
   }
 
   rename(title: string): void {

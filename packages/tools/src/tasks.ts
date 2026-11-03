@@ -116,6 +116,18 @@ export const listTasks = (session: string): TaskInfo[] => {
   }).map(info).reverse();
 };
 
+// Forgets the session's tasks that have ended (exited or stopped), for the person's Clear finished. A running task is never touched.
+export const clearFinishedTasks = (session: string): number => {
+  let cleared = 0;
+  for (const t of tasks.values()) {
+    if (t.session === session && t.status !== "running") {
+      tasks.delete(t.id);
+      cleared++;
+    }
+  }
+  return cleared;
+};
+
 // Stops everything a session started, when it is deleted or the agent exits.
 export const stopSessionTasks = (session: string): number => {
   let stopped = 0;
