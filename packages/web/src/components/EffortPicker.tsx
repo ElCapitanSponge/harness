@@ -1,5 +1,13 @@
 import { effortLevels, type Effort } from "@harness/core/effort";
-import { Select } from "@/components/ui/fields";
+import { Choice } from "@/components/ui/choice";
+
+const HINTS: Record<Effort, string> = {
+  low: "Fastest, with the least thinking",
+  medium: "A balance of speed and thought",
+  high: "More thinking before it answers",
+  xhigh: "Even more thinking",
+  max: "The most thinking, and the slowest",
+};
 
 // How hard the model should think, for models that can be told. It shows nothing for one that cannot, so there is no control that does
 // nothing. "Default" leaves it to the model's own setting.
@@ -9,23 +17,24 @@ export const EffortPicker = ({ model, value, onChange, disabled, className }: { 
     return null;
   }
   return (
-    <Select
-      aria-label="Effort"
-      title="How hard the model thinks"
+    <Choice
+      label="Effort"
       className={className}
-      disabled={disabled}
+      disabled={disabled ?? false}
       value={value ?? "default"}
-      onChange={(ev) => {
-        const next = ev.target.value;
+      groups={[{
+        options: [
+          { value: "default", label: "Default effort", detail: "Leave it to the model's own setting" },
+          ...levels.map((level) => {
+            return { value: level, label: `Effort: ${level}`, detail: HINTS[level] };
+          }),
+        ],
+      }]}
+      onValueChange={(next) => {
         onChange(levels.find((l) => {
           return l === next;
         }));
       }}
-    >
-      <option value="default">Default effort</option>
-      {levels.map((level) => {
-        return <option key={level} value={level}>{`Effort: ${level}`}</option>;
-      })}
-    </Select>
+    />
   );
 };

@@ -44,7 +44,7 @@ That is one process of about 70 MB, 70 percent less, and it starts faster. The W
 
 A game makes the device **busy**: nothing is sent to it. A call or meeting does not need all of it, so a program on the **limiting programs** list puts the device in **limited** mode instead. It stays in the pool, but only with models up to the size you set (8 GB by default); a model's size is read from LM Studio (`lms ls`).
 
-- **Everything respects it.** Routing, Auto mode, loading on use and the model picker all see only the small models. In the picker a model that is too big is still listed, greyed out, with its size and the reason ("20 GB, too big while Teams is running"); a request for one by name gets the same explanation.
+- **Everything respects it.** Routing, Auto mode, loading on use and the model picker all see only the small models. In the picker a model that is too big is still listed, greyed out, with its size and the reason on a second line ("20 GB, too big while Teams is running"); a request for one by name gets the same explanation.
 - **A big model Torii loaded is unloaded** (when model control is on) as soon as the limit starts, so the call has the graphics card. A model with a reply being written is not touched, and neither is one you loaded in LM Studio yourself.
 - **It ends by itself.** When the program closes, the device shows all its models again; unloaded ones load on use as usual.
 - **A model whose size is not known** is not limited, since there is nothing to compare.

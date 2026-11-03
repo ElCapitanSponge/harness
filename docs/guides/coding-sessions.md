@@ -84,7 +84,7 @@ In the web page, choose **Code** on the start screen, pick the device and folder
 
 ## Permissions: modes and approvals
 
-Next to the message box, **Changes** sets how this coding session treats changes. It starts on the first and can be changed at any time; the thread notes each change.
+Next to the message box, **Changes** sets how this coding session treats changes. It starts on the first and can be changed at any time; the thread notes each change. The list says under each mode what it allows, so a phone sees it too, and marks the risky one with a badge.
 
 | Mode | What happens |
 | --- | --- |

@@ -40,3 +40,16 @@ if (typeof Element.prototype.scrollIntoView !== "function") {
     return undefined;
   };
 }
+
+// Radix Select asks for pointer capture, which jsdom does not have.
+if (typeof Element.prototype.hasPointerCapture !== "function") {
+  Element.prototype.hasPointerCapture = () => {
+    return false;
+  };
+  Element.prototype.setPointerCapture = () => {
+    return undefined;
+  };
+  Element.prototype.releasePointerCapture = () => {
+    return undefined;
+  };
+}
