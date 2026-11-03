@@ -198,6 +198,64 @@ describe("a conversation that compacts itself", () => {
     expect(attempts.length).toBeLessThan(4);
   });
 
+  it("stores a start before the summary is asked for and an end after it, so a reload and a second page see it", async () => {
+    const { sessions } = setup((call) => {
+      return call >= 3 ? 900 : 100;
+    });
+    const chat = sessions.create({ model: "qwen" });
+    for (const t of ["one", "two", "three", "four"]) {
+      await say(chat, t);
+    }
+    const order = kinds(chat).filter((k) => {
+      return k === "compacting" || k === "compacted";
+    });
+    expect(order).toEqual(["compacting", "compacted"]);
+    // The note says how full the context was (900 + 10 of 1000).
+    expect(chat.events.find((e) => {
+      return e.type === "compacting";
+    })).toMatchObject({ manual: false, percent: 91 });
+  });
+
+  it("stores why a compaction failed, after its start, and never an end", async () => {
+    const { sessions, complete } = setup(() => {
+      return 950;
+    });
+    const real = complete.getMockImplementation();
+    complete.mockImplementation((model, messages, tools, signal, hooks) => {
+      if (textOf(messages[0]?.content).startsWith("You are condensing")) {
+        return Promise.reject(new Error("model unavailable"));
+      }
+      return real?.(model, messages, tools, signal, hooks) ?? Promise.reject(new Error("no model"));
+    });
+    const chat = sessions.create({ model: "qwen" });
+    for (const t of ["one", "two", "three", "four"]) {
+      await say(chat, t);
+    }
+    const order = kinds(chat).filter((k) => {
+      return k === "compacting" || k === "compaction-failed" || k === "compacted";
+    });
+    expect(order.slice(0, 2)).toEqual(["compacting", "compaction-failed"]);
+    expect(order).not.toContain("compacted");
+    expect(chat.events.find((e) => {
+      return e.type === "compaction-failed";
+    })).toMatchObject({ manual: false, reason: "model unavailable" });
+  });
+
+  it("stores a start for a compaction on request too, and none when there is nothing to summarise", async () => {
+    const { sessions } = setup(() => {
+      return 100;
+    });
+    const chat = sessions.create({ model: "qwen" });
+    await say(chat, "one");
+    await chat.compact();
+    expect(kinds(chat)).not.toContain("compacting");
+
+    await say(chat, "two");
+    await say(chat, "three");
+    await chat.compact();
+    expect(chat.events.slice(-2)).toMatchObject([{ type: "compacting", manual: true }, { type: "compacted", manual: true }]);
+  });
+
   it("compacts on request, reports how much it freed, and refuses when there is nothing older or a turn is running", async () => {
     const { sessions } = setup(() => {
       return 100;

@@ -193,6 +193,9 @@ export const Message = ({ item, model, onAnswer, onReply }: { item: Item; model:
       );
 
     case "compaction":
+      if (item.status !== "done") {
+        return <CompactionNote item={item} />;
+      }
       return (
         <div className="flex items-center gap-3 text-xs text-muted-foreground" role="separator" aria-label="Conversation compacted">
           <span className="h-px flex-1 bg-border" />
@@ -239,6 +242,35 @@ export const Message = ({ item, model, onAnswer, onReply }: { item: Item; model:
 };
 
 // What the request is doing, in a few words.
+type UnfinishedCompaction = Exclude<Extract<Item, { kind: "compaction" }>, { status: "done" }>;
+
+// What the thread says about a compaction that has no divider yet: it has started, it failed, or it was cut off before it ended.
+const compactionNote = (item: UnfinishedCompaction): { label: string; text: string } => {
+  if (item.status === "running") {
+    const why = item.percent === undefined ? "summarising the earlier messages" : `the context is ${String(item.percent)}% full`;
+    return { label: "Compacting the conversation", text: `Compacting the conversation: ${why}` };
+  }
+  if (item.status === "failed") {
+    return { label: "Compaction failed", text: `Compaction failed: ${item.reason ?? "no reason given"}` };
+  }
+  return { label: "Compaction did not finish", text: "Compaction did not finish" };
+};
+
+const CompactionNote = ({ item }: { item: UnfinishedCompaction }) => {
+  const { label, text } = compactionNote(item);
+  const running = item.status === "running";
+  return (
+    <div className={cn("flex items-center gap-3 text-xs", item.status === "failed" ? "text-destructive" : "text-muted-foreground")} role={running ? "status" : "separator"} aria-label={label}>
+      <span className="h-px flex-1 bg-border" />
+      <span className="flex items-center gap-1.5">
+        {running ? <Loader2 className="size-3.5 animate-spin" /> : <Layers className="size-3.5" />}
+        {text}
+      </span>
+      <span className="h-px flex-1 bg-border" />
+    </div>
+  );
+};
+
 export const stageLabel = (stage: ConversationState["stage"]): string => {
   switch (stage?.name) {
     case undefined:

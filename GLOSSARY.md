@@ -143,7 +143,7 @@ _Avoid_: handoff, failover
 How hard a model is asked to think, where it can be told: low, medium, high, and for Claude xhigh and max. Chosen for a conversation next to the model, and ignored by a model that cannot be told.
 
 **Compaction**:
-Replacing a conversation's older turns, in what is sent to the model, with a short summary the model writes, so the conversation can go on. The system prompt and the latest turns are kept, and what the person sees does not change.
+Replacing a conversation's older turns, in what is sent to the model, with a short summary the model writes, so the conversation can go on. The system prompt and the latest turns are kept, and what the person sees does not change, except that the thread shows a note when it starts, which becomes a divider with the counts, or a note saying why it failed.
 _Avoid_: truncation, trimming
 
 **Context meter**:
