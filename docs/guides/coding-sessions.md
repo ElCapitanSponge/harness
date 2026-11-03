@@ -29,6 +29,21 @@ Tools: `read_file`, `list_dir`, `grep`, `write_file`, `edit_file`, `run_command`
 - **`run_command` is not sandboxed.** It runs in the working directory but a command can touch anything your user can. Read what it asks to run.
 - **Claude models** (`claude`, `claude:<alias>`) hand over to the real `claude` CLI on your machine, using that machine's own login, because Claude Code already has its own file tools. To use Claude on another device's folders from the page, see [Claude](claude.md).
 
+### Print mode, for scripts
+
+`-p` (`--print`) is `claude -p` for `harness code`: one turn that never waits on a person, with or without a terminal.
+
+```bash
+harness code -p "summarise the failing tests" > summary.txt
+harness code -p --output-format json -y "fix the lint errors" | jq .outcome
+```
+
+- **It never asks.** Without `-y` a change that needs approval is declined and reported; with `-y` it runs. With no prompt on the command line the prompt is read from a pipe, and a terminal is an error.
+- **stdout holds only the final reply.** Earlier replies, tool lines and errors go to stderr.
+- **`--output-format json`** prints one line: `outcome`, `text`, `model`, and `error` (the message) when the outcome is `error`.
+- **The exit code says how the turn ended.** 0 for `done`; 1 for `declined`, `stopped` (the step limit) and `error` (including a cancelled turn).
+- It works with `-d` / `-r` and with `--continue` / `--resume`. For Claude models, `-p` and `--output-format` are passed to `claude` itself.
+
 `pnpm` runs scripts from the repository root, so wrap the CLI in a shell function that passes your directory through in `HARNESS_CWD`:
 
 ```bash

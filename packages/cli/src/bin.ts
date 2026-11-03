@@ -8,6 +8,7 @@ import { Gateway } from "./api.js";
 import { isClaudeModel, runClaudeCode } from "./claudecode.js";
 import { parseCommand, USAGE } from "./commands.js";
 import { pickSession } from "./resume.js";
+import { createReplyHold, endOf, endOutcome, exitCodeFor, renderResult, type PrintOptions, type TurnEnd } from "./print.js";
 import { formatModels, formatNodes, formatSessions, formatSettings } from "./format.js";
 import { lms } from "@harness/lmstudio";
 
@@ -42,6 +43,33 @@ const stageText = (stage: StageName, detail?: string): string => {
     default:
       return "";
   }
+};
+
+// Set when print mode is on, so a failure before the turn even starts is reported the way a script asked for.
+let printing: { print: PrintOptions; model: string } | undefined;
+
+// In print mode nothing may wait on a person: with no prompt on the command line the prompt comes from a pipe, never from a terminal.
+const printPrompt = async (prompt: string): Promise<string> => {
+  if (prompt) {
+    return prompt;
+  }
+  if (process.stdin.isTTY) {
+    throw new Error("no prompt given (put it after the options, or pipe it in)");
+  }
+  const piped = await readStdin();
+  if (!piped) {
+    throw new Error("no prompt given");
+  }
+  return piped;
+};
+
+// Writes what a script reads (the final reply, or one JSON object) and sets the exit code from how the turn ended.
+const reportPrint = (print: PrintOptions, end: TurnEnd, text: string, model: string): void => {
+  const out = renderResult({ ...end, text, model }, print.format);
+  if (out) {
+    console.log(out);
+  }
+  process.exitCode = exitCodeFor(end.outcome);
 };
 
 const chatOnce = async (model: string, history: ChatMessage[]): Promise<void> => {
@@ -87,9 +115,9 @@ const chat = async (model: string, prompt: string): Promise<void> => {
 };
 
 // Works on a connected device's files: the model loop runs on the gateway, tools run on the device.
-const codeRemote = async (model: string, prompt: string, yes: boolean, device: string, rootName?: string, back?: SessionInfo): Promise<void> => {
+const codeRemote = async (model: string, prompt: string, yes: boolean, device: string, rootName?: string, back?: SessionInfo, print?: PrintOptions): Promise<void> => {
   if (back) {
-    return codeSession(back, prompt);
+    return codeSession(back, prompt, yes, print);
   }
   const node = (await gateway.nodes()).find((n) => {
     return n.nodeId === device;
@@ -105,17 +133,20 @@ const codeRemote = async (model: string, prompt: string, yes: boolean, device: s
 
   const session = await gateway.createSession({ model, device, root, autoApprove: yes });
   console.error(`working on ${device}:${root} with "${model}"${yes ? " (auto-approving changes)" : ""}`);
-  return codeSession(session, prompt);
+  return codeSession(session, prompt, yes, print);
 };
 
 // Talks to a coding session on the gateway, a new one or one gone back to; earlier events are not shown again.
-const codeSession = async (session: SessionInfo, prompt: string): Promise<void> => {
-  const rl = process.stdin.isTTY ? readline.createInterface({ input: process.stdin, output: process.stdout }) : undefined;
+const codeSession = async (session: SessionInfo, prompt: string, yes: boolean, print?: PrintOptions): Promise<void> => {
+  const rl = !print && process.stdin.isTTY ? readline.createInterface({ input: process.stdin, output: process.stdout }) : undefined;
   // Events already shown, so a later turn does not replay earlier ones.
   let cursor = session.events;
   let lastStage = "";
+  const hold = createReplyHold((text) => {
+    console.error(text);
+  });
   const ask = async (event: Extract<SessionEvent, { type: "approval" }>): Promise<void> => {
-    let approve = false;
+    let approve = yes;
     let always = false;
     if (rl) {
       const answer = (await rl.question(`  allow ${event.summary}? [y/N/a = always allow ${event.tool}] `).catch(() => {
@@ -126,8 +157,9 @@ const codeSession = async (session: SessionInfo, prompt: string): Promise<void> 
     }
     await gateway.answerApproval(session.id, event.id, approve, always);
   };
-  const turn = async (text: string): Promise<void> => {
+  const turn = async (text: string): Promise<TurnEnd> => {
     const abort = new AbortController();
+    let ended: TurnEnd = { outcome: "error", message: "the session ended before the turn did" };
     const onInt = () => {
       return void gateway.cancelSession(session.id).catch(() => {
         return undefined;
@@ -150,8 +182,16 @@ const codeSession = async (session: SessionInfo, prompt: string): Promise<void> 
           continue;
         }
         cursor++;
+        const end = endOf(event);
+        if (end) {
+          ended = end;
+        }
         if (event.type === "text") {
-          console.log(event.text);
+          if (print) {
+            hold.add(event.text);
+          } else {
+            console.log(event.text);
+          }
         } else if (event.type === "tool") {
           console.error(`  > ${event.summary}`);
         } else if (event.type === "approval") {
@@ -176,8 +216,13 @@ const codeSession = async (session: SessionInfo, prompt: string): Promise<void> 
       process.removeListener("SIGINT", onInt);
       abort.abort();
     }
+    return ended;
   };
 
+  if (print) {
+    reportPrint(print, await turn(await printPrompt(prompt)), hold.take(), session.model);
+    return;
+  }
   if (prompt) {
     await turn(prompt);
     rl?.close();
@@ -188,7 +233,8 @@ const codeSession = async (session: SessionInfo, prompt: string): Promise<void> 
     if (!piped) {
       throw new Error("no prompt given");
     }
-    return turn(piped);
+    await turn(piped);
+    return;
   }
   console.error("(empty line or Ctrl+C to quit)");
   for (;;) {
@@ -203,14 +249,17 @@ const codeSession = async (session: SessionInfo, prompt: string): Promise<void> 
   rl.close();
 };
 
-const code = async (model: string, prompt: string, yes: boolean): Promise<void> => {
+const code = async (model: string, prompt: string, yes: boolean, print?: PrintOptions): Promise<void> => {
   if (isClaudeModel(model)) {
-    return runClaudeCode(model, prompt);
+    return runClaudeCode(model, prompt, print);
   }
 
   const interactive = process.stdin.isTTY;
-  const rl = interactive ? readline.createInterface({ input: process.stdin, output: process.stdout }) : undefined;
+  const rl = !print && interactive ? readline.createInterface({ input: process.stdin, output: process.stdout }) : undefined;
   const always = new Set<string>();
+  const hold = createReplyHold((text) => {
+    console.error(text);
+  });
 
   const approve: Approver = async (tool, summary) => {
     if (yes || always.has(tool)) {
@@ -237,14 +286,18 @@ const code = async (model: string, prompt: string, yes: boolean): Promise<void> 
     approve,
     ctx: { cwd: workingDir },
     onText: (text: string) => {
-      console.log(text);
+      if (print) {
+        hold.add(text);
+      } else {
+        console.log(text);
+      }
     },
     onTool: (summary: string) => {
       console.error(`  > ${summary}`);
     },
   };
 
-  const turn = async (text: string) => {
+  const turn = async (text: string): Promise<TurnEnd> => {
     history.push({ role: "user", content: text });
     try {
       const outcome = await runTurn(history, deps);
@@ -253,13 +306,17 @@ const code = async (model: string, prompt: string, yes: boolean): Promise<void> 
       } else if (outcome.stopped) {
         console.error("(stopped at the step limit; say 'continue' to go on)");
       }
+      return { outcome: endOutcome(outcome) };
     } catch (err) {
       console.error(`error: ${(err as Error).message}`);
+      return { outcome: "error", message: (err as Error).message };
     }
   };
 
   console.error(`working in ${workingDir} with "${model}"${yes ? " (auto-approving changes)" : ""}`);
-  if (prompt) {
+  if (print) {
+    reportPrint(print, await turn(await printPrompt(prompt)), hold.take(), model);
+  } else if (prompt) {
     await turn(prompt);
   } else if (!rl) {
     const piped = await readStdin();
@@ -329,15 +386,16 @@ const main = async (): Promise<void> => {
     case "chat":
       return chat(cmd.model, cmd.prompt);
     case "code": {
+      printing = cmd.print ? { print: cmd.print, model: cmd.model } : undefined;
       if (cmd.resume || cmd.continue) {
         const back = pickSession(await gateway.sessions(), { resume: cmd.resume, continue: cmd.continue, device: cmd.device, root: cmd.root });
         if (!back.deviceConnected) {
           throw new Error(`${back.device} is not connected, so that session cannot be continued`);
         }
         console.error(`continuing ${back.id.slice(0, 8)} on ${back.device}:${back.root} with "${back.model}"`);
-        return codeRemote(back.model, cmd.prompt, cmd.yes, back.device, back.root, back);
+        return codeRemote(back.model, cmd.prompt, cmd.yes, back.device, back.root, back, cmd.print);
       }
-      return cmd.device ? codeRemote(cmd.model, cmd.prompt, cmd.yes, cmd.device, cmd.root) : code(cmd.model, cmd.prompt, cmd.yes);
+      return cmd.device ? codeRemote(cmd.model, cmd.prompt, cmd.yes, cmd.device, cmd.root, undefined, cmd.print) : code(cmd.model, cmd.prompt, cmd.yes, cmd.print);
     }
     case "tool": {
       const result = await gateway.deviceTool(cmd.device, cmd.root, cmd.tool, cmd.args);
@@ -368,6 +426,12 @@ const main = async (): Promise<void> => {
 };
 
 main().catch((err: unknown) => {
-  console.error(`error: ${err instanceof Error ? err.message : String(err)}`);
+  const message = err instanceof Error ? err.message : String(err);
+  console.error(`error: ${message}`);
+  if (printing) {
+    // Left to end on its own rather than cut off with process.exit, so what was written to a pipe is not lost.
+    reportPrint(printing.print, { outcome: "error", message }, "", printing.model);
+    return;
+  }
   process.exit(1);
 });
