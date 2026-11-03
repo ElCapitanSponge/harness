@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { effortFor, noImagesReason, type ApprovalPreview, type PermissionMode, sseData, supportsImages, type ImageAttachment, textOf, type ChatMessage, type Effort, type NodeRecord, type LiveSessionEvent, type SessionEvent, type SessionInfo, type Tool, type ToolCall } from "@harness/core";
+import { effortFor, noImagesReason, type ApprovalPreview, type PermissionMode, sseData, supportsImages, type ImageAttachment, textOf, type ChatMessage, type Effort, type NodeRecord, type LiveSessionEvent, type QueuedInfo, type SessionEvent, type SessionInfo, type Tool, type ToolCall } from "@harness/core";
 import { MAX_SUBAGENTS, MAX_SUBAGENT_DEPTH, agentTool, askTool, contextPrompt, fileChange, planTool, planToolForPlanMode, readQuestion, readPlan, readSubagentTask, runTurn, systemPrompt, type ProjectContext, type SkillSummary, tools as allTools, type StreamHooks, type ToolSpec } from "@harness/tools";
 import type { Registry } from "./registry.js";
 import type { Relay } from "./relay.js";
@@ -219,6 +219,18 @@ const titleFrom = (text: string): string => {
 const MAX_STORED_THOUGHT = 6000;
 // What a tool returned, as kept in the events for the page to show when a group of actions is opened. The model was given all of it.
 const MAX_STORED_OUTPUT = 4000;
+// How many messages can wait for a running turn to end.
+const MAX_QUEUED = 10;
+
+// A message sent while a turn was running, with everything `send` needs to start it later.
+interface QueuedMessage {
+  id: string;
+  text: string;
+  model?: string;
+  effort?: Effort | "default";
+  skill?: { name: string; arguments?: string };
+  images?: ImageAttachment[];
+}
 
 interface SessionDeps {
   relay: Pick<Relay, "callTool">;
@@ -305,6 +317,15 @@ export class Session {
   private chosen: AutoChoice | undefined;
   // The call whose size last made automatic compaction fail, so one failure does not repeat on every message.
   private compactFailedFor = 0;
+  // Messages sent while a turn was running, in the order they will be taken up. They are kept here, not on the page, so every client sees the
+  // same queue and a reload loses nothing; they are not kept across a restart of the gateway.
+  private queue: QueuedMessage[] = [];
+  // The queue is held back when the last turn was declined, cancelled or failed: the person is looked to, not the next message sent for them.
+  private held = false;
+  // Whether the turn that is ending finished (a step-limit stop counts), so the queue may go on.
+  private finishedCleanly = false;
+  // A queued message the person chose to send now: taken as soon as the running turn has stopped, however it ended.
+  private sendFirst: string | undefined;
 
   constructor(
     init: Pick<StoredSession, "id" | "title" | "model" | "device" | "root" | "created" | "updated"> & { pinned?: boolean; read?: number; mode?: PermissionMode; parent?: string; depth?: number; effort?: Effort; history: ChatMessage[]; events?: SessionEvent[] },
@@ -366,6 +387,7 @@ export class Session {
       ...(this.pinned ? { pinned: true } : {}),
       ...(this.waiting() ? { waiting: this.waiting() } : {}),
       read: this.read,
+      ...(this.queue.length > 0 ? { queued: this.queued(), ...(this.held ? { queueHeld: true } : {}) } : {}),
       chosen: this.current === "auto" && this.chosen ? { model: this.chosen.model, device: this.chosen.device, reason: this.chosen.reason } : undefined,
     };
   }
@@ -378,6 +400,10 @@ export class Session {
   subscribe(listener: (event: SessionEvent | LiveSessionEvent) => void, from = 0): () => void {
     for (const event of this.events.slice(from)) {
       listener(event);
+    }
+    // A client that joins (or comes back) is told what is waiting; the queue is not among the stored events.
+    if (this.queue.length > 0) {
+      listener({ type: "queue", messages: this.queued(), held: this.held });
     }
     this.listeners.add(listener);
     return () => {
@@ -429,13 +455,19 @@ export class Session {
     }
   }
 
-  // Throws if a turn is running or the device is not connected: a session whose device is away can be read, not continued.
-  send(text: string, model?: string, effort?: Effort | "default", skill?: { name: string; arguments?: string }, images?: ImageAttachment[]): void {
-    if (this.abort) {
-      throw new Error("the session is busy with a turn");
-    }
+  // Starts a turn, or, if one is running, queues the message to be taken up when it ends, and says which. Throws if the device is not
+  // connected (a session whose device is away can be read, not continued) or the queue is full.
+  send(text: string, model?: string, effort?: Effort | "default", skill?: { name: string; arguments?: string }, images?: ImageAttachment[]): "started" | "queued" {
     if (skill && !(this.kind === "code" ? this.deps.startSkill !== undefined || this.deps.library !== undefined : this.deps.library !== undefined)) {
       throw new Error("skills run in a coding session, on a device, or in a chat with the gateway's skill library");
+    }
+    if (this.abort) {
+      if (this.queue.length >= MAX_QUEUED) {
+        throw new Error(`${String(MAX_QUEUED)} messages are already waiting`);
+      }
+      this.queue.push({ id: randomUUID(), text, ...(model !== undefined ? { model } : {}), ...(effort !== undefined ? { effort } : {}), ...(skill ? { skill } : {}), ...(images && images.length > 0 ? { images } : {}) });
+      this.announceQueue();
+      return "queued";
     }
     this.starting = skill;
     this.attached = images ?? [];
@@ -462,6 +494,106 @@ export class Session {
     this.emit({ type: "user", text, ...(images && images.length > 0 ? { images } : {}) });
     this.history.push({ role: "user", content: text });
     void this.run(this.abort, specs);
+    return "started";
+  }
+
+  private queued(): QueuedInfo[] {
+    return this.queue.map((q) => {
+      return { id: q.id, text: q.text, images: q.images?.length ?? 0 };
+    });
+  }
+
+  private announceQueue(): void {
+    this.emitLive({ type: "queue", messages: this.queued(), held: this.held });
+  }
+
+  // Changes the words of a waiting message. False if it is not there (it was taken up, or removed).
+  editQueued(id: string, text: string): boolean {
+    const item = this.queue.find((q) => {
+      return q.id === id;
+    });
+    if (!item) {
+      return false;
+    }
+    item.text = text;
+    this.announceQueue();
+    return true;
+  }
+
+  removeQueued(id: string): boolean {
+    const at = this.queue.findIndex((q) => {
+      return q.id === id;
+    });
+    if (at < 0) {
+      return false;
+    }
+    this.queue.splice(at, 1);
+    this.held = this.held && this.queue.length > 0;
+    this.announceQueue();
+    return true;
+  }
+
+  // Sends a waiting message at once. If a turn is running it is cancelled (what it waited to ask counts as declined) and this message goes next,
+  // however the turn ends. False if the message is not there. Throws if it cannot start (the device is away), leaving it queued.
+  sendQueuedNow(id: string): boolean {
+    if (!this.queue.some((q) => {
+      return q.id === id;
+    })) {
+      return false;
+    }
+    if (this.abort) {
+      this.sendFirst = id;
+      this.cancel();
+      return true;
+    }
+    this.takeAndSend(id);
+    return true;
+  }
+
+  // Takes a waiting message out of the queue and starts it; if it cannot start it goes back to where it was.
+  private takeAndSend(id: string): void {
+    const at = this.queue.findIndex((q) => {
+      return q.id === id;
+    });
+    const item = this.queue[at];
+    if (!item) {
+      return;
+    }
+    this.queue.splice(at, 1);
+    this.announceQueue();
+    try {
+      this.send(item.text, item.model, item.effort, item.skill, item.images);
+    } catch (err) {
+      this.queue.splice(at, 0, item);
+      this.announceQueue();
+      throw err;
+    }
+  }
+
+  // Called once a turn has ended and the session is idle. A message the person chose to send now goes first. Otherwise the next waiting
+  // message starts, but only if the turn finished: after a decline, a cancel or a failure the queue is held, and goes on after the next turn that
+  // finishes (or when the person sends a message from it, or removes it).
+  private advance(): void {
+    const clean = this.finishedCleanly;
+    this.finishedCleanly = false;
+    const first = this.sendFirst;
+    this.sendFirst = undefined;
+    const next = first ?? (clean ? this.queue[0]?.id : undefined);
+    if (next === undefined) {
+      if (this.queue.length > 0 && !this.held) {
+        this.held = true;
+        this.announceQueue();
+      }
+      return;
+    }
+    this.held = false;
+    try {
+      this.takeAndSend(next);
+    } catch (err) {
+      this.emit({ type: "error", message: err instanceof Error ? err.message : String(err) });
+      this.held = true;
+      this.announceQueue();
+    }
   }
 
   cancel(): void {
@@ -650,6 +782,9 @@ export class Session {
     } finally {
       this.abort = undefined;
       this.deps.persist?.(this);
+      // Messages that were sent while it ran are not left waiting for a turn that is not coming.
+      this.finishedCleanly = true;
+      this.advance();
     }
   }
 
@@ -874,6 +1009,7 @@ export class Session {
       this.abort = undefined;
       this.updated = Date.now();
       this.deps.persist?.(this);
+      this.advance();
       return;
     }
     // A failure to summarise does not stop the turn; it is tried again after the next model call, not on every message.
@@ -973,6 +1109,7 @@ export class Session {
         },
       });
       this.emit({ type: "done", ...outcome });
+      this.finishedCleanly = outcome.declined !== true;
     } catch (err) {
       // Drop a half-finished turn so the next one does not send tool calls that never got results.
       this.history.length = mark;
@@ -981,6 +1118,7 @@ export class Session {
       this.abort = undefined;
       this.updated = Date.now();
       this.deps.persist?.(this);
+      this.advance();
     }
   }
 }

@@ -228,6 +228,49 @@ describe("session endpoints", () => {
     expect((await post(app, `/sessions/${id}/cancel`, {})).status).toBe(200);
   });
 
+  it("queues a message sent while a turn is running, and lets it be reworded, taken back or sent now", async () => {
+    registry.upsert(beat({ roots: ["proj"], allowedTools: ["read_file"] }));
+    // A model that never answers, until the turn is cancelled.
+    const waiting = (_model: string, _messages: unknown, _tools: unknown, signal: AbortSignal) => {
+      return new Promise((_resolve, reject) => {
+        signal.addEventListener("abort", () => {
+          reject(new Error("cancelled"));
+        });
+      });
+    };
+    const app = createApp({ registry, relay: relay as never, loader: { ensure: loaderEnsure }, sessions: new Sessions({ registry, relay: relay as never, complete: waiting as never }) });
+    const { id } = (await (await post(app, "/sessions", { model: "qwen", device: "pc", root: "proj" })).json()) as { id: string };
+    const patch = (path: string, body: unknown) => {
+      return app.request(path, { ...json(body), method: "PATCH" });
+    };
+
+    expect((await post(app, `/sessions/${id}/messages`, { text: "first" })).status).toBe(202);
+    const queued = await post(app, `/sessions/${id}/messages`, { text: "second" });
+    expect(queued.status).toBe(202);
+    const info = (await queued.json()) as { busy: boolean; queued: { id: string; text: string }[] };
+    expect(info.busy).toBe(true);
+    expect(info.queued.map((q) => {
+      return q.text;
+    })).toEqual(["second"]);
+    const second = info.queued[0]!.id;
+
+    const reworded = await patch(`/sessions/${id}/queue/${second}`, { text: "second, reworded" });
+    expect(reworded.status).toBe(200);
+    expect(((await reworded.json()) as { queued: { text: string }[] }).queued[0]?.text).toBe("second, reworded");
+    expect((await patch(`/sessions/${id}/queue/${second}`, { text: "" })).status).toBe(400);
+    expect((await patch(`/sessions/${id}/queue/nope`, { text: "x" })).status).toBe(404);
+
+    const removed = await app.request(`/sessions/${id}/queue/${second}`, { method: "DELETE" });
+    expect(removed.status).toBe(200);
+    expect(((await removed.json()) as { queued?: unknown }).queued).toBeUndefined();
+    expect((await app.request(`/sessions/${id}/queue/${second}`, { method: "DELETE" })).status).toBe(404);
+
+    const third = ((await (await post(app, `/sessions/${id}/messages`, { text: "third" })).json()) as { queued: { id: string }[] }).queued[0]!.id;
+    expect((await post(app, `/sessions/${id}/queue/${third}/send`, {})).status).toBe(202);
+    expect((await post(app, "/sessions/nope/queue/x/send", {})).status).toBe(404);
+    await post(app, `/sessions/${id}/cancel`, {});
+  });
+
   it("deletes a session, and returns 404 for one that does not exist", async () => {
     registry.upsert(beat({ roots: ["proj"], allowedTools: ["read_file"] }));
     const app = build();

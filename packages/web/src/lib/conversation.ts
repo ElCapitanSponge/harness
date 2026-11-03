@@ -1,4 +1,4 @@
-import type { ApprovalPreview, FileChange, ImageAttachment, PlanStep, ToolImage, SessionEvent, StageName } from "@harness/core";
+import type { ApprovalPreview, FileChange, ImageAttachment, PlanStep, QueuedInfo, ToolImage, SessionEvent, StageName } from "@harness/core";
 
 // What the page shows for a conversation, built up from the gateway's events. Kept free of React so it can be tested.
 
@@ -33,6 +33,10 @@ export interface ConversationState {
   plan: PlanStep[];
   // Screenshots the agent browser took, newest first.
   shots: ToolImage[];
+  // Messages sent while a turn was running, waiting their turn, as the gateway keeps them; and whether they are held back because the last turn
+  // was declined, cancelled or failed.
+  queue: QueuedInfo[];
+  queueHeld: boolean;
   // A turn is running: from the person's message until it is done, cancelled or has failed.
   busy: boolean;
   // How many stored events have been seen, so a dropped connection resumes where it left off.
@@ -47,10 +51,10 @@ import type { ActionEntry } from "./actions";
 import { MODE_LABELS } from "./modes";
 
 export const emptyConversation = (): ConversationState => {
-  return { items: [], changes: [], plan: [], shots: [], busy: false, cursor: 0, next: 1 };
+  return { items: [], changes: [], plan: [], shots: [], queue: [], queueHeld: false, busy: false, cursor: 0, next: 1 };
 };
 
-export type StreamEvent = SessionEvent | { type: "thinking-delta"; text: string } | { type: "text-delta"; text: string } | { type: "stage"; stage: StageName; detail?: string };
+export type StreamEvent = SessionEvent | { type: "queue"; messages: QueuedInfo[]; held: boolean } | { type: "thinking-delta"; text: string } | { type: "text-delta"; text: string } | { type: "stage"; stage: StageName; detail?: string };
 
 // The turn is running from the moment Send is pressed, before any event has come back.
 export const markBusy = (state: ConversationState, now: number = Date.now()): ConversationState => {
@@ -58,7 +62,7 @@ export const markBusy = (state: ConversationState, now: number = Date.now()): Co
 };
 
 const isDelta = (event: StreamEvent): boolean => {
-  return event.type === "thinking-delta" || event.type === "text-delta" || event.type === "stage";
+  return event.type === "thinking-delta" || event.type === "text-delta" || event.type === "stage" || event.type === "queue";
 };
 
 // Finishes any thinking or reply that was still being written, and ends the open group of actions: a message, an approval, a question
@@ -140,6 +144,10 @@ export const applyEvent = (state: ConversationState, event: StreamEvent, now: nu
 
     case "stage":
       return { ...state, stage: { name: event.stage, detail: event.detail } };
+
+    // Live only, like the stage: it is not among the stored events, so it does not move the cursor.
+    case "queue":
+      return { ...state, queue: event.messages, queueHeld: event.held };
 
     case "thinking-delta":
       if (last?.kind === "thinking" && last.live) {

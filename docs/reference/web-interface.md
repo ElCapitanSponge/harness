@@ -38,7 +38,7 @@ The sidebar lists conversations grouped by project (see [Projects in the sidebar
 
 ## The message box
 
-The message box takes markdown, and colours it as you type (see [Markdown in the message box](../guides/coding-sessions.md#markdown-in-the-message-box)).
+The message box takes markdown, and colours it as you type (see [Markdown in the message box](../guides/coding-sessions.md#markdown-in-the-message-box)). It stays open while the model works: a message sent then is queued (see [Sending while the model works](../guides/coding-sessions.md#sending-while-the-model-works)).
 
 | Key | Does |
 | --- | --- |

@@ -2,6 +2,7 @@ import { Bell, Code2, MessageSquare, PanelRight, RotateCcw } from "lucide-react"
 import { useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router";
 import { Composer } from "@/components/Composer";
+import { QueuedMessages } from "@/components/QueuedMessages";
 import type { Effort } from "@harness/core/effort";
 import { ContextMeter } from "@/components/ContextMeter";
 import { EffortPicker } from "@/components/EffortPicker";
@@ -24,7 +25,7 @@ import { parseSlash, withLibrary } from "@/lib/skills";
 const Conversation = ({ id }: { id: string }) => {
   const navigate = useNavigate();
   const sessions = useSessions();
-  const { state, send, cancel, answer, reply } = useConversation(id);
+  const { state, send, cancel, answer, reply, editQueued, removeQueued, sendQueuedNow } = useConversation(id);
   const info = sessions.data?.find((s) => {
     return s.id === id;
   });
@@ -236,9 +237,23 @@ const Conversation = ({ id }: { id: string }) => {
           />
         </div>
         {notice ? <p className="mx-auto w-full max-w-3xl px-4 pb-1.5 text-[13px] text-muted-foreground" role="status">{notice}</p> : null}
+        <QueuedMessages
+          messages={state.queue}
+          held={state.queueHeld}
+          onEdit={(queueId, text) => {
+            void editQueued(queueId, text);
+          }}
+          onRemove={(queueId) => {
+            void removeQueued(queueId);
+          }}
+          onSendNow={(queueId) => {
+            void sendQueuedNow(queueId);
+          }}
+        />
         <Composer
           draftKey={id}
           busy={state.busy}
+          canQueue
           disabled={!info || offline}
           skills={skills}
           insertion={insertion}

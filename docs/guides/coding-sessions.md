@@ -144,6 +144,14 @@ What you type is coloured as markdown while you write it: headings and list mark
 
 The colouring cannot change the width of a letter, or it would drift from the box, so bold is a heavier stroke rather than a bold face, italics are underlined rather than slanted, and code keeps the same font with a shaded background. Use **Preview** for the finished look. Drafts, `@` mentions and `/` commands work as before. A screen reader reads the box's own text and skips the coloured copy, and in a high-contrast mode the colouring is switched off and the box shows its plain text.
 
+## Sending while the model works
+
+You can keep typing while a turn is running. Press Enter (or **Queue message**) and the message waits above the message box; **Stop** stays beside it. When the running turn ends cleanly the next message starts as a turn of its own, and several go one at a time, in the order you sent them. Up to 10 can wait; an eleventh is refused with a reason.
+
+Each waiting message has **Send now**, a pencil to reword it, and a cross to take it back. **Send now** stops the turn that is running, ends it cleanly, and sends that message next; the others stay queued behind it. The queue is kept by the gateway, so a reload, a second browser tab or the desktop app shows the same list.
+
+If the last turn was declined, cancelled or failed, the queue is held, and the list says so in words. Nothing is sent for you after a turn that did not finish; the held messages go on after the next turn that does, or you can send one now or remove it. The queue is kept in memory, so it is lost if the gateway restarts.
+
 ## The session panel
 
 In a coding session, the panel button in the header opens **This session** beside the conversation (a drawer over it on a phone). It shows:

@@ -15,7 +15,7 @@ vi.mock("@/lib/api", () => {
 const send = vi.fn();
 vi.mock("@/lib/useConversation", () => {
   return { useConversation: () => {
-    return { state: { items: [], changes: [], plan: [], shots: [], busy: false, cursor: 0, next: 1 }, send, cancel: vi.fn(), answer: vi.fn(), reply: vi.fn() };
+    return { state: { items: [], changes: [], plan: [], shots: [], queue: [], queueHeld: false, busy: false, cursor: 0, next: 1 }, send, cancel: vi.fn(), answer: vi.fn(), reply: vi.fn(), editQueued: vi.fn(), removeQueued: vi.fn(), sendQueuedNow: vi.fn() };
   } };
 });
 

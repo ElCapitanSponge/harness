@@ -82,6 +82,21 @@ describe("a conversation built from events", () => {
     expect(state.items[1]).toMatchObject({ live: false, entries: [{ summary: "read a.ts" }, { summary: "read b.ts" }] });
   });
 
+  it("keeps the queue the gateway reports, which is live only and does not move the cursor", () => {
+    const waiting = run([{ type: "user", text: "q" }, { type: "queue", messages: [{ id: "a", text: "next", images: 0 }, { id: "b", text: "after", images: 1 }], held: false }]);
+    expect(waiting.queue.map((m) => {
+      return m.text;
+    })).toEqual(["next", "after"]);
+    expect(waiting.queueHeld).toBe(false);
+    expect(waiting.cursor).toBe(1);
+    expect(kinds(waiting)).toEqual(["user"]);
+
+    const held = run([{ type: "queue", messages: [{ id: "a", text: "next", images: 0 }], held: true }], waiting);
+    expect(held.queueHeld).toBe(true);
+    expect(held.queue).toHaveLength(1);
+    expect(run([{ type: "queue", messages: [], held: false }], held).queue).toEqual([]);
+  });
+
   it("tracks an approval from asked to answered", () => {
     const asked = run([{ type: "user", text: "q" }, { type: "approval", id: "a1", tool: "write_file", summary: "write x" }]);
     expect(asked.items[1]).toMatchObject({ kind: "approval", status: "pending" });

@@ -21,6 +21,10 @@ const pause = (ms: number, signal: AbortSignal): Promise<void> => {
 const follow = async (id: string, store: Store<ConversationState>, signal: AbortSignal, client: QueryClient): Promise<void> => {
   while (!signal.aborted) {
     try {
+      // The gateway tells a client that joins what is waiting, but only when something is; what this client remembers from before is stale.
+      store.setState((s) => {
+        return applyEvent(s, { type: "queue", messages: [], held: false });
+      });
       const res = await fetch(`/sessions/${id}/events?from=${String(store.state.cursor)}`, { headers: authHeaders(), signal });
       if (res.status === 404) {
         store.setState((s) => {
@@ -127,5 +131,28 @@ export const useConversation = (id: string) => {
     });
   };
 
-  return { state, send, cancel, answer, reply };
+  // The queue is the gateway's; these ask it, and the change comes back as a queue event. A message that was taken up meanwhile is gone, which is fine.
+  const editQueued = async (queueId: string, text: string): Promise<void> => {
+    await api<unknown>(`/sessions/${id}/queue/${queueId}`, { method: "PATCH", body: { text } }).catch(() => {
+      return undefined;
+    });
+  };
+
+  const removeQueued = async (queueId: string): Promise<void> => {
+    await api<unknown>(`/sessions/${id}/queue/${queueId}`, { method: "DELETE" }).catch(() => {
+      return undefined;
+    });
+  };
+
+  const sendQueuedNow = async (queueId: string): Promise<void> => {
+    try {
+      await api<unknown>(`/sessions/${id}/queue/${queueId}/send`, { method: "POST", body: {} });
+    } catch (err) {
+      store.setState((s) => {
+        return applyEvent(s, { type: "error", message: err instanceof Error ? err.message : "Could not send." });
+      });
+    }
+  };
+
+  return { state, send, cancel, answer, reply, editQueued, removeQueued, sendQueuedNow };
 };

@@ -56,6 +56,26 @@ const types = (s: Session): string[] => {
   });
 };
 
+const said = (s: Session): string[] => {
+  return s.events.flatMap((e) => {
+    return e.type === "user" ? [e.text] : [];
+  });
+};
+
+// Makes the model wait to be answered, one call at a time; a call that is cancelled fails, as a real one does.
+const hold = (): ((m: ChatMessage) => void)[] => {
+  const waiting: ((m: ChatMessage) => void)[] = [];
+  complete.mockImplementation((_model, _messages, _tools, signal) => {
+    return new Promise((resolve, reject) => {
+      waiting.push(resolve);
+      signal.addEventListener("abort", () => {
+        reject(new Error("cancelled"));
+      });
+    });
+  });
+  return waiting;
+};
+
 beforeEach(() => {
   registry = new Registry();
   registry.upsert(beat());
@@ -164,24 +184,137 @@ describe("Session turns", () => {
     expect(second.at(-1)).toMatchObject({ role: "tool", content: "error: file not found" });
   });
 
-  it("refuses a second message while a turn is running", async () => {
-    let release!: (m: ChatMessage) => void;
-    complete.mockImplementation(() => {
-      return new Promise((resolve) => {
-        return (release = resolve);
-      });
-    });
+  it("queues a message sent while a turn is running and takes them up one at a time, in order, when it ends", async () => {
+    const waiting = hold();
     const s = create();
-    s.send("first");
+    expect(s.send("first")).toBe("started");
     expect(s.busy).toBe(true);
-    expect(() => {
-      s.send("second");
-    }).toThrow("busy");
-    release({ role: "assistant", content: "ok" });
+    expect(s.send("second")).toBe("queued");
+    expect(s.send("third")).toBe("queued");
+    expect(s.info().queued?.map((q) => {
+      return q.text;
+    })).toEqual(["second", "third"]);
+    expect(said(s)).toEqual(["first"]);
+
+    waiting.shift()!({ role: "assistant", content: "one" });
+    await until(() => {
+      return said(s).length === 2 && waiting.length === 1;
+    });
+    expect(s.info().queued?.map((q) => {
+      return q.text;
+    })).toEqual(["third"]);
+    waiting.shift()!({ role: "assistant", content: "two" });
+    await until(() => {
+      return said(s).length === 3 && waiting.length === 1;
+    });
+    waiting.shift()!({ role: "assistant", content: "three" });
     await until(() => {
       return !s.busy;
     });
+    expect(said(s)).toEqual(["first", "second", "third"]);
+    expect(s.info().queued).toBeUndefined();
+  });
+
+  it("holds the queue after a cancelled turn, and takes it up after the next turn that finishes", async () => {
+    hold();
+    const s = create();
+    s.send("first");
+    s.send("second");
+    s.cancel();
+    await until(() => {
+      return !s.busy;
+    });
+    expect(said(s)).toEqual(["first"]);
+    expect(s.info()).toMatchObject({ queued: [{ text: "second" }], queueHeld: true });
+
+    complete.mockImplementation(async () => {
+      return { role: "assistant", content: "ok" };
+    });
+    expect(s.send("third")).toBe("started");
+    await until(() => {
+      return said(s).length === 3 && !s.busy;
+    });
+    expect(said(s)).toEqual(["first", "third", "second"]);
+    expect(s.info().queued).toBeUndefined();
+  });
+
+  it("holds the queue after a turn that failed", async () => {
+    complete.mockRejectedValueOnce(new Error("model down"));
+    const s = create();
+    s.send("first");
+    s.send("second");
+    await until(() => {
+      return !s.busy;
+    });
+    expect(types(s)).toContain("error");
+    expect(said(s)).toEqual(["first"]);
+    expect(s.info()).toMatchObject({ queued: [{ text: "second" }], queueHeld: true });
+  });
+
+  it("sends a waiting message now: the running turn is cancelled and that message goes next", async () => {
+    hold();
+    const s = create();
+    s.send("first");
+    s.send("second");
     s.send("third");
+    const third = s.info().queued![1]!.id;
+    expect(s.sendQueuedNow(third)).toBe(true);
+    await until(() => {
+      return said(s).length === 2;
+    });
+    expect(said(s)).toEqual(["first", "third"]);
+    expect(types(s)).toContain("cancelled");
+    expect(s.info().queued?.map((q) => {
+      return q.text;
+    })).toEqual(["second"]);
+    expect(s.sendQueuedNow(third)).toBe(false);
+    s.cancel();
+    await until(() => {
+      return !s.busy;
+    });
+  });
+
+  it("lets a waiting message be reworded or taken back, and tells a client that joins what is waiting", async () => {
+    hold();
+    const s = create();
+    s.send("first");
+    s.send("second");
+    const id = s.info().queued![0]!.id;
+    expect(s.editQueued(id, "second, reworded")).toBe(true);
+    const told: string[][] = [];
+    s.subscribe((e) => {
+      if (e.type === "queue") {
+        told.push(e.messages.map((m) => {
+          return m.text;
+        }));
+      }
+    });
+    expect(told).toEqual([["second, reworded"]]);
+    expect(s.removeQueued(id)).toBe(true);
+    expect(told.at(-1)).toEqual([]);
+    expect(s.removeQueued(id)).toBe(false);
+    expect(s.editQueued(id, "x")).toBe(false);
+    expect(s.info().queued).toBeUndefined();
+    s.cancel();
+    await until(() => {
+      return !s.busy;
+    });
+  });
+
+  it("queues only so many messages", async () => {
+    hold();
+    const s = create();
+    s.send("first");
+    for (let i = 0; i < 10; i++) {
+      s.send(`m${String(i)}`);
+    }
+    expect(() => {
+      s.send("one too many");
+    }).toThrow("10 messages are already waiting");
+    s.cancel();
+    await until(() => {
+      return !s.busy;
+    });
   });
 
   it("keeps the conversation across turns", async () => {

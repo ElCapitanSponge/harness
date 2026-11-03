@@ -275,6 +275,8 @@ export const LibraryImport = z.object({
 // Changes to a conversation: a new title, and/or pinning it to the top of the sidebar.
 // How far the person has read a conversation, as a count of its events.
 export const SessionRead = z.object({ events: z.number().int().min(0) });
+// Changing the words of a message that is waiting in the queue.
+export const QueuedEdit = z.object({ text: z.string().min(1) });
 export const SessionRename = z.object({ title: z.string().trim().min(1).max(120).optional(), pinned: z.boolean().optional() }).refine((v) => {
   return v.title !== undefined || v.pinned !== undefined;
 }, { message: "send a title or pinned" });
@@ -320,13 +322,22 @@ export type SessionEvent
 // waiting for it to answer, then its thinking and writing. Live only, like the deltas.
 export type StageName = "routing" | "freeing" | "loading" | "waiting" | "thinking" | "writing" | "compacting";
 
+// A message the person sent while a turn was running, waiting its turn. `images` is how many pictures go with it.
+export interface QueuedInfo {
+  id: string;
+  text: string;
+  images: number;
+}
+
 export type LiveSessionEvent
   = | { type: "thinking-delta"; text: string }
+    // The queue of messages waiting for the turn to end, whole each time it changes, and whether it is being held back (see Session).
+    | { type: "queue"; messages: QueuedInfo[]; held: boolean }
     | { type: "text-delta"; text: string }
     | { type: "stage"; stage: StageName; detail?: string };
 
 export const isLiveEvent = (event: { type: string }): event is LiveSessionEvent => {
-  return event.type.endsWith("-delta") || event.type === "stage";
+  return event.type.endsWith("-delta") || event.type === "stage" || event.type === "queue";
 };
 
 // One usage window of the Claude plan, as the claude program reports it: how much is used (0 to 1) and when it resets.
@@ -424,6 +435,10 @@ export interface SessionInfo {
   waiting?: "approval" | "question";
   // How many of its events the person has read, in any client. Fewer than `events` means there is something new to read; absent means all of it.
   read?: number;
+  // Messages sent while a turn was running, in the order they will be taken up (absent when there are none), and whether they are held back
+  // because the last turn was declined, cancelled or failed.
+  queued?: QueuedInfo[];
+  queueHeld?: boolean;
 }
 
 // Loading or unloading a model on a device.
