@@ -141,6 +141,32 @@ describe("compaction", () => {
   });
 });
 
+describe("a compaction as it happens", () => {
+  it("shows a note as soon as it starts, and that same note becomes the divider when it ends", () => {
+    const started = run([{ type: "user", text: "q" }, { type: "compacting", manual: false, percent: 82 }]);
+    expect(started.items.at(-1)).toMatchObject({ kind: "compaction", status: "running", manual: false, percent: 82 });
+
+    const ended = run([{ type: "compacted", messages: 6, tokensBefore: 9000, tokensAfter: 1200, manual: false }], started);
+    expect(kinds(ended)).toEqual(["user", "compaction"]);
+    expect(ended.items.at(-1)).toMatchObject({ status: "done", messages: 6, tokensBefore: 9000, tokensAfter: 1200 });
+    expect(ended.cursor).toBe(3);
+  });
+
+  it("becomes a failure note with the reason, and is one note even if the start was never seen", () => {
+    const state = run([{ type: "compacting", manual: true }, { type: "compaction-failed", manual: true, reason: "the model wrote no summary" }]);
+    expect(kinds(state)).toEqual(["compaction"]);
+    expect(state.items[0]).toMatchObject({ status: "failed", manual: true, reason: "the model wrote no summary" });
+
+    const alone = run([{ type: "compaction-failed", manual: false, reason: "x" }]);
+    expect(alone.items).toMatchObject([{ kind: "compaction", status: "failed" }]);
+  });
+
+  it("is not left saying it is compacting when the turn ends without an end for it", () => {
+    const state = run([{ type: "user", text: "q" }, { type: "compacting", manual: false }, { type: "done", stopped: false }]);
+    expect(state.items.at(-1)).toMatchObject({ kind: "compaction", status: "interrupted" });
+  });
+});
+
 describe("progress before the first word", () => {
   it("is busy with a timer from the moment of sending, follows the stages, and clears when the turn ends", () => {
     const sent = markBusy(emptyConversation(), 5000);

@@ -842,13 +842,15 @@ export class Session {
     }
   }
 
-  private async compactNow(abort: AbortController, manual: boolean): Promise<CompactResult> {
+  private async compactNow(abort: AbortController, manual: boolean, percent?: number): Promise<CompactResult> {
     const plan = planCompaction(this.history);
     if (!plan) {
       return { ok: false, reason: "there is nothing older to summarise yet" };
     }
     const tokensBefore = historyTokens(this.history);
     const window = this.deps.ledger?.forConversation(this.id).last?.contextLength;
+    // Stored, so the thread says so as soon as the summary is asked for, on every page and after a reload.
+    this.emit({ type: "compacting", manual, ...(percent === undefined ? {} : { percent }) });
     try {
       const reply = await this.deps.complete(
         this.active,
@@ -875,12 +877,14 @@ export class Session {
       this.emit({ type: "compacted", messages: plan.older.length, tokensBefore, tokensAfter, manual });
       return { ok: true, messages: plan.older.length, tokensBefore, tokensAfter };
     } catch (err) {
-      return { ok: false, reason: err instanceof Error ? err.message : String(err) };
+      const reason = err instanceof Error ? err.message : String(err);
+      this.emit({ type: "compaction-failed", manual, reason });
+      return { ok: false, reason };
     }
   }
 
-  // Before a turn: the last call's time, if it left the context full enough that the conversation should compact first.
-  private compactionDue(): number | undefined {
+  // Before a turn: the last call's time and how full the context was, if it left the context full enough that the conversation should compact first.
+  private compactionDue(): { time: number; percent: number } | undefined {
     const at = this.deps.compactAt ?? 0;
     const last = this.deps.ledger?.forConversation(this.id).last;
     // The window of the model that is about to answer, which may not be the one that answered last.
@@ -890,7 +894,7 @@ export class Session {
     }
     // After a change of model the last call's size says nothing about the new window, so the history is measured instead.
     const used = last.model === this.active ? last.promptTokens + last.completionTokens : historyTokens(this.history);
-    return used / window >= at ? last.time : undefined;
+    return used / window >= at ? { time: last.time, percent: Math.round((used / window) * 100) } : undefined;
   }
 
   // Says so before the call, in words, when the conversation cannot fit the model that is about to answer.
@@ -1070,8 +1074,8 @@ export class Session {
     const due = this.compactionDue();
     if (due !== undefined) {
       this.emitLive({ type: "stage", stage: "compacting" });
-      if (!(await this.compactNow(abort, false)).ok) {
-        this.compactFailedFor = due;
+      if (!(await this.compactNow(abort, false, due.percent)).ok) {
+        this.compactFailedFor = due.time;
       }
     }
     const mark = this.history.length - 1;

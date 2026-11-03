@@ -142,10 +142,44 @@ export const ErrorNote: Story = { args: item({ kind: "note", id: 8, tone: "error
 export const InfoNote: Story = { args: item({ kind: "note", id: 9, tone: "info", text: "Cancelled." }) };
 
 export const CompactedAutomatically: Story = {
-  args: item({ kind: "compaction", id: 12, messages: 14, tokensBefore: 26_400, tokensAfter: 3100, manual: false }),
+  args: item({ kind: "compaction", id: 12, status: "done", messages: 14, tokensBefore: 26_400, tokensAfter: 3100, manual: false }),
   play: async ({ canvasElement }) => {
     // The person sees that it happened, and by how much.
     await expect(within(canvasElement).getByRole("separator", { name: "Conversation compacted" })).toHaveTextContent("Compacted automatically: 14 earlier messages summarised, about 26k to 3.1k tokens");
+  },
+};
+
+export const CompactingNow: Story = {
+  args: item({ kind: "compaction", id: 13, status: "running", manual: false, percent: 82 }),
+  play: async ({ canvasElement }) => {
+    // The note is there as soon as the summary is asked for, before the divider with the counts.
+    const canvas = within(canvasElement);
+    await expect(canvas.getByRole("status", { name: "Compacting the conversation" })).toHaveTextContent("Compacting the conversation: the context is 82% full");
+    await expect(canvas.queryByRole("separator")).toBeNull();
+  },
+};
+
+export const CompactingManually: Story = {
+  args: item({ kind: "compaction", id: 14, status: "running", manual: true }),
+  play: async ({ canvasElement }) => {
+    await expect(within(canvasElement).getByRole("status")).toHaveTextContent("Compacting the conversation: summarising the earlier messages");
+  },
+};
+
+export const CompactionFailed: Story = {
+  args: item({ kind: "compaction", id: 15, status: "failed", manual: false, reason: "the model wrote no summary" }),
+  play: async ({ canvasElement }) => {
+    await expect(within(canvasElement).getByRole("separator", { name: "Compaction failed" })).toHaveTextContent("Compaction failed: the model wrote no summary");
+  },
+};
+
+export const CompactionDidNotFinish: Story = {
+  args: item({ kind: "compaction", id: 16, status: "interrupted", manual: false }),
+  play: async ({ canvasElement }) => {
+    // A start that never ended is not left saying "compacting".
+    const canvas = within(canvasElement);
+    await expect(canvas.getByRole("separator", { name: "Compaction did not finish" })).toBeVisible();
+    await expect(canvas.queryByRole("status")).toBeNull();
   },
 };
 

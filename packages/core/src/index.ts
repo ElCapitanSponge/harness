@@ -311,6 +311,10 @@ export type SessionEvent
     | { type: "subagent"; childId: string; task: string; status: "running" | "done" | "failed"; result?: string; n: number; of: number; depth: number }
     | { type: "question"; id: string; question: string; options: string[] }
     | { type: "question-resolved"; id: string; answer?: string }
+    // A compaction has begun: stored before the summary is asked for, so every page shows it and a reload keeps it. `percent` is how full the
+    // context was when it began an automatic one. It ends with `compacted` or `compaction-failed`.
+    | { type: "compacting"; manual: boolean; percent?: number }
+    | { type: "compaction-failed"; manual: boolean; reason: string }
     | { type: "compacted"; messages: number; tokensBefore: number; tokensAfter: number; manual: boolean }
     | { type: "done"; stopped: boolean; declined?: boolean }
     | { type: "cancelled" }
