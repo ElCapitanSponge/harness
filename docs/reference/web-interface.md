@@ -53,3 +53,15 @@ The message box takes markdown, and colours it as you type (see [Markdown in the
 | `/` at the start (coding sessions) | Open the skill menu. Up and Down move, Enter or Tab completes the name, Escape closes it. |
 
 Inside a fenced code block Enter adds a line instead of sending, so code can be pasted whole. The toolbar has the same formatting as buttons and a **Preview**. What you typed and did not send is kept per conversation, so a refresh does not lose it.
+
+## On a phone and other touchscreens
+
+The layout adapts to the width of the screen (the sidebar is a drawer below the `md` width) and to how the screen is used. Where the browser reports a touchscreen (`pointer: coarse`, so a phone or tablet but not a mouse), the page changes in these ways:
+
+- **Targets are 44px.** Buttons, fields, menu items, list rows, the toggles that open a tool action and the sidebar links are at least 44px tall, and an icon button is 44px square. Switches, checkboxes and the button that removes an attached image keep their look but can be tapped within 44px around them.
+- **Nothing waits for hover.** The copy buttons (on a message and on a code block) and the **+** beside a project are shown all the time.
+- **Choices have taller rows.** The model, effort and **Changes** lists are easier to tap.
+- **Nothing scrolls sideways.** The conversation header and the row of pickers wrap onto a second line, a long folder, device or model name breaks instead of widening the page, and the context panel is never wider than the screen.
+- **The keyboard does not cover the message box.** In browsers that support it (Chrome on Android) the page shrinks when the on-screen keyboard opens.
+
+With a mouse none of this changes.

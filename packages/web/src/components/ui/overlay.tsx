@@ -21,7 +21,7 @@ export const DialogContent = ({ className, children, title, description, ...prop
           <DialogPrimitive.Description className={cn("text-muted-foreground", description ? "" : "sr-only")}>{description ?? title}</DialogPrimitive.Description>
         </div>
         {children}
-        <DialogPrimitive.Close className="absolute right-3 top-3 rounded-md p-1.5 text-muted-foreground hover:bg-muted" aria-label="Close">
+        <DialogPrimitive.Close className="absolute right-3 top-3 rounded-md p-1.5 text-muted-foreground hover:bg-muted pointer-coarse:p-3.5" aria-label="Close">
           <X className="size-4" />
         </DialogPrimitive.Close>
       </DialogPrimitive.Content>
@@ -48,7 +48,7 @@ export const MenuContent = ({ className, ...props }: ComponentProps<typeof MenuP
 export const MenuItem = ({ className, danger, ...props }: ComponentProps<typeof MenuPrimitive.Item> & { danger?: boolean }) => {
   return (
     <MenuPrimitive.Item
-      className={cn("flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-sm outline-none data-[highlighted]:bg-muted data-[disabled]:pointer-events-none data-[disabled]:opacity-50 [&_svg]:size-4", danger && "text-destructive", className)}
+      className={cn("flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-sm outline-none pointer-coarse:min-h-11 data-[highlighted]:bg-muted data-[disabled]:pointer-events-none data-[disabled]:opacity-50 [&_svg]:size-4", danger && "text-destructive", className)}
       {...props}
     />
   );

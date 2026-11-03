@@ -172,7 +172,7 @@ export const ImportView = () => {
                 {parsed.drafts.map((d, i) => {
                   return (
                     <details key={`${String(i)}-${d.title}`} className="rounded-xl border bg-card p-3" open={parsed.drafts.length === 1}>
-                      <summary className="flex cursor-pointer list-none items-center gap-2">
+                      <summary className="flex cursor-pointer list-none items-center pointer-coarse:min-h-11 gap-2">
                         {parsed.drafts.length > 1
                           ? (
                               <Checkbox aria-label={`Import ${d.title}`} checked={d.selected} onClick={stop} onCheckedChange={(value) => {

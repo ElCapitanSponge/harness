@@ -150,7 +150,7 @@ export const SidePanel = ({ changes, plan, tasks = [], shots = [], files, onClea
                     {changes.map((f) => {
                       return (
                         <li key={f.path}>
-                          <button type="button" className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left hover:bg-muted" onClick={() => {
+                          <button type="button" className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left pointer-coarse:min-h-11 hover:bg-muted" onClick={() => {
                             setOpenPath(f.path);
                           }}
                           >

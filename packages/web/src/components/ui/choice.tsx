@@ -26,9 +26,9 @@ const Row = ({ option }: { option: ChoiceOption }) => {
       value={option.value}
       disabled={option.disabled ?? false}
       aria-describedby={option.detail ? detailId : undefined}
-      className="relative flex min-h-11 cursor-pointer select-none items-start gap-2 rounded-md py-2 pl-8 pr-2 text-sm outline-none data-[highlighted]:bg-muted data-[state=checked]:font-medium data-[disabled]:cursor-not-allowed data-[disabled]:opacity-60 sm:min-h-0 sm:py-1.5"
+      className="relative flex cursor-pointer select-none items-start gap-2 rounded-md py-1.5 pl-8 pr-2 text-sm outline-none pointer-coarse:min-h-11 pointer-coarse:py-2 data-[highlighted]:bg-muted data-[state=checked]:font-medium data-[disabled]:cursor-not-allowed data-[disabled]:opacity-60"
     >
-      <span className="absolute left-2 top-2.5 flex size-4 items-center justify-center sm:top-2">
+      <span className="absolute left-2 top-2 flex size-4 items-center justify-center pointer-coarse:top-2.5">
         <SelectPrimitive.ItemIndicator><Check className="size-4" /></SelectPrimitive.ItemIndicator>
       </span>
       <span className="grid min-w-0 flex-1 break-words">
@@ -48,7 +48,7 @@ export const Choice = ({ label, groups, value, onValueChange, disabled = false, 
     <SelectPrimitive.Root value={value} onValueChange={onValueChange} disabled={disabled}>
       <SelectPrimitive.Trigger
         aria-label={label}
-        className={cn("flex h-8 w-full cursor-pointer items-center justify-between gap-2 rounded-md border border-input bg-card px-3 text-left text-sm text-card-foreground focus-visible:border-primary disabled:cursor-not-allowed disabled:opacity-60", className)}
+        className={cn("flex h-8 w-full cursor-pointer pointer-coarse:h-11 items-center justify-between gap-2 rounded-md border border-input bg-card px-3 text-left text-sm text-card-foreground focus-visible:border-primary disabled:cursor-not-allowed disabled:opacity-60", className)}
       >
         <span className="min-w-0 truncate"><SelectPrimitive.Value /></span>
         <SelectPrimitive.Icon asChild><ChevronDown className="size-4 shrink-0 text-muted-foreground" /></SelectPrimitive.Icon>
