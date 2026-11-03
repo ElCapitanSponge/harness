@@ -1,9 +1,7 @@
-import { ArrowUp, Bold, Braces, Code, Eye, Italic, Link, List, ListOrdered, FileText, Paperclip, Pencil, Quote, Square, X } from "lucide-react";
-import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent, type ReactNode, type SyntheticEvent } from "react";
-import { Markdown } from "@/components/Markdown";
-import { MarkdownBackdrop } from "@/components/MarkdownBackdrop";
+import { ArrowUp, FileText, Paperclip, Square, X } from "lucide-react";
+import { useEffect, useRef, useState, type KeyboardEvent, type SyntheticEvent } from "react";
+import { MarkdownEditor, Tool, type EditorHandle } from "@/components/MarkdownEditor";
 import { Button } from "@/components/ui/button";
-import { codeBlock, continueList, insideFence, link, prefixLines, wrapSelection, type Edit } from "@/lib/markdown-edit";
 import type { ImageAttachment } from "@harness/core/image";
 import { contextBlock, desktopApi, type PickedFile } from "@/lib/desktop";
 import { pickInBrowser } from "@/lib/pickfiles";
@@ -35,17 +33,9 @@ const write = (name: string, value: string): void => {
   }
 };
 
-const Tool = ({ label, onClick, disabled, pressed, children }: { label: string; onClick: () => void; disabled?: boolean; pressed?: boolean; children: ReactNode }) => {
-  return (
-    <Button type="button" variant="subtle" size="icon" className="size-7" title={label} aria-label={label} aria-pressed={pressed} disabled={disabled} onClick={onClick}>
-      {children}
-    </Button>
-  );
-};
-
-// The message box. It takes markdown: a toolbar and the usual shortcuts (Ctrl or Cmd with B, I, E for code, K for a link), lists
-// that carry on, a live preview, and Enter that adds a line inside a code block instead of sending. What was typed and not sent
-// is kept for each conversation, so a refresh does not lose it.
+// The message box. It takes markdown through the shared editor (toolbar, shortcuts, lists that carry on, a live preview, and Enter that adds a
+// line inside a code block instead of sending). Here are the parts only the message box has: the menus for / and @, pictures, and sending. What
+// was typed and not sent is kept for each conversation, so a refresh does not lose it.
 export const Composer = ({ draftKey, busy, disabled, placeholder, skills, imageNote, insertion, project, onCommand, onSend, onStop, canQueue }: { draftKey: string; busy: boolean; canQueue?: boolean; disabled?: boolean; placeholder?: string; skills?: SkillInfo[]; imageNote?: string; insertion?: { id: number; text: string }; project?: Project; onCommand?: (name: string, args: string) => void; onSend: (text: string, images?: ImageAttachment[]) => void; onStop?: () => void }) => {
   const name = `harness-draft-${draftKey}`;
   const [text, setText] = useState(() => {
@@ -66,9 +56,6 @@ export const Composer = ({ draftKey, busy, disabled, placeholder, skills, imageN
   const matches = query !== undefined && listed ? matchSkills(listed, query) : [];
   const menu = matches.length > 0 && !dismissed && !preview;
   const chosen = Math.min(active, Math.max(0, matches.length - 1));
-  const ref = useRef<HTMLTextAreaElement>(null);
-  // The coloured copy of the text behind the box; it follows the box's scrolling.
-  const backdrop = useRef<HTMLDivElement>(null);
   // The @ menu: in a coding session, typing @ and a name lists the project's files; choosing one puts its path in the message and its text
   // below as context. The slash menu has the message when it starts with /.
   const [caret, setCaret] = useState(0);
@@ -77,25 +64,8 @@ export const Composer = ({ draftKey, busy, disabled, placeholder, skills, imageN
   const found = useMention(project, text, caret, !menu && !preview);
   const mentionOpen = found.mention !== undefined && found.candidates.length > 0 && !mentionDismissed;
   const mentionChosen = Math.min(mentionActive, Math.max(0, found.candidates.length - 1));
-  // Where the selection should be once the text it belongs to has been drawn.
-  const selection = useRef<{ start: number; end: number } | undefined>(undefined);
-
-  useLayoutEffect(() => {
-    const el = ref.current;
-    const wanted = selection.current;
-    if (el && wanted) {
-      selection.current = undefined;
-      el.focus();
-      el.setSelectionRange(wanted.start, wanted.end);
-    }
-    if (el) {
-      el.style.height = "auto";
-      el.style.height = `${String(Math.min(el.scrollHeight, window.innerHeight * 0.4))}px`;
-      if (backdrop.current) {
-        backdrop.current.scrollTop = el.scrollTop;
-      }
-    }
-  }, [text, preview]);
+  // The editor, so a menu choice can say where the caret goes once the new text is drawn.
+  const editor = useRef<EditorHandle>(null);
 
   // Files added as context: from the panel (insertion), or chosen here with the system's file picker in the desktop app (any file on this
   // machine), or the browser's. Their text goes into the message in a code block with its path.
@@ -148,7 +118,7 @@ export const Composer = ({ draftKey, busy, disabled, placeholder, skills, imageN
       return;
     }
     change(`/${pick.name} `);
-    selection.current = { start: pick.name.length + 2, end: pick.name.length + 2 };
+    editor.current?.select(pick.name.length + 2, pick.name.length + 2);
   };
 
   const chooseMention = (choice: Candidate): void => {
@@ -156,7 +126,7 @@ export const Composer = ({ draftKey, busy, disabled, placeholder, skills, imageN
       return;
     }
     const next = applyMention(text, found.mention, choice);
-    selection.current = { start: next.caret, end: next.caret };
+    editor.current?.select(next.caret, next.caret);
     setCaret(next.caret);
     change(next.text);
     if (!choice.isDir && project) {
@@ -168,19 +138,6 @@ export const Composer = ({ draftKey, busy, disabled, placeholder, skills, imageN
           setContextProblems([file.problem]);
         }
       });
-    }
-  };
-
-  const apply = (edit: Edit): void => {
-    selection.current = { start: edit.start, end: edit.end };
-    change(edit.text);
-  };
-
-  // Runs one of the editing functions on the current selection.
-  const edit = (make: (value: string, start: number, end: number) => Edit): void => {
-    const el = ref.current;
-    if (el) {
-      apply(make(text, el.selectionStart, el.selectionEnd));
     }
   };
 
@@ -221,26 +178,24 @@ export const Composer = ({ draftKey, busy, disabled, placeholder, skills, imageN
     }
   };
 
-  const keys = (ev: KeyboardEvent<HTMLTextAreaElement>): void => {
-    if (ev.nativeEvent.isComposing) {
-      return;
-    }
+  // The keys the menus use, offered before the editor's own: the arrows move, Enter or Tab choose, Escape closes. True when one was used.
+  const menuKeys = (ev: KeyboardEvent<HTMLTextAreaElement>): boolean => {
     if (mentionOpen) {
       const pick = found.candidates[mentionChosen];
       if (ev.key === "ArrowDown" || ev.key === "ArrowUp") {
         ev.preventDefault();
         setMentionActive((mentionChosen + (ev.key === "ArrowDown" ? 1 : found.candidates.length - 1)) % found.candidates.length);
-        return;
+        return true;
       }
       if ((ev.key === "Enter" || ev.key === "Tab") && pick && !ev.shiftKey) {
         ev.preventDefault();
         chooseMention(pick);
-        return;
+        return true;
       }
       if (ev.key === "Escape") {
         ev.preventDefault();
         setMentionDismissed(true);
-        return;
+        return true;
       }
     }
     if (menu) {
@@ -248,59 +203,20 @@ export const Composer = ({ draftKey, busy, disabled, placeholder, skills, imageN
       if (ev.key === "ArrowDown" || ev.key === "ArrowUp") {
         ev.preventDefault();
         setActive((chosen + (ev.key === "ArrowDown" ? 1 : matches.length - 1)) % matches.length);
-        return;
+        return true;
       }
       if ((ev.key === "Enter" || ev.key === "Tab") && pick && !ev.shiftKey) {
         ev.preventDefault();
         chooseSlash(pick);
-        return;
+        return true;
       }
       if (ev.key === "Escape") {
         ev.preventDefault();
         setDismissed(true);
-        return;
+        return true;
       }
     }
-    const mod = ev.ctrlKey || ev.metaKey;
-    if (mod && !ev.shiftKey && !ev.altKey && ev.key !== "Enter") {
-      const shortcut: Record<string, (value: string, s: number, e: number) => Edit> = {
-        b: (value, s, e) => {
-          return wrapSelection(value, s, e, "**");
-        },
-        i: (value, s, e) => {
-          return wrapSelection(value, s, e, "*");
-        },
-        e: (value, s, e) => {
-          return wrapSelection(value, s, e, "`");
-        },
-        k: link,
-      };
-      const make = shortcut[ev.key.toLowerCase()];
-      if (make) {
-        ev.preventDefault();
-        edit(make);
-      }
-      return;
-    }
-    if (ev.key !== "Enter") {
-      return;
-    }
-    const cursor = ev.currentTarget.selectionStart;
-    if (ev.shiftKey) {
-      // A new line, which carries a list on.
-      const next = continueList(text, cursor);
-      if (next) {
-        ev.preventDefault();
-        apply(next);
-      }
-      return;
-    }
-    // Inside a code block Enter adds a line, so code can be typed or pasted without sending half of it; Ctrl or Cmd with Enter sends.
-    if (!mod && insideFence(text, cursor)) {
-      return;
-    }
-    ev.preventDefault();
-    submit();
+    return false;
   };
 
   // With a queue, a turn running does not stop the person sending: the message waits its turn.
@@ -377,74 +293,27 @@ export const Composer = ({ draftKey, busy, disabled, placeholder, skills, imageN
           )
         : null}
       <div className="rounded-2xl border border-input bg-card p-2 shadow-card focus-within:border-primary">
-        <div className="mb-1 flex items-center gap-0.5 border-b pb-1" role="toolbar" aria-label="Formatting">
-          <Tool label="Bold" disabled={preview} onClick={() => {
-            edit((v, s, e) => {
-              return wrapSelection(v, s, e, "**");
-            });
+        <MarkdownEditor
+          text={text}
+          preview={preview}
+          onPreview={setPreview}
+          handle={editor}
+          onChange={(value, at) => {
+            if (at !== undefined) {
+              setCaret(at);
+            }
+            change(value);
           }}
-          >
-            <Bold />
-          </Tool>
-          <Tool label="Italic" disabled={preview} onClick={() => {
-            edit((v, s, e) => {
-              return wrapSelection(v, s, e, "*");
-            });
-          }}
-          >
-            <Italic />
-          </Tool>
-          <Tool label="Inline code" disabled={preview} onClick={() => {
-            edit((v, s, e) => {
-              return wrapSelection(v, s, e, "`");
-            });
-          }}
-          >
-            <Code />
-          </Tool>
-          <Tool label="Code block" disabled={preview} onClick={() => {
-            edit(codeBlock);
-          }}
-          >
-            <Braces />
-          </Tool>
-          <Tool label="Bulleted list" disabled={preview} onClick={() => {
-            edit((v, s, e) => {
-              return prefixLines(v, s, e, "bullet");
-            });
-          }}
-          >
-            <List />
-          </Tool>
-          <Tool label="Numbered list" disabled={preview} onClick={() => {
-            edit((v, s, e) => {
-              return prefixLines(v, s, e, "number");
-            });
-          }}
-          >
-            <ListOrdered />
-          </Tool>
-          <Tool label="Quote" disabled={preview} onClick={() => {
-            edit((v, s, e) => {
-              return prefixLines(v, s, e, "quote");
-            });
-          }}
-          >
-            <Quote />
-          </Tool>
-          <Tool label="Link" disabled={preview} onClick={() => {
-            edit(link);
-          }}
-          >
-            <Link />
-          </Tool>
-          {imagesAllowed
+          onCaret={setCaret}
+          onSubmit={submit}
+          before={menuKeys}
+          tools={imagesAllowed
             ? (
                 <>
                   <input ref={picker} type="file" multiple accept="image/png,image/jpeg,image/gif,image/webp" className="sr-only" aria-label="Choose images" onChange={(ev) => {
-                    const chosen = [...(ev.target.files ?? [])];
+                    const chosenFiles = [...(ev.target.files ?? [])];
                     ev.target.value = "";
-                    void attach(chosen);
+                    void attach(chosenFiles);
                   }}
                   />
                   <Tool label="Add files as context" disabled={preview} onClick={() => {
@@ -462,105 +331,74 @@ export const Composer = ({ draftKey, busy, disabled, placeholder, skills, imageN
                 </>
               )
             : null}
-          <span className="flex-1" />
-          <Tool label={preview ? "Edit" : "Preview"} pressed={preview} onClick={() => {
-            setPreview(!preview);
+          above={(
+            <>
+              {images.length > 0
+                ? (
+                    <ul className="mb-1 flex flex-wrap gap-2" aria-label="Attached images">
+                      {images.map((img, i) => {
+                        return (
+                          <li key={`${String(i)}-${img.data.slice(-12)}`} className="relative">
+                            <img src={`data:${img.mediaType};base64,${img.data}`} alt={`Attached image ${String(i + 1)}`} className="h-16 rounded-md border" />
+                            <button
+                              type="button"
+                              aria-label={`Remove image ${String(i + 1)}`}
+                              className="absolute -right-1.5 -top-1.5 flex size-5 items-center justify-center rounded-full border bg-card shadow-card"
+                              onClick={() => {
+                                setImages(images.filter((_, j) => {
+                                  return j !== i;
+                                }));
+                              }}
+                            >
+                              <X className="size-3" />
+                            </button>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  )
+                : null}
+              {images.length > 0 && imageNote ? <p className="mb-1 text-xs text-warning" role="status">{imageNote}</p> : null}
+              {contextProblems.length > 0 ? <p className="mb-1 text-xs text-destructive" role="alert">{contextProblems.join(" ")}</p> : null}
+              {imageProblems.length > 0 ? <p className="mb-1 text-xs text-destructive" role="alert">{imageProblems.join(" ")}</p> : null}
+            </>
+          )}
+          aside={(
+            <>
+              {busy && onStop
+                ? (
+                    <Button type="button" variant="secondary" size="icon" onClick={onStop} aria-label="Stop">
+                      <Square className="fill-current" />
+                    </Button>
+                  )
+                : null}
+              {!(busy && onStop) || (canQueue && text.trim() !== "")
+                ? (
+                    <Button type="submit" variant="primary" size="icon" disabled={busyWithText || !text.trim()} aria-label={busy && canQueue ? "Queue message" : "Send"}>
+                      <ArrowUp />
+                    </Button>
+                  )
+                : null}
+            </>
+          )}
+          field={{
+            "aria-label": "Message",
+            "role": listed || project ? "combobox" : undefined,
+            "aria-expanded": listed || project ? menu || mentionOpen : undefined,
+            "aria-controls": mentionOpen ? `${name}-files` : menu ? `${name}-skills` : undefined,
+            "aria-activedescendant": mentionOpen && found.candidates[mentionChosen] ? `${name}-file-${found.candidates[mentionChosen].path}` : menu && matches[chosen] ? `${name}-skill-${matches[chosen].name}` : undefined,
+            "placeholder": placeholder ?? (busy && canQueue ? "Write the next message; it is sent when this turn ends" : "Message (markdown works)"),
+            "onPaste": (ev) => {
+              const pasted = [...ev.clipboardData.files].filter((f) => {
+                return f.type.startsWith("image/");
+              });
+              if (imagesAllowed && pasted.length > 0) {
+                ev.preventDefault();
+                void attach(pasted);
+              }
+            },
           }}
-          >
-            {preview ? <Pencil /> : <Eye />}
-          </Tool>
-        </div>
-
-        {images.length > 0
-          ? (
-              <ul className="mb-1 flex flex-wrap gap-2" aria-label="Attached images">
-                {images.map((img, i) => {
-                  return (
-                    <li key={`${String(i)}-${img.data.slice(-12)}`} className="relative">
-                      <img src={`data:${img.mediaType};base64,${img.data}`} alt={`Attached image ${String(i + 1)}`} className="h-16 rounded-md border" />
-                      <button
-                        type="button"
-                        aria-label={`Remove image ${String(i + 1)}`}
-                        className="absolute -right-1.5 -top-1.5 flex size-5 items-center justify-center rounded-full border bg-card shadow-card"
-                        onClick={() => {
-                          setImages(images.filter((_, j) => {
-                            return j !== i;
-                          }));
-                        }}
-                      >
-                        <X className="size-3" />
-                      </button>
-                    </li>
-                  );
-                })}
-              </ul>
-            )
-          : null}
-        {images.length > 0 && imageNote ? <p className="mb-1 text-xs text-warning" role="status">{imageNote}</p> : null}
-        {contextProblems.length > 0 ? <p className="mb-1 text-xs text-destructive" role="alert">{contextProblems.join(" ")}</p> : null}
-        {imageProblems.length > 0 ? <p className="mb-1 text-xs text-destructive" role="alert">{imageProblems.join(" ")}</p> : null}
-
-        <div className="flex items-end gap-2">
-          {preview
-            ? (
-                <div className="max-h-[40vh] min-h-9 min-w-0 flex-1 overflow-y-auto px-2 py-1.5" aria-label="Preview of your message">
-                  {text.trim() ? <Markdown text={text} /> : <span className="text-muted-foreground">Nothing to preview yet.</span>}
-                </div>
-              )
-            : (
-                <div className="relative min-w-0 flex-1">
-                  <MarkdownBackdrop text={text} boxRef={backdrop} />
-                  <textarea
-                    ref={ref}
-                    value={text}
-                    rows={1}
-                    aria-label="Message"
-                    role={listed || project ? "combobox" : undefined}
-                    aria-expanded={listed || project ? menu || mentionOpen : undefined}
-                    aria-controls={mentionOpen ? `${name}-files` : menu ? `${name}-skills` : undefined}
-                    aria-activedescendant={mentionOpen && found.candidates[mentionChosen] ? `${name}-file-${found.candidates[mentionChosen].path}` : menu && matches[chosen] ? `${name}-skill-${matches[chosen].name}` : undefined}
-                    placeholder={placeholder ?? (busy && canQueue ? "Write the next message; it is sent when this turn ends" : "Message (markdown works)")}
-                    className="relative block max-h-[40vh] min-h-9 w-full resize-none overflow-y-auto bg-transparent px-2 py-1.5 text-transparent caret-foreground outline-none [scrollbar-gutter:stable] selection:bg-primary/30 placeholder:text-muted-foreground forced-colors:text-[CanvasText]"
-                    onScroll={(ev) => {
-                      if (backdrop.current) {
-                        backdrop.current.scrollTop = ev.currentTarget.scrollTop;
-                      }
-                    }}
-                    onChange={(ev) => {
-                      setCaret(ev.target.selectionStart);
-                      change(ev.target.value);
-                    }}
-                    onSelect={(ev) => {
-                      setCaret(ev.currentTarget.selectionStart);
-                    }}
-                    onKeyDown={keys}
-                    onPaste={(ev) => {
-                      const pasted = [...ev.clipboardData.files].filter((f) => {
-                        return f.type.startsWith("image/");
-                      });
-                      if (imagesAllowed && pasted.length > 0) {
-                        ev.preventDefault();
-                        void attach(pasted);
-                      }
-                    }}
-                  />
-                </div>
-              )}
-          {busy && onStop
-            ? (
-                <Button type="button" variant="secondary" size="icon" onClick={onStop} aria-label="Stop">
-                  <Square className="fill-current" />
-                </Button>
-              )
-            : null}
-          {!(busy && onStop) || (canQueue && text.trim() !== "")
-            ? (
-                <Button type="submit" variant="primary" size="icon" disabled={busyWithText || !text.trim()} aria-label={busy && canQueue ? "Queue message" : "Send"}>
-                  <ArrowUp />
-                </Button>
-              )
-            : null}
-        </div>
+        />
       </div>
       <p className="mt-1 px-2 text-xs text-muted-foreground">Enter sends. Shift+Enter adds a line. Inside a code block Enter adds a line and Ctrl+Enter sends.</p>
     </form>

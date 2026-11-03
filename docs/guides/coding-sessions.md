@@ -164,7 +164,7 @@ The colouring cannot change the width of a letter, or it would drift from the bo
 
 You can keep typing while a turn is running. Press Enter (or **Queue message**) and the message waits above the message box; **Stop** stays beside it. When the running turn ends cleanly the next message starts as a turn of its own, and several go one at a time, in the order you sent them. Up to 10 can wait; an eleventh is refused with a reason.
 
-Each waiting message has **Send now**, a pencil to reword it, and a cross to take it back. **Send now** stops the turn that is running, ends it cleanly, and sends that message next; the others stay queued behind it. The queue is kept by the gateway, so a reload, a second browser tab or the desktop app shows the same list.
+Each waiting message has **Send now**, a pencil to reword it, and a cross to take it back. The pencil opens the same editor as the message box: the markdown colouring, the formatting toolbar and shortcuts, Shift+Enter for a new line, and the preview. Enter saves, Escape keeps the message as it was, and a message left empty is not saved. Pictures on a queued message stay as they were queued. **Send now** stops the turn that is running, ends it cleanly, and sends that message next; the others stay queued behind it. The queue is kept by the gateway, so a reload, a second browser tab or the desktop app shows the same list.
 
 If the last turn was declined, cancelled or failed, the queue is held, and the list says so in words. Nothing is sent for you after a turn that did not finish; the held messages go on after the next turn that does, or you can send one now or remove it. The queue is kept in memory, so it is lost if the gateway restarts.
 
