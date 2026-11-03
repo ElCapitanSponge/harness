@@ -2,7 +2,7 @@ import { Download, MoreHorizontal, Pencil, Pin, PinOff, Trash2 } from "lucide-re
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/fields";
-import { Dialog, DialogContent, Menu, MenuContent, MenuItem, MenuTrigger } from "@/components/ui/overlay";
+import { ConfirmDialog, Dialog, DialogContent, Menu, MenuContent, MenuItem, MenuTrigger } from "@/components/ui/overlay";
 import { downloadExport } from "@/lib/download";
 import { useDeleteConversation, usePinConversation, useRenameConversation } from "@/lib/queries";
 import type { SessionInfo } from "@/lib/types";
@@ -86,31 +86,24 @@ export const ConversationActions = ({ info, onDeleted, className }: { info: Sess
         </DialogContent>
       </Dialog>
 
-      <Dialog open={dialog === "delete"} onOpenChange={(open) => {
-        setDialog(open ? "delete" : undefined);
-      }}
-      >
-        <DialogContent title="Delete this conversation?" description="Its history is removed from the gateway and cannot be brought back.">
-          {remove.error ? <p className="text-destructive" role="alert">{remove.error.message}</p> : null}
-          <div className="flex justify-end gap-2">
-            <Button onClick={() => {
-              setDialog(undefined);
-            }}
-            >
-              Cancel
-            </Button>
-            <Button variant="destructive" disabled={remove.isPending} onClick={() => {
-              remove.mutate(info.id, { onSuccess: () => {
-                setDialog(undefined);
-                onDeleted?.();
-              } });
-            }}
-            >
-              Delete
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
+      <ConfirmDialog
+        open={dialog === "delete"}
+        onOpenChange={(open) => {
+          setDialog(open ? "delete" : undefined);
+        }}
+        title="Delete this conversation?"
+        description="Its history is removed from the gateway and cannot be brought back."
+        confirmLabel="Delete"
+        tone="destructive"
+        pending={remove.isPending}
+        error={remove.error?.message}
+        onConfirm={() => {
+          remove.mutate(info.id, { onSuccess: () => {
+            setDialog(undefined);
+            onDeleted?.();
+          } });
+        }}
+      />
     </>
   );
 };

@@ -24,17 +24,22 @@ describe("Mode picker", () => {
     expect(onChange).toHaveBeenCalledWith("plan");
   });
 
-  it("asks to be sure before running without asking, and does nothing if the answer is no", async () => {
+  it("asks to be sure before running without asking: cancel leaves the mode as it was, confirm sets it", async () => {
     const onChange = vi.fn();
-    const confirm = vi.spyOn(window, "confirm").mockReturnValue(false);
     render(<ModePicker value="ask" onChange={onChange} />);
     await userEvent.selectOptions(screen.getByLabelText("Changes"), "bypass");
-    expect(confirm).toHaveBeenCalledWith(expect.stringContaining("without asking you first") as string);
+    expect(screen.getByRole("alertdialog", { name: "Run without asking?" })).toHaveTextContent("without asking you first");
     expect(onChange).not.toHaveBeenCalled();
 
-    confirm.mockReturnValue(true);
+    await userEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    expect(screen.queryByRole("alertdialog")).toBeNull();
+    expect(onChange).not.toHaveBeenCalled();
+    expect(screen.getByLabelText("Changes")).toHaveValue("ask");
+
     await userEvent.selectOptions(screen.getByLabelText("Changes"), "bypass");
+    await userEvent.click(screen.getByRole("button", { name: "Run without asking" }));
     expect(onChange).toHaveBeenCalledWith("bypass");
+    expect(screen.queryByRole("alertdialog")).toBeNull();
   });
 
   it("marks the conversation clearly while it runs without asking", () => {

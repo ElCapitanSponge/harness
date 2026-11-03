@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { SessionInfo } from "@/lib/types";
@@ -42,5 +42,40 @@ describe("pinning from a conversation's menu", () => {
     await open(info(true));
     await userEvent.click(screen.getByRole("menuitem", { name: /Unpin/ }));
     expect(api).toHaveBeenCalledWith("/sessions/s1", { method: "PATCH", body: { pinned: false } });
+  });
+});
+
+describe("deleting from a conversation's menu", () => {
+  beforeEach(() => {
+    api.mockReset();
+    api.mockResolvedValue({});
+  });
+
+  it("asks first, and deletes nothing if the answer is no", async () => {
+    await open(info());
+    await userEvent.click(screen.getByRole("menuitem", { name: /Delete/ }));
+    expect(screen.getByRole("alertdialog", { name: "Delete this conversation?" })).toHaveAccessibleDescription(/cannot be brought back/);
+    await userEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    expect(screen.queryByRole("alertdialog")).toBeNull();
+    expect(api).not.toHaveBeenCalledWith("/sessions/s1", { method: "DELETE" });
+  });
+
+  it("deletes the conversation once the person confirms, and closes the question", async () => {
+    await open(info());
+    await userEvent.click(screen.getByRole("menuitem", { name: /Delete/ }));
+    await userEvent.click(screen.getByRole("button", { name: "Delete" }));
+    expect(api).toHaveBeenCalledWith("/sessions/s1", { method: "DELETE" });
+    await waitFor(() => {
+      expect(screen.queryByRole("alertdialog")).toBeNull();
+    });
+  });
+
+  it("keeps the question open and shows the reason when the delete fails", async () => {
+    api.mockRejectedValue(new Error("The gateway said no"));
+    await open(info());
+    await userEvent.click(screen.getByRole("menuitem", { name: /Delete/ }));
+    await userEvent.click(screen.getByRole("button", { name: "Delete" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("The gateway said no");
+    expect(screen.getByRole("alertdialog")).toBeInTheDocument();
   });
 });
