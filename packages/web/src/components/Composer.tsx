@@ -1,6 +1,7 @@
 import { ArrowUp, Bold, Braces, Code, Eye, Italic, Link, List, ListOrdered, FileText, Paperclip, Pencil, Quote, Square, X } from "lucide-react";
 import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent, type ReactNode, type SyntheticEvent } from "react";
 import { Markdown } from "@/components/Markdown";
+import { MarkdownBackdrop } from "@/components/MarkdownBackdrop";
 import { Button } from "@/components/ui/button";
 import { codeBlock, continueList, insideFence, link, prefixLines, wrapSelection, type Edit } from "@/lib/markdown-edit";
 import type { ImageAttachment } from "@harness/core/image";
@@ -66,6 +67,8 @@ export const Composer = ({ draftKey, busy, disabled, placeholder, skills, imageN
   const menu = matches.length > 0 && !dismissed && !preview;
   const chosen = Math.min(active, Math.max(0, matches.length - 1));
   const ref = useRef<HTMLTextAreaElement>(null);
+  // The coloured copy of the text behind the box; it follows the box's scrolling.
+  const backdrop = useRef<HTMLDivElement>(null);
   // The @ menu: in a coding session, typing @ and a name lists the project's files; choosing one puts its path in the message and its text
   // below as context. The slash menu has the message when it starts with /.
   const [caret, setCaret] = useState(0);
@@ -88,6 +91,9 @@ export const Composer = ({ draftKey, busy, disabled, placeholder, skills, imageN
     if (el) {
       el.style.height = "auto";
       el.style.height = `${String(Math.min(el.scrollHeight, window.innerHeight * 0.4))}px`;
+      if (backdrop.current) {
+        backdrop.current.scrollTop = el.scrollTop;
+      }
     }
   }, [text, preview]);
 
@@ -501,35 +507,43 @@ export const Composer = ({ draftKey, busy, disabled, placeholder, skills, imageN
                 </div>
               )
             : (
-                <textarea
-                  ref={ref}
-                  value={text}
-                  rows={1}
-                  aria-label="Message"
-                  role={listed || project ? "combobox" : undefined}
-                  aria-expanded={listed || project ? menu || mentionOpen : undefined}
-                  aria-controls={mentionOpen ? `${name}-files` : menu ? `${name}-skills` : undefined}
-                  aria-activedescendant={mentionOpen && found.candidates[mentionChosen] ? `${name}-file-${found.candidates[mentionChosen].path}` : menu && matches[chosen] ? `${name}-skill-${matches[chosen].name}` : undefined}
-                  placeholder={placeholder ?? "Message (markdown works)"}
-                  className="max-h-[40vh] min-h-9 min-w-0 flex-1 resize-none bg-transparent px-2 py-1.5 outline-none placeholder:text-muted-foreground"
-                  onChange={(ev) => {
-                    setCaret(ev.target.selectionStart);
-                    change(ev.target.value);
-                  }}
-                  onSelect={(ev) => {
-                    setCaret(ev.currentTarget.selectionStart);
-                  }}
-                  onKeyDown={keys}
-                  onPaste={(ev) => {
-                    const pasted = [...ev.clipboardData.files].filter((f) => {
-                      return f.type.startsWith("image/");
-                    });
-                    if (imagesAllowed && pasted.length > 0) {
-                      ev.preventDefault();
-                      void attach(pasted);
-                    }
-                  }}
-                />
+                <div className="relative min-w-0 flex-1">
+                  <MarkdownBackdrop text={text} boxRef={backdrop} />
+                  <textarea
+                    ref={ref}
+                    value={text}
+                    rows={1}
+                    aria-label="Message"
+                    role={listed || project ? "combobox" : undefined}
+                    aria-expanded={listed || project ? menu || mentionOpen : undefined}
+                    aria-controls={mentionOpen ? `${name}-files` : menu ? `${name}-skills` : undefined}
+                    aria-activedescendant={mentionOpen && found.candidates[mentionChosen] ? `${name}-file-${found.candidates[mentionChosen].path}` : menu && matches[chosen] ? `${name}-skill-${matches[chosen].name}` : undefined}
+                    placeholder={placeholder ?? "Message (markdown works)"}
+                    className="relative block max-h-[40vh] min-h-9 w-full resize-none overflow-y-auto bg-transparent px-2 py-1.5 text-transparent caret-foreground outline-none [scrollbar-gutter:stable] selection:bg-primary/30 placeholder:text-muted-foreground forced-colors:text-[CanvasText]"
+                    onScroll={(ev) => {
+                      if (backdrop.current) {
+                        backdrop.current.scrollTop = ev.currentTarget.scrollTop;
+                      }
+                    }}
+                    onChange={(ev) => {
+                      setCaret(ev.target.selectionStart);
+                      change(ev.target.value);
+                    }}
+                    onSelect={(ev) => {
+                      setCaret(ev.currentTarget.selectionStart);
+                    }}
+                    onKeyDown={keys}
+                    onPaste={(ev) => {
+                      const pasted = [...ev.clipboardData.files].filter((f) => {
+                        return f.type.startsWith("image/");
+                      });
+                      if (imagesAllowed && pasted.length > 0) {
+                        ev.preventDefault();
+                        void attach(pasted);
+                      }
+                    }}
+                  />
+                </div>
               )}
           {busy && onStop
             ? (
