@@ -28,7 +28,7 @@ export const ProjectGroups = ({ groups, collapsed, pathname, onToggle, onNew, on
         const closed = group.kind === "project" || group.kind === "chats" ? collapsed.has(group.key) : false;
         const Chevron = closed ? ChevronRight : ChevronDown;
         return (
-          <section key={group.key || "chats"} aria-label={group.kind === "project" ? `${group.name} on ${group.device}` : group.name}>
+          <section key={group.key} aria-label={group.kind === "project" ? `${group.name} on ${group.device}` : group.name}>
             <div className="group/head flex items-center gap-0.5">
               {group.kind === "pinned"
                 ? <span className="px-1 py-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Pinned</span>

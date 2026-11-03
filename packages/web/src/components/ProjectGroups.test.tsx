@@ -54,6 +54,13 @@ describe("the sidebar's project groups", () => {
     expect(header("bastila")).toHaveAttribute("aria-expanded", "true");
   });
 
+  it("collapses the Chats group when the stored list has it, which has no device or folder", () => {
+    show([{ device: "", root: "" }]);
+    expect(screen.queryByText("A chat")).toBeNull();
+    expect(screen.getByText("Title a")).toBeVisible();
+    expect(header("Chats")).toHaveAttribute("aria-expanded", "false");
+  });
+
   it("asks to collapse a group that is open", async () => {
     const { onToggle } = show();
     await userEvent.click(header("This device"));
