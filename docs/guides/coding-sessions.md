@@ -138,6 +138,12 @@ The model's tool calls are folded, as its thinking is. Each run of tool activity
 
 Inside, each call is one line. A command or a file read expands to what it returned (shortened at 4,000 characters; the model was given all of it). A change to a file is a **Modified** row with the file name, and expanding it shows the same diff as the session panel. An approval or a question ends the group and is shown outside it, so it is never hidden in a fold. Reopened and imported conversations are grouped the same way; calls stored before tool names were kept are counted as other actions and show no output.
 
+## Markdown in the message box
+
+What you type is coloured as markdown while you write it: headings and list markers, **bold**, `code`, links, quotes, and fenced code blocks across their lines (a block you have not closed yet is styled to the end, as it will be read). It is a picture drawn behind the box: the box stays an ordinary text box, so the cursor, selection, undo, paste and input methods work as they always did, and what is sent is exactly the text you typed. Raw HTML or script in your text is shown as the characters you typed and is never turned into page elements.
+
+The colouring cannot change the width of a letter, or it would drift from the box, so bold is a heavier stroke rather than a bold face, italics are underlined rather than slanted, and code keeps the same font with a shaded background. Use **Preview** for the finished look. Drafts, `@` mentions and `/` commands work as before. A screen reader reads the box's own text and skips the coloured copy, and in a high-contrast mode the colouring is switched off and the box shows its plain text.
+
 ## The session panel
 
 In a coding session, the panel button in the header opens **This session** beside the conversation (a drawer over it on a phone). It shows:

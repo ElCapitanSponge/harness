@@ -38,7 +38,7 @@ The sidebar lists conversations grouped by project (see [Projects in the sidebar
 
 ## The message box
 
-The message box takes markdown.
+The message box takes markdown, and colours it as you type (see [Markdown in the message box](../guides/coding-sessions.md#markdown-in-the-message-box)).
 
 | Key | Does |
 | --- | --- |
