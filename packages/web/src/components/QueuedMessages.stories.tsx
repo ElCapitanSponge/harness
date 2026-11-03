@@ -57,6 +57,19 @@ export const Editing: Story = {
   },
 };
 
+export const EditingWithTheMessageBoxTools: Story = {
+  args: { messages: MESSAGES },
+  play: async ({ canvasElement, args }) => {
+    const canvas = within(canvasElement);
+    await userEvent.click(canvas.getByRole("button", { name: "Edit queued message 2" }));
+    // The same toolbar and coloured box as the message box, and a new line with Shift+Enter that is kept when saved.
+    await expect(canvas.getByRole("toolbar", { name: "Formatting" })).toBeVisible();
+    await expect(canvas.getByTestId("markdown-backdrop")).toBeInTheDocument();
+    await userEvent.type(canvas.getByLabelText("Reword queued message 2"), "{Shift>}{Enter}{/Shift}and a third line");
+    await userEvent.click(canvas.getByRole("button", { name: "Save the change" }));
+    await expect(args.onEdit).toHaveBeenCalledWith("b", "And check it on Windows\nwith the long path\nand a third line");
+  },
+};
 export const HeldAfterACancel: Story = {
   args: { messages: MESSAGES, held: true },
   play: async ({ canvasElement }) => {
