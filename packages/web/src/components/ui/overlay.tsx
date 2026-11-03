@@ -1,6 +1,6 @@
 import { AlertDialog as AlertDialogPrimitive, Dialog as DialogPrimitive, DropdownMenu as MenuPrimitive } from "radix-ui";
 import { X } from "lucide-react";
-import type { ComponentProps } from "react";
+import type { ComponentProps, ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
@@ -56,7 +56,7 @@ export const MenuItem = ({ className, danger, ...props }: ComponentProps<typeof 
 
 // A question that needs a yes or a no. It takes focus on Cancel, closes on Escape, and a click outside does not close it, so a stray tap cannot confirm.
 // The caller owns `open`: it stays open while `pending`, and shows `error` if the action failed, until the caller closes it.
-export const ConfirmDialog = ({ open, onOpenChange, title, description, confirmLabel, cancelLabel = "Cancel", tone = "plain", pending = false, error, onConfirm }: {
+export const ConfirmDialog = ({ open, onOpenChange, title, description, confirmLabel, cancelLabel = "Cancel", tone = "plain", pending = false, error, onConfirm, extra }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   title: string;
@@ -67,6 +67,8 @@ export const ConfirmDialog = ({ open, onOpenChange, title, description, confirmL
   pending?: boolean;
   error?: string | undefined;
   onConfirm: () => void;
+  // Another way out, between Cancel and the confirm button: a button the caller supplies.
+  extra?: ReactNode;
 }) => {
   return (
     <AlertDialogPrimitive.Root open={open} onOpenChange={onOpenChange}>
@@ -82,6 +84,7 @@ export const ConfirmDialog = ({ open, onOpenChange, title, description, confirmL
             <AlertDialogPrimitive.Cancel asChild>
               <Button>{cancelLabel}</Button>
             </AlertDialogPrimitive.Cancel>
+            {extra}
             <Button variant={tone === "destructive" ? "destructive" : tone === "risky" ? "warning" : "primary"} disabled={pending} onClick={onConfirm}>{confirmLabel}</Button>
           </div>
         </AlertDialogPrimitive.Content>

@@ -13,7 +13,7 @@ Run from the repository root as `pnpm harness <command>`, or with the `harness` 
 | --- | --- |
 | `harness nodes` | List devices reporting to the gateway, with their project folders. |
 | `harness models` | List models across devices. |
-| `harness sessions` | List saved conversations (chats and coding sessions). |
+| `harness sessions [--all]` | List saved conversations (chats and coding sessions). Archived ones are left out, with a count, unless you add `--all`. |
 | `harness export <id>` | Print a saved conversation as markdown; redirect it to a file. See [Importing and exporting](../guides/importing.md). |
 | `harness import <file> [-n number \| --all] [-m model]` | Bring in a Claude Code `.jsonl`, a ChatGPT or Claude.ai export, or a markdown or text transcript. With several conversations in the file, `-n` picks one by number (they are listed if you omit it) and `--all` takes them all. |
 | `harness settings <device> [key json]` | Show a device's settings, or change one, for example `settings anakin claude true`. The device must run with `REMOTE_CONFIG=1`. |

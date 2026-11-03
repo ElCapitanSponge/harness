@@ -6,8 +6,8 @@ import type { SessionInfo } from "./types";
 // Within a group the order is the one the list came in (most recent first), with each sub-agent's conversation under its parent.
 
 export interface Group {
-  // A project (a folder on a device), the conversations pinned to the top, or the chats that have no project.
-  kind: "pinned" | "project" | "chats";
+  // A project (a folder on a device), the conversations pinned to the top, the chats that have no project, or the conversations put away in the Archive.
+  kind: "pinned" | "project" | "chats" | "archive";
   // groupKey of the device and root; chats have neither, so theirs is groupKey("", ""), as the collapsed list stores it.
   key: string;
   device: string;
@@ -23,16 +23,25 @@ export const groupKey = (device: string, root: string): string => {
   return `${device}\u0000${root}`;
 };
 
+// The Archive section is closed unless this entry is in the stored list of collapsed groups. That is the reverse of a project, which is open
+// unless it is stored, so what gets remembered is the person opening it. The device name cannot be a real one.
+export const ARCHIVE_ENTRY = { device: "@archive", root: "" };
+
 export const groupSessions = (list: SessionInfo[], thisDevice: string | undefined): Group[] => {
   const projects = new Map<string, SessionInfo[]>();
   const chats: SessionInfo[] = [];
+  const archived = list.filter((s) => {
+    return s.archived === true;
+  }).sort((a, b) => {
+    return b.updated - a.updated;
+  });
   const pinned = list.filter((s) => {
-    return s.pinned === true;
+    return s.pinned === true && s.archived !== true;
   }).sort((a, b) => {
     return b.updated - a.updated;
   });
   for (const s of list) {
-    if (s.pinned === true) {
+    if (s.pinned === true || s.archived === true) {
       continue;
     }
     if (s.kind !== "code") {
@@ -57,6 +66,9 @@ export const groupSessions = (list: SessionInfo[], thisDevice: string | undefine
   }));
   if (chats.length > 0) {
     out.push({ kind: "chats", key: groupKey("", ""), device: "", root: "", name: "Chats", here: false, items: nested(chats) });
+  }
+  if (archived.length > 0) {
+    out.push({ kind: "archive", key: groupKey(ARCHIVE_ENTRY.device, ARCHIVE_ENTRY.root), device: ARCHIVE_ENTRY.device, root: ARCHIVE_ENTRY.root, name: "Archive", here: false, items: nested(archived) });
   }
   return out;
 };

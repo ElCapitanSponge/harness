@@ -117,6 +117,7 @@ describe("parseCommand", () => {
 describe("parseCommand for conversations and device settings", () => {
   it("parses sessions", () => {
     expect(parseCommand(["sessions"])).toEqual({ name: "sessions" });
+    expect(parseCommand(["sessions", "--all"])).toEqual({ name: "sessions", all: true });
   });
 
   it("shows a device's settings, or changes one with a JSON value", () => {

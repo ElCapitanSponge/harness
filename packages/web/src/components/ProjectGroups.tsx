@@ -25,7 +25,8 @@ export const ProjectGroups = ({ groups, collapsed, pathname, onToggle, onNew, on
   return (
     <div className="grid gap-2">
       {groups.map((group) => {
-        const closed = group.kind === "project" || group.kind === "chats" ? collapsed.has(group.key) : false;
+        // A project or the chats are open unless the person closed them; the Archive is closed unless they opened it (see ARCHIVE_ENTRY).
+        const closed = group.kind === "archive" ? !collapsed.has(group.key) : group.kind === "project" || group.kind === "chats" ? collapsed.has(group.key) : false;
         const Chevron = closed ? ChevronRight : ChevronDown;
         return (
           <section key={group.key} aria-label={group.kind === "project" ? `${group.name} on ${group.device}` : group.name}>
@@ -46,9 +47,14 @@ export const ProjectGroups = ({ groups, collapsed, pathname, onToggle, onNew, on
                         <span className="block truncate text-xs font-semibold uppercase tracking-wide text-muted-foreground">{group.name}</span>
                         {group.kind !== "project" ? null : <span className="block truncate text-xs font-normal text-muted-foreground" title={`${group.device}:${group.root}`}>{group.here ? "This device" : group.device}</span>}
                       </span>
+                      {group.kind === "archive" && closed && group.items.some(({ info: i }) => {
+                        return statusOf(i, pathname === `/c/${i.id}`) === "needs-you";
+                      })
+                        ? <HandHelping className="size-4 shrink-0 text-warning" aria-label="Something in the archive is waiting for you" />
+                        : null}
                     </button>
                   )}
-              {group.kind === "pinned"
+              {group.kind === "pinned" || group.kind === "archive"
                 ? null
                 : (
                     <Button variant="subtle" size="icon" className="size-7 opacity-0 focus-visible:opacity-100 group-hover/head:opacity-100" aria-label={group.kind === "project" ? `New session in ${group.name}` : "New chat"} title={group.kind === "project" ? "New session in this project" : "New chat"} onClick={() => {
@@ -81,8 +87,8 @@ export const ProjectGroups = ({ groups, collapsed, pathname, onToggle, onNew, on
                                 : c.kind === "code" ? <Code2 className="size-4 shrink-0 text-muted-foreground" /> : <MessageSquare className="size-4 shrink-0 text-muted-foreground" />}
                             <span className="min-w-0 flex-1">
                               <span className={cn("block truncate", status === "unread" && "font-semibold")}>{c.title || "New conversation"}</span>
-                              {group.kind === "pinned" && c.kind === "code" ? <span className="block truncate text-xs font-normal text-muted-foreground">{baseName(c.root)} · {c.device}{c.deviceConnected ? "" : " (offline)"}</span> : null}
-                              {group.kind !== "pinned" && c.kind === "code" && !c.deviceConnected ? <span className="block truncate text-xs font-normal text-muted-foreground">offline</span> : null}
+                              {(group.kind === "pinned" || group.kind === "archive") && c.kind === "code" ? <span className="block truncate text-xs font-normal text-muted-foreground">{baseName(c.root)} · {c.device}{c.deviceConnected ? "" : " (offline)"}</span> : null}
+                              {group.kind !== "pinned" && group.kind !== "archive" && c.kind === "code" && !c.deviceConnected ? <span className="block truncate text-xs font-normal text-muted-foreground">offline</span> : null}
                             </span>
                             {status === undefined ? null : <span className="sr-only">{statusLabel(status, c)}</span>}
                             {status === "unread" ? <span aria-hidden className="size-2 shrink-0 rounded-full bg-primary" /> : null}

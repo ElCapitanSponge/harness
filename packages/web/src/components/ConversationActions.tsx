@@ -1,10 +1,10 @@
-import { Download, MoreHorizontal, Pencil, Pin, PinOff, Trash2 } from "lucide-react";
+import { Archive, ArchiveRestore, Download, MoreHorizontal, Pencil, Pin, PinOff, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/fields";
 import { ConfirmDialog, Dialog, DialogContent, Menu, MenuContent, MenuItem, MenuTrigger } from "@/components/ui/overlay";
 import { downloadExport } from "@/lib/download";
-import { useDeleteConversation, usePinConversation, useRenameConversation } from "@/lib/queries";
+import { useArchiveConversation, useDeleteConversation, usePinConversation, useRenameConversation } from "@/lib/queries";
 import type { SessionInfo } from "@/lib/types";
 
 // Rename and delete for one conversation, from a small menu.
@@ -14,6 +14,7 @@ export const ConversationActions = ({ info, onDeleted, className }: { info: Sess
   const rename = useRenameConversation();
   const remove = useDeleteConversation();
   const pin = usePinConversation();
+  const archive = useArchiveConversation();
 
   return (
     <>
@@ -24,12 +25,16 @@ export const ConversationActions = ({ info, onDeleted, className }: { info: Sess
           </Button>
         </MenuTrigger>
         <MenuContent>
-          <MenuItem onSelect={() => {
-            pin.mutate({ id: info.id, pinned: info.pinned !== true });
-          }}
-          >
-            {info.pinned === true ? <PinOff /> : <Pin />} {info.pinned === true ? "Unpin" : "Pin to top"}
-          </MenuItem>
+          {info.archived === true
+            ? null
+            : (
+                <MenuItem onSelect={() => {
+                  pin.mutate({ id: info.id, pinned: info.pinned !== true });
+                }}
+                >
+                  {info.pinned === true ? <PinOff /> : <Pin />} {info.pinned === true ? "Unpin" : "Pin to top"}
+                </MenuItem>
+              )}
           <MenuItem onSelect={() => {
             setTitle(info.title);
             setDialog("rename");
@@ -42,6 +47,12 @@ export const ConversationActions = ({ info, onDeleted, className }: { info: Sess
           }}
           >
             <Download /> Export as markdown
+          </MenuItem>
+          <MenuItem onSelect={() => {
+            archive.mutate({ id: info.id, archived: info.archived !== true });
+          }}
+          >
+            {info.archived === true ? <ArchiveRestore /> : <Archive />} {info.archived === true ? "Unarchive" : "Archive"}
           </MenuItem>
           <MenuItem danger onSelect={() => {
             setDialog("delete");
@@ -96,7 +107,19 @@ export const ConversationActions = ({ info, onDeleted, className }: { info: Sess
         confirmLabel="Delete"
         tone="destructive"
         pending={remove.isPending}
-        error={remove.error?.message}
+        error={(remove.error ?? archive.error)?.message}
+        extra={info.archived === true
+          ? undefined
+          : (
+              <Button disabled={remove.isPending || archive.isPending} onClick={() => {
+                archive.mutate({ id: info.id, archived: true }, { onSuccess: () => {
+                  setDialog(undefined);
+                } });
+              }}
+              >
+                Archive instead
+              </Button>
+            )}
         onConfirm={() => {
           remove.mutate(info.id, { onSuccess: () => {
             setDialog(undefined);

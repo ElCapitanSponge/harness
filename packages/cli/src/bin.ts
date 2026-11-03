@@ -352,7 +352,7 @@ const main = async (): Promise<void> => {
       console.log(formatModels(await gateway.nodes()));
       return;
     case "sessions":
-      console.log(formatSessions(await gateway.sessions()));
+      console.log(formatSessions(await gateway.sessions(), Date.now(), cmd.all === true));
       return;
     case "export":
       process.stdout.write(await gateway.exportSession(cmd.id));

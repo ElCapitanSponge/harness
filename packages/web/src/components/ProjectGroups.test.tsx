@@ -3,7 +3,7 @@ import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router";
 import { describe, expect, it, vi } from "vitest";
-import { groupSessions } from "@/lib/groups";
+import { ARCHIVE_ENTRY, groupSessions } from "@/lib/groups";
 import type { SessionInfo } from "@/lib/types";
 import { collapsedKeys, ProjectGroups } from "./ProjectGroups";
 
@@ -124,5 +124,54 @@ describe("the sidebar's project groups", () => {
       </QueryClientProvider>,
     );
     expect(screen.queryByText("Has new messages")).toBeNull();
+  });
+
+  const archivedList = [code("a", "anakin", "C:/work/app"), { ...code("b", "anakin", "C:/work/app"), archived: true }, { ...chat, id: "d", title: "Old chat", archived: true }];
+  const mountArchive = (items: SessionInfo[], opened: boolean) => {
+    const onToggle = vi.fn();
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        <MemoryRouter>
+          <ProjectGroups groups={groupSessions(items, "anakin")} collapsed={collapsedKeys(opened ? [ARCHIVE_ENTRY] : [])} pathname="/" onToggle={onToggle} onNew={vi.fn()} onNavigate={vi.fn()} onDeleted={vi.fn()} />
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+    return onToggle;
+  };
+
+  it("keeps the Archive closed until the person opens it, and leaves the other groups as they were", () => {
+    mountArchive(archivedList, false);
+    const group = screen.getByRole("region", { name: "Archive" });
+    expect(within(group).getByRole("button", { name: /Archive/ })).toHaveAttribute("aria-expanded", "false");
+    expect(within(group).queryByText("Title b")).toBeNull();
+    expect(screen.getByText("Title a")).toBeVisible();
+  });
+
+  it("lists what is archived once opened, with the project of a coding session, and no button to start a new one", () => {
+    mountArchive(archivedList, true);
+    const group = screen.getByRole("region", { name: "Archive" });
+    expect(within(group).getByRole("button", { name: /Archive/ })).toHaveAttribute("aria-expanded", "true");
+    expect(within(group).getByText("Title b")).toBeVisible();
+    expect(within(group).getByText(/app · anakin/)).toBeVisible();
+    expect(within(group).getByText("Old chat")).toBeVisible();
+    expect(within(group).queryByRole("button", { name: /New/ })).toBeNull();
+  });
+
+  it("asks to open the Archive when it is closed", async () => {
+    const onToggle = mountArchive(archivedList, false);
+    await userEvent.click(within(screen.getByRole("region", { name: "Archive" })).getByRole("button", { name: /Archive/ }));
+    expect(onToggle).toHaveBeenCalledWith(expect.objectContaining({ kind: "archive" }), false);
+  });
+
+  it("shows on a closed Archive that something in it is waiting for the person", () => {
+    const waiting = [{ ...code("b", "anakin", "p"), archived: true, waiting: "approval" as const, read: 0, events: 3 }];
+    mountArchive(waiting, false);
+    expect(screen.getByLabelText("Something in the archive is waiting for you")).toBeInTheDocument();
+  });
+
+  it("marks a waiting conversation in an open Archive by its own mark", () => {
+    mountArchive([{ ...code("b", "anakin", "p"), archived: true, waiting: "approval" as const, read: 0, events: 3 }], true);
+    expect(screen.getByText("Waiting for your approval")).toBeInTheDocument();
+    expect(screen.queryByLabelText("Something in the archive is waiting for you")).toBeNull();
   });
 });

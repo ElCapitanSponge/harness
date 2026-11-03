@@ -17,6 +17,12 @@ describe("picking the session to go back to", () => {
     }).toThrow("no coding session to continue");
   });
 
+  it("does not continue an archived session, but still goes back to one by its id", () => {
+    const put = [s("aaaa1111", { updated: 5 }), s("dddd5555", { updated: 20, archived: true })];
+    expect(pickSession(put, { continue: true }).id).toBe("aaaa1111");
+    expect(pickSession(put, { resume: "dddd" }).id).toBe("dddd5555");
+  });
+
   it("takes an id or the start of one, never a chat", () => {
     expect(pickSession(all, { resume: "bbbb" }).id).toBe("bbbb3333");
     expect(pickSession(all, { resume: "aaaa2" }).id).toBe("aaaa2222");

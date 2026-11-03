@@ -15,17 +15,25 @@ const table = (headers: string[], rows: string[][]): string => {
 };
 
 // Saved conversations, newest activity first.
-export const formatSessions = (sessions: SessionInfo[], now = Date.now()): string => {
+// Conversations put away in the archive are left out unless asked for, and the count of those left out is said.
+export const formatSessions = (all: SessionInfo[], now = Date.now(), withArchived = false): string => {
+  const sessions = all.filter((s) => {
+    return withArchived || s.archived !== true;
+  });
+  const hidden = all.length - sessions.length;
   if (sessions.length === 0) {
-    return "No saved conversations.";
+    return hidden > 0
+      ? `No saved conversations (${String(hidden)} archived: harness sessions --all lists them).`
+      : "No saved conversations.";
   }
-  return table(
+  const out = table(
     ["ID", "KIND", "TITLE", "MODEL", "WHERE", "ACTIVE"],
     sessions.map((s) => {
       const minutes = Math.max(0, Math.round((now - s.updated) / 60_000));
-      return [s.id.slice(0, 8), s.kind, s.title || "(new)", s.model, s.kind === "code" ? `${s.device}:${s.root}${s.deviceConnected ? "" : " (offline)"}` : "-", minutes < 1 ? "now" : `${String(minutes)}m ago`];
+      return [s.id.slice(0, 8), s.kind, `${s.title || "(new)"}${s.archived === true ? " (archived)" : ""}`, s.model, s.kind === "code" ? `${s.device}:${s.root}${s.deviceConnected ? "" : " (offline)"}` : "-", minutes < 1 ? "now" : `${String(minutes)}m ago`];
     }),
   );
+  return hidden > 0 ? `${out}\n${String(hidden)} archived, not shown: harness sessions --all lists them.` : out;
 };
 
 // A device's settings, where each came from, and whether it accepts changes from here.

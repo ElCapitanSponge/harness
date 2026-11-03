@@ -3,7 +3,7 @@ import type { SessionInfo } from "@harness/core";
 export interface Wanted {
   // An id, or the start of one, from `harness sessions`.
   resume?: string;
-  // The newest coding session, in the given device and root if there are any.
+  // The newest coding session, in the given device and root if there are any. One put away in the archive is skipped; --resume still reaches it.
   continue?: boolean;
   device?: string;
   root?: string;
@@ -26,7 +26,7 @@ export const pickSession = (sessions: SessionInfo[], wanted: Wanted): SessionInf
     return only;
   }
   const newest = sessions.filter((s) => {
-    return s.kind === "code" && (!wanted.device || s.device === wanted.device) && (!wanted.root || s.root === wanted.root);
+    return s.kind === "code" && s.archived !== true && (!wanted.device || s.device === wanted.device) && (!wanted.root || s.root === wanted.root);
   }).sort((a, b) => {
     return b.updated - a.updated;
   })[0];

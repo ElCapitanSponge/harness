@@ -62,6 +62,16 @@ describe("formatSessions and formatSettings", () => {
     expect(formatSessions([])).toBe("No saved conversations.");
   });
 
+  it("leaves out archived conversations unless asked, and says how many", () => {
+    const archived = { ...session, id: "aaaaaaaa-4f50-4a6b-8c7d-9e0f1a2b3c4d", title: "Old idea", archived: true };
+    const hidden = formatSessions([session, archived], 120_000);
+    expect(hidden).toContain("Why the build fails");
+    expect(hidden).not.toContain("Old idea");
+    expect(hidden).toContain("1 archived, not shown");
+    expect(formatSessions([session, archived], 120_000, true)).toContain("Old idea (archived)");
+    expect(formatSessions([archived], 120_000)).toContain("1 archived");
+  });
+
   it("shows each setting with its source and whether changes are accepted", () => {
     const report = {
       settings: { projectRoots: {}, readOnlyRoots: [], onDeviceTools: "read", remoteTools: "off", modelControl: false, claude: true, gameProcesses: [], idleUnloadMinutes: 20, limitedProcesses: [], limitedMaxGb: 8, browser: false, browserHosts: [], skillFolders: [] },

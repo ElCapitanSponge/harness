@@ -157,6 +157,16 @@ describe("permission modes and rules in the database", () => {
     expect(store.loadAll()[0]?.pinned).toBeUndefined();
   });
 
+  it("keeps a conversation archived, and not archived by default", async () => {
+    const store = sqliteStore(openDatabase(":memory:"));
+    await store.save(session());
+    expect(store.loadAll()[0]?.archived).toBeUndefined();
+    await store.save(session({ archived: true }));
+    expect(store.loadAll()[0]).toMatchObject({ archived: true });
+    await store.save(session({ archived: false }));
+    expect(store.loadAll()[0]?.archived).toBeUndefined();
+  });
+
   it("keeps how far a conversation has been read, and counts what was saved before as read", async () => {
     const db = openDatabase(":memory:");
     const store = sqliteStore(db);

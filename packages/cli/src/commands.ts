@@ -4,7 +4,7 @@ import type { PrintOptions } from "./print.js";
 export type Command
   = | { name: "nodes" }
     | { name: "models" }
-    | { name: "sessions" }
+    | { name: "sessions"; all?: boolean }
     | { name: "export"; id: string }
     | { name: "import"; file: string; all: boolean; pick?: number; model?: string }
     | { name: "settings"; device: string; key?: string; value?: unknown }
@@ -20,7 +20,7 @@ export const USAGE = `harness - talk to local models and Claude through the gate
 Usage:
   harness nodes                         list nodes reporting to the gateway
   harness models                        list models across nodes
-  harness sessions                      list saved conversations (chats and coding sessions)
+  harness sessions [--all]              list saved conversations (chats and coding sessions); --all adds the archived ones
   harness export <id>                   print a saved conversation as markdown (redirect it to a file)
   harness import <file> [-n number | --all] [-m model]
                                         bring in a Claude Code .jsonl, a ChatGPT or Claude.ai export, or a
@@ -91,7 +91,7 @@ export const parseCommand = (argv: string[]): Command => {
     case "models":
       return { name };
     case "sessions":
-      return { name };
+      return values.all ? { name, all: true } : { name };
     case "export": {
       if (!rest[0]) {
         throw new Error("export needs a conversation id (see: harness sessions)");

@@ -32,7 +32,7 @@ The sidebar lists conversations grouped by project (see [Projects in the sidebar
 - **Changes** next to the message box sets the permission mode (ask, accept edits, plan first, run without asking).
 - A tool the model wants to use that changes things shows an approval card with what will happen (the diff, the whole command and folder, or the new file): **Allow**, allow for this conversation, allow always in this project, or **Decline** with an optional reason. Declining ends the turn.
 - A failed turn shows the reason and **Retry**.
-- The conversation menu has **Rename**, **Export as markdown** and **Delete**.
+- The conversation menu has **Pin to top**, **Rename**, **Export as markdown**, **Archive** and **Delete**. Archived conversations are listed in an **Archive** section at the bottom of the sidebar (closed until opened), and the menu there offers **Unarchive**. **Delete** asks first and offers **Archive instead**.
 - In a coding session the panel button opens the plan and the changed files with their diffs ([Coding sessions](../guides/coding-sessions.md#the-session-panel)).
 - A skill you start shows as a collapsed block; its text opens on a click.
 

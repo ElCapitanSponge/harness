@@ -278,6 +278,29 @@ describe("conversation routes", () => {
     expect(unpinned.pinned).toBeUndefined();
   });
 
+  it("archives a conversation and brings it back, unpinning it on the way in, and keeps it in the list", async () => {
+    const { app, sessions } = build();
+    const chat = sessions.create({ model: "qwen" });
+    const before = chat.info();
+    await app.request(`/sessions/${chat.id}`, send("PATCH", { pinned: true }));
+    const archived = (await (await app.request(`/sessions/${chat.id}`, send("PATCH", { archived: true }))).json()) as { archived?: boolean; pinned?: boolean; title: string; updated: number };
+    expect(archived).toMatchObject({ archived: true, title: before.title, updated: before.updated });
+    expect(archived.pinned).toBeUndefined();
+    expect(((await (await app.request("/sessions")).json()) as { id: string; archived?: boolean }[]).find((s) => {
+      return s.id === chat.id;
+    })?.archived).toBe(true);
+    const back = (await (await app.request(`/sessions/${chat.id}`, send("PATCH", { archived: false }))).json()) as { archived?: boolean; pinned?: boolean };
+    expect(back.archived).toBeUndefined();
+    expect(back.pinned).toBeUndefined();
+  });
+
+  it("keeps a conversation archived when a new message arrives", async () => {
+    const { app, sessions } = build();
+    const chat = sessions.create({ model: "qwen" });
+    await app.request(`/sessions/${chat.id}`, send("PATCH", { archived: true }));
+    await app.request(`/sessions/${chat.id}`, send("PATCH", { title: "Renamed" }));
+    expect(chat.info()).toMatchObject({ archived: true, title: "Renamed" });
+  });
   it("records how far a conversation has been read, forward only, and refuses what is not a count", async () => {
     const { app, sessions } = build();
     const chat = sessions.create({ model: "qwen" });
