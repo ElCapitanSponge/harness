@@ -4,6 +4,7 @@ import ReactMarkdown from "react-markdown";
 import rehypeHighlight from "rehype-highlight";
 import remarkGfm from "remark-gfm";
 import { Button } from "@/components/ui/button";
+import { copyText } from "@/lib/clipboard";
 
 const languageOf = (children: ReactNode): string => {
   if (isValidElement<{ className?: string }>(children)) {
@@ -19,7 +20,10 @@ const CodeBlock = ({ children }: ComponentProps<"pre">) => {
   const language = languageOf(children);
 
   const copy = (): void => {
-    void navigator.clipboard.writeText(ref.current?.innerText ?? "").then(() => {
+    void copyText(ref.current?.innerText ?? "").then((ok) => {
+      if (!ok) {
+        return;
+      }
       setCopied(true);
       setTimeout(() => {
         setCopied(false);

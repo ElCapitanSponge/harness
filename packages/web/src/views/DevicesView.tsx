@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Badge, Input, Switch, Textarea } from "@/components/ui/fields";
 import { Dialog, DialogContent, DialogTrigger } from "@/components/ui/overlay";
 import { keyStore } from "@/lib/api";
+import { copyText } from "@/lib/clipboard";
 import { desktopApi, rootNameFor } from "@/lib/desktop";
 import { useDeviceSettings, useNodes, useSaveSettings } from "@/lib/queries";
 import type { NodeRecord, SettingKey, SettingsReport } from "@/lib/types";
@@ -346,7 +347,10 @@ const AddDevice = () => {
               <div key={c.label} className="flex items-center justify-between gap-3 rounded-lg border p-3">
                 <span className="font-semibold">{c.label}</span>
                 <Button onClick={() => {
-                  void navigator.clipboard.writeText(c.build(keyStore.state)).then(() => {
+                  void copyText(c.build(keyStore.state)).then((ok) => {
+                    if (!ok) {
+                      return;
+                    }
                     setCopied(c.label);
                   });
                 }}

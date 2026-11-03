@@ -1,4 +1,4 @@
-import { Bot, Brain, ChevronRight, CircleHelp, GitBranch, Layers, Sparkles, Loader2, Copy } from "lucide-react";
+import { Bot, Brain, ChevronRight, CircleHelp, GitBranch, Layers, Sparkles, Loader2, Copy, Check } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Link } from "react-router";
 import { Actions } from "@/components/Actions";
@@ -6,6 +6,7 @@ import { ApprovalCard, type Answer } from "@/components/ApprovalCard";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/fields";
 import { Markdown } from "@/components/Markdown";
+import { copyText } from "@/lib/clipboard";
 import type { ConversationState, Item } from "@/lib/conversation";
 import { compact as compactTokens } from "@/lib/format";
 import { cn } from "@/lib/utils";
@@ -31,17 +32,23 @@ const useElapsed = (startedAt: number, running: boolean): number => {
 
 // Copies a message's text; hidden until the surrounding `group` is hovered or the button has focus.
 const CopyButton = ({ text }: { text: string }) => {
+  const [state, setState] = useState<"idle" | "copied" | "failed">("idle");
   return (
     <button
       type="button"
-      title="Copy message"
+      title={state === "failed" ? "Could not copy" : "Copy message"}
       aria-label="Copy message"
       className="absolute right-1 top-1 rounded bg-muted/70 p-1 text-muted-foreground opacity-0 transition-opacity hover:text-foreground focus-visible:opacity-100 group-hover:opacity-100"
       onClick={() => {
-        void navigator.clipboard.writeText(text);
+        void copyText(text).then((ok) => {
+          setState(ok ? "copied" : "failed");
+          setTimeout(() => {
+            setState("idle");
+          }, 1500);
+        });
       }}
     >
-      <Copy className="size-3" />
+      {state === "copied" ? <Check className="size-3" /> : <Copy className="size-3" />}
     </button>
   );
 };
