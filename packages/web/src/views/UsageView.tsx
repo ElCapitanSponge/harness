@@ -62,7 +62,7 @@ const Table = ({ title, rows }: { title: string; rows: { key: string; name: stri
                 {rows.map((r) => {
                   return (
                     <tr key={r.key} className="border-t">
-                      <td className="py-1.5">{r.name}{r.sub ? <span className="block text-xs text-muted-foreground">{r.sub}</span> : null}</td>
+                      <td className="py-1.5 [overflow-wrap:anywhere]">{r.name}{r.sub ? <span className="block text-xs text-muted-foreground">{r.sub}</span> : null}</td>
                       <td className="text-right">{r.calls}</td>
                       <td className="text-right"><Tokens value={r.promptTokens} estimated={r.estimated} /></td>
                       <td className="text-right"><Tokens value={r.completionTokens} estimated={r.estimated} /></td>
@@ -96,7 +96,7 @@ export const UsageView = () => {
           <div className="inline-flex rounded-lg border bg-card p-0.5" role="group" aria-label="Range">
             {RANGES.map((r) => {
               return (
-                <button key={r.days} type="button" aria-pressed={days === r.days} className={cn("rounded-md px-3 py-1 font-semibold text-muted-foreground hover:text-foreground", days === r.days && "bg-accent text-accent-foreground")} onClick={() => {
+                <button key={r.days} type="button" aria-pressed={days === r.days} className={cn("rounded-md px-3 py-1 font-semibold text-muted-foreground pointer-coarse:min-h-11 hover:text-foreground", days === r.days && "bg-accent text-accent-foreground")} onClick={() => {
                   setDays(r.days);
                 }}
                 >

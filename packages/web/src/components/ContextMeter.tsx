@@ -26,7 +26,7 @@ export const ContextMeter = ({ id, busy = false }: { id: string; busy?: boolean 
   return (
     <Popover.Root>
       <Popover.Trigger asChild>
-        <button type="button" className="flex items-center gap-2 rounded-md px-2 py-1 text-xs text-muted-foreground hover:bg-muted">
+        <button type="button" className="flex items-center gap-2 rounded-md px-2 py-1 text-xs text-muted-foreground pointer-coarse:min-h-11 hover:bg-muted">
           <Gauge className="size-3.5" />
           <span>{mark}{compact(used)}{window ? ` / ${compact(window)}` : ""}</span>
           {fraction === undefined
@@ -40,7 +40,7 @@ export const ContextMeter = ({ id, busy = false }: { id: string; busy?: boolean 
         </button>
       </Popover.Trigger>
       <Popover.Portal>
-        <Popover.Content align="end" sideOffset={6} className="z-50 w-80 rounded-lg border bg-popover p-4 text-popover-foreground shadow-raised">
+        <Popover.Content align="end" sideOffset={6} className="z-50 w-80 max-w-[calc(100vw-1rem)] rounded-lg border bg-popover p-4 text-popover-foreground shadow-raised">
           <div className="mb-2 font-semibold">Context</div>
           <p className="mb-3 text-muted-foreground">
             {mark}{used.toLocaleString()} tokens in the conversation so far{window ? `, of ${window.toLocaleString()} that ${last.model} can hold` : ""}.
@@ -66,7 +66,7 @@ export const ContextMeter = ({ id, busy = false }: { id: string; busy?: boolean 
               {data.byModel.map((m) => {
                 return (
                   <tr key={`${m.device}/${m.model}`} className="border-t">
-                    <td className="py-1">{m.model}<span className="block text-xs text-muted-foreground">{m.device}</span></td>
+                    <td className="py-1 [overflow-wrap:anywhere]">{m.model}<span className="block text-xs text-muted-foreground">{m.device}</span></td>
                     <td className="text-right">{m.calls}</td>
                     <td className="text-right">{m.estimated ? "~" : ""}{compact(m.promptTokens)}</td>
                     <td className="text-right">{m.estimated ? "~" : ""}{compact(m.completionTokens)}</td>

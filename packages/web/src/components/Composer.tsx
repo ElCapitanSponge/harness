@@ -343,7 +343,7 @@ export const Composer = ({ draftKey, busy, disabled, placeholder, skills, imageN
                             <button
                               type="button"
                               aria-label={`Remove image ${String(i + 1)}`}
-                              className="absolute -right-1.5 -top-1.5 flex size-5 items-center justify-center rounded-full border bg-card shadow-card"
+                              className="absolute -right-1.5 -top-1.5 flex size-5 items-center justify-center rounded-full border bg-card shadow-card pointer-coarse:after:absolute pointer-coarse:after:-inset-3 pointer-coarse:after:content-['']"
                               onClick={() => {
                                 setImages(images.filter((_, j) => {
                                   return j !== i;

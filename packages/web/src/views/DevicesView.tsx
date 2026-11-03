@@ -68,7 +68,7 @@ const ToolGroupControl = ({ group, label, hint, value, onChange, disabled, tools
               role="radio"
               aria-checked={value === a.value}
               disabled={disabled}
-              className={cn("rounded-md px-3 py-1 font-semibold text-muted-foreground hover:text-foreground disabled:opacity-60", value === a.value && "bg-accent text-accent-foreground")}
+              className={cn("rounded-md px-3 py-1 font-semibold text-muted-foreground pointer-coarse:min-h-11 hover:text-foreground disabled:opacity-60", value === a.value && "bg-accent text-accent-foreground")}
               onClick={() => {
                 onChange(a.value);
               }}
@@ -199,7 +199,7 @@ const SettingsForm = ({ node, report }: { node: NodeRecord; report: SettingsRepo
               <div className="grid gap-1.5 sm:grid-cols-2">
                 {rootNames.map((name) => {
                   return (
-                    <label key={name} className="flex items-center gap-2 text-[13px]">
+                    <label key={name} className="flex items-center gap-2 text-[13px] pointer-coarse:min-h-11">
                       <Switch disabled={off("readOnlyRoots")} checked={readOnly.includes(name)} aria-label={`${name} is read-only`} onCheckedChange={(checked) => {
                         setReadOnly(checked ? [...readOnly, name] : readOnly.filter((n) => {
                           return n !== name;

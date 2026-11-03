@@ -6,7 +6,7 @@ import { cn } from "@/lib/utils";
 const field = "w-full rounded-md border border-input bg-card px-3 text-sm text-card-foreground placeholder:text-muted-foreground focus-visible:border-primary disabled:cursor-not-allowed disabled:opacity-60";
 
 export const Input = ({ className, ...props }: ComponentProps<"input">) => {
-  return <input className={cn(field, "h-8", className)} {...props} />;
+  return <input className={cn(field, "h-8 pointer-coarse:h-11", className)} {...props} />;
 };
 
 export const Textarea = ({ className, ...props }: ComponentProps<"textarea">) => {
@@ -14,13 +14,13 @@ export const Textarea = ({ className, ...props }: ComponentProps<"textarea">) =>
 };
 
 export const Select = ({ className, ...props }: ComponentProps<"select">) => {
-  return <select className={cn(field, "h-8 cursor-pointer pr-8", className)} {...props} />;
+  return <select className={cn(field, "h-8 cursor-pointer pr-8 pointer-coarse:h-11", className)} {...props} />;
 };
 
 export const Switch = ({ className, ...props }: ComponentProps<typeof SwitchPrimitive.Root>) => {
   return (
     <SwitchPrimitive.Root
-      className={cn("inline-flex h-5 w-10 shrink-0 cursor-pointer items-center rounded-full border border-input bg-card p-0.5 transition-colors data-[state=checked]:border-primary data-[state=checked]:bg-primary disabled:cursor-not-allowed disabled:opacity-60", className)}
+      className={cn("relative inline-flex h-5 w-10 shrink-0 cursor-pointer items-center rounded-full border border-input bg-card p-0.5 transition-colors pointer-coarse:after:absolute pointer-coarse:after:-inset-3 pointer-coarse:after:content-[''] data-[state=checked]:border-primary data-[state=checked]:bg-primary disabled:cursor-not-allowed disabled:opacity-60", className)}
       {...props}
     >
       <SwitchPrimitive.Thumb className="block size-3.5 rounded-full bg-muted-foreground transition-transform data-[state=checked]:translate-x-5 data-[state=checked]:bg-primary-foreground" />
@@ -31,7 +31,7 @@ export const Switch = ({ className, ...props }: ComponentProps<typeof SwitchPrim
 export const Checkbox = ({ className, ...props }: ComponentProps<typeof CheckboxPrimitive.Root>) => {
   return (
     <CheckboxPrimitive.Root
-      className={cn("flex size-4 shrink-0 cursor-pointer items-center justify-center rounded-sm border border-input bg-card data-[state=checked]:border-primary data-[state=checked]:bg-primary disabled:cursor-not-allowed disabled:opacity-60", className)}
+      className={cn("relative flex size-4 shrink-0 cursor-pointer items-center justify-center rounded-sm border border-input bg-card pointer-coarse:after:absolute pointer-coarse:after:-inset-3.5 pointer-coarse:after:content-[''] data-[state=checked]:border-primary data-[state=checked]:bg-primary disabled:cursor-not-allowed disabled:opacity-60", className)}
       {...props}
     >
       <CheckboxPrimitive.Indicator>

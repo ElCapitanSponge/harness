@@ -98,7 +98,7 @@ const Sidebar = ({ onNavigate }: { onNavigate: () => void }) => {
           to="/manage/devices"
           onClick={onNavigate}
           className={({ isActive }) => {
-            return cn("flex items-center gap-2 rounded-md px-2 py-1.5 hover:bg-muted", isActive && "bg-accent font-semibold text-accent-foreground");
+            return cn("flex items-center gap-2 rounded-md px-2 py-1.5 pointer-coarse:min-h-11 hover:bg-muted", isActive && "bg-accent font-semibold text-accent-foreground");
           }}
         >
           <Monitor className="size-4" /> Devices
@@ -107,7 +107,7 @@ const Sidebar = ({ onNavigate }: { onNavigate: () => void }) => {
           to="/manage/permissions"
           onClick={onNavigate}
           className={({ isActive }) => {
-            return cn("flex items-center gap-2 rounded-md px-2 py-1.5 hover:bg-muted", isActive && "bg-accent font-semibold text-accent-foreground");
+            return cn("flex items-center gap-2 rounded-md px-2 py-1.5 pointer-coarse:min-h-11 hover:bg-muted", isActive && "bg-accent font-semibold text-accent-foreground");
           }}
         >
           <ShieldCheck className="size-4" /> Permissions
@@ -116,7 +116,7 @@ const Sidebar = ({ onNavigate }: { onNavigate: () => void }) => {
           to="/manage/skills"
           onClick={onNavigate}
           className={({ isActive }) => {
-            return cn("flex items-center gap-2 rounded-md px-2 py-1.5 hover:bg-muted", isActive && "bg-accent font-semibold text-accent-foreground");
+            return cn("flex items-center gap-2 rounded-md px-2 py-1.5 pointer-coarse:min-h-11 hover:bg-muted", isActive && "bg-accent font-semibold text-accent-foreground");
           }}
         >
           <Sparkles className="size-4" /> Skills
@@ -125,7 +125,7 @@ const Sidebar = ({ onNavigate }: { onNavigate: () => void }) => {
           to="/import"
           onClick={onNavigate}
           className={({ isActive }) => {
-            return cn("flex items-center gap-2 rounded-md px-2 py-1.5 hover:bg-muted", isActive && "bg-accent font-semibold text-accent-foreground");
+            return cn("flex items-center gap-2 rounded-md px-2 py-1.5 pointer-coarse:min-h-11 hover:bg-muted", isActive && "bg-accent font-semibold text-accent-foreground");
           }}
         >
           <FileUp className="size-4" /> Import
@@ -134,7 +134,7 @@ const Sidebar = ({ onNavigate }: { onNavigate: () => void }) => {
           to="/manage/usage"
           onClick={onNavigate}
           className={({ isActive }) => {
-            return cn("flex items-center gap-2 rounded-md px-2 py-1.5 hover:bg-muted", isActive && "bg-accent font-semibold text-accent-foreground");
+            return cn("flex items-center gap-2 rounded-md px-2 py-1.5 pointer-coarse:min-h-11 hover:bg-muted", isActive && "bg-accent font-semibold text-accent-foreground");
           }}
         >
           <BarChart3 className="size-4" /> Usage
