@@ -45,29 +45,29 @@
 }
 
 .dark {
-  --background: #14110f;
+  --background: #1c1917;
   --foreground: #f3ede2;
-  --card: #1d1916;
+  --card: #2b2623;
   --card-foreground: #f3ede2;
-  --popover: #26211d;
+  --popover: #37312d;
   --popover-foreground: #f3ede2;
-  --primary: #e8553f;
-  --primary-hover: #f06a55;
+  --primary: #ee6650;
+  --primary-hover: #f27560;
   --primary-pressed: #d4452f;
   --primary-foreground: #1a0f0c;
-  --secondary: #2a241f;
+  --secondary: #3a3430;
   --secondary-foreground: #f3ede2;
-  --muted: #272220;
-  --muted-foreground: #a89e90;
-  --accent: #3a1c16;
-  --accent-foreground: #f4b3a6;
+  --muted: #36302c;
+  --muted-foreground: #b5aa9c;
+  --accent: #6a2f24;
+  --accent-foreground: #ffe4dd;
   --destructive: #ef8a8a;
   --success: #8fbf6a;
   --warning: #e0b052;
-  --border: #342d27;
-  --input: #4a4036;
-  --ring: #e8553f;
-  --code: #100d0b;
+  --border: #4d443d;
+  --input: #61564c;
+  --ring: #ee6650;
+  --code: #151210;
   --shadow-card: 0 0 2px rgb(0 0 0 / 0.4), 0 2px 4px rgb(0 0 0 / 0.4);
   --shadow-raised: 0 0 8px rgb(0 0 0 / 0.4), 0 4px 8px rgb(0 0 0 / 0.45);
   --hl-keyword: #e0a3c4;
