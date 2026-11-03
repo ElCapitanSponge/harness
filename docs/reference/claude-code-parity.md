@@ -34,17 +34,17 @@ Torii is meant to replace Claude Code desktop and the Claude Code command line i
 
 ## Still missing
 
-None of these has a ticket yet; each gets one, with its blockers, before work on it starts.
+An item with a number has its ticket; each of the others gets one, with its blockers, before work on it starts.
 
 - [ ] **Rewind to a checkpoint.** Undo a session's file changes and conversation back to an earlier turn.
 - [ ] **MCP servers.** Tools from Model Context Protocol servers, configured per device or project.
 - [ ] **Hooks.** Commands that run before or after a tool call or at the end of a turn.
 - [ ] **A git worktree for each session.** Sessions that work on the same project without touching each other's files.
 - [x] **Resume and continue on the command line.** `harness code --resume` and `--continue` for the sessions the gateway keeps (#126).
-- [ ] **A headless print mode on the command line.** One prompt in, the answer on standard output, for scripts (`claude -p`).
-- [ ] **A status line.** A line of the person's own choosing under the message box.
+- [ ] **A print mode on the command line.** `-p` for scripts: it never asks, can print JSON, and exits non-zero unless the turn ended with a reply (`claude -p`, #145). A prompt on the command line already runs one turn and exits.
+- [ ] **A status line.** A line of the person's own choosing under the message box (#144, waiting on the owner's answers).
 - [ ] **Output styles.** Changing how the model words its replies.
-- [ ] **Editing a project's memory from the page.** Viewing and editing `AGENTS.md` and `CLAUDE.md` without leaving the conversation (`/init` writes one, but there is no editor).
+- [ ] **Editing a project's memory from the page.** Viewing and editing `AGENTS.md` and `CLAUDE.md` without leaving the conversation (`/init` writes one, but there is no editor; #146).
 
 ## Differences on purpose
 
