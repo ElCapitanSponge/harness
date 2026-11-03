@@ -25,7 +25,7 @@ The sidebar lists conversations grouped by project (see [Projects in the sidebar
 
 ## In a conversation
 
-- **Next message goes to** picks the model for the next message (Auto or any model on any device, or Claude) and the effort. The header badge shows the model, or `Auto: <model>` once Auto has chosen.
+- **Next message goes to** picks the model for the next message (Auto or any model on any device, or Claude) and the effort. The header badge shows the model, or `Auto: <model>` once Auto has chosen. The model, effort and **Changes** choices open a list where each option has a second line saying what it means (a model's state, an effort level, what a mode allows), or why it cannot be chosen, and a badge where one matters (**risky**); the button shows only the label. It works from the keyboard (Enter or the arrows to open, the arrows to move, Enter to choose, Escape to close). Plain lists (a device, a folder) stay the browser's own select, so a phone shows its system picker.
 - Under each reply: which model and device wrote it, and with Auto the reason it was chosen.
 - The **context meter** shows how full the model's window is, with **Compact now**. Automatic compaction is marked by a tick on the bar and a divider in the thread. See [Usage](../guides/usage.md).
 - The status line shows the stage of a request (finding a device, loading a model, waiting, thinking, writing). See [Progress](../guides/progress.md).

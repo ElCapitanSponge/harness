@@ -1,7 +1,7 @@
 import type { PermissionMode } from "@harness/core";
 import { TriangleAlert } from "lucide-react";
 import { useState } from "react";
-import { Select } from "@/components/ui/fields";
+import { Choice } from "@/components/ui/choice";
 import { ConfirmDialog } from "@/components/ui/overlay";
 import { MODE_OPTIONS } from "@/lib/modes";
 
@@ -9,21 +9,24 @@ import { MODE_OPTIONS } from "@/lib/modes";
 // Choosing it only opens the question: the mode stays as it was until the person confirms.
 export const ModePicker = ({ value, onChange, disabled, className }: { value: PermissionMode; onChange: (mode: PermissionMode) => void; disabled?: boolean; className?: string }) => {
   const [asking, setAsking] = useState(false);
-  const current = MODE_OPTIONS.find((o) => {
-    return o.value === value;
-  });
   return (
     <span className="inline-flex items-center gap-1">
       {value === "bypass" ? <TriangleAlert className="size-4 text-warning" aria-label="Nothing asks in this mode" /> : null}
-      <Select
-        aria-label="Changes"
-        title={current?.hint}
+      <Choice
+        label="Changes"
         className={className}
-        disabled={disabled}
+        disabled={disabled ?? false}
         value={value}
-        onChange={(ev) => {
+        groups={[{
+          options: MODE_OPTIONS.map((o) => {
+            return o.value === "bypass"
+              ? { value: o.value, label: o.label, detail: o.hint, badge: "risky", badgeTone: "warning" as const }
+              : { value: o.value, label: o.label, detail: o.hint };
+          }),
+        }]}
+        onValueChange={(chosen) => {
           const next = MODE_OPTIONS.find((o) => {
-            return o.value === ev.target.value;
+            return o.value === chosen;
           })?.value;
           if (next === "bypass") {
             setAsking(true);
@@ -33,11 +36,7 @@ export const ModePicker = ({ value, onChange, disabled, className }: { value: Pe
             onChange(next);
           }
         }}
-      >
-        {MODE_OPTIONS.map((o) => {
-          return <option key={o.value} value={o.value}>{o.value === "bypass" ? `${o.label} (risky)` : o.label}</option>;
-        })}
-      </Select>
+      />
       <ConfirmDialog
         open={asking}
         onOpenChange={setAsking}

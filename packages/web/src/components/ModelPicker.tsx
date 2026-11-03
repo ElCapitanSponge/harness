@@ -1,20 +1,21 @@
-import { Select } from "@/components/ui/fields";
+import { Choice, type ChoiceGroup } from "@/components/ui/choice";
 import { useCatalogue } from "@/lib/queries";
 import { clockTime } from "@/lib/time";
 import type { CatalogueEntry } from "@/lib/types";
 
-const stateLabel = (m: CatalogueEntry): string => {
+// The second line of a model in the list: whether it is ready, and if it cannot be chosen, why.
+const stateDetail = (m: CatalogueEntry): string => {
   switch (m.state) {
     case "loaded":
-      return "";
+      return "Loaded";
     case "loads-on-use":
-      return " - loads when used";
+      return "Loads when used";
     case "busy":
-      return ` - busy${m.busyReason ? ` (${m.busyReason})` : ""}`;
+      return `Busy${m.busyReason ? ` (${m.busyReason})` : ""}`;
     case "cannot-load":
-      return " - cannot load here";
+      return "Cannot load here";
     case "limited":
-      return ` - ${m.busyReason ?? "too big right now"}`;
+      return m.busyReason ?? "Too big right now";
   }
 };
 
@@ -31,52 +32,51 @@ export const useModels = () => {
 export const ModelPicker = ({ value, onChange, disabled, className }: { value: string; onChange: (id: string) => void; disabled?: boolean; className?: string }) => {
   const { catalogue } = useModels();
   const data = catalogue.data;
-  const groups = new Map<string, CatalogueEntry[]>();
+  const byDevice = new Map<string, CatalogueEntry[]>();
   for (const m of data?.models ?? []) {
-    groups.set(m.device, [...(groups.get(m.device) ?? []), m]);
+    byDevice.set(m.device, [...(byDevice.get(m.device) ?? []), m]);
   }
   const empty = !data || (data.models.length === 0 && !data.claude.available);
   const selected = value || "auto";
 
-  return (
-    <Select
-      aria-label="Model"
-      className={className}
-      disabled={disabled ?? false}
-      value={selected}
-      onChange={(ev) => {
-        onChange(ev.target.value);
-      }}
-    >
-      <option value="auto">Auto (Torii chooses)</option>
-      {empty ? <option value="" disabled>{catalogue.isPending ? "Loading models..." : "No models: connect a device"}</option> : null}
-      {[...groups.entries()].map(([device, models]) => {
-        return (
-          <optgroup key={device} label={device}>
-            {models.map((m) => {
-              return <option key={`${device}/${m.id}`} value={m.id} disabled={m.state === "busy" || m.state === "cannot-load" || m.state === "limited"}>{m.id}{stateLabel(m)}</option>;
-            })}
-          </optgroup>
-        );
-      })}
-      {data?.claude.available
-        ? (
-            <optgroup label={`Claude (through ${data.claude.device ?? "a device"})${data.claude.model ? `, using ${data.claude.model}` : ""}`}>
-              {data.claude.models.map((id) => {
-                return <option key={id} value={id}>{id}</option>;
-              })}
-            </optgroup>
-          )
-        : null}
-      {data?.claude.limitedUntil !== undefined
-        ? (
-            <optgroup label={`Claude - limited until ${clockTime(data.claude.limitedUntil)}`}>
-              {data.claude.models.map((id) => {
-                return <option key={id} value={id} disabled>{id}</option>;
-              })}
-            </optgroup>
-          )
-        : null}
-    </Select>
-  );
+  const groups: ChoiceGroup[] = [{ options: [{ value: "auto", label: "Auto (Torii chooses)", detail: "The gateway picks a model for each message" }] }];
+  if (empty) {
+    groups.push({ options: [{ value: "none", label: catalogue.isPending ? "Loading models..." : "No models: connect a device", disabled: true }] });
+  }
+  for (const [device, models] of byDevice) {
+    groups.push({
+      label: device,
+      options: models.map((m) => {
+        return { value: m.id, label: m.id, detail: stateDetail(m), disabled: m.state === "busy" || m.state === "cannot-load" || m.state === "limited" };
+      }),
+    });
+  }
+  if (data?.claude.available) {
+    groups.push({
+      label: `Claude (through ${data.claude.device ?? "a device"})${data.claude.model ? `, using ${data.claude.model}` : ""}`,
+      options: data.claude.models.map((id) => {
+        return { value: id, label: id };
+      }),
+    });
+  }
+  if (data?.claude.limitedUntil !== undefined) {
+    const until = clockTime(data.claude.limitedUntil);
+    groups.push({
+      label: `Claude - limited until ${until}`,
+      options: data.claude.models.map((id) => {
+        return { value: id, label: id, detail: `Limited until ${until}`, disabled: true };
+      }),
+    });
+  }
+  // A model that is set but not in the list (the list is still loading, or the model went away) is shown as it is, not as Auto.
+  const known = groups.some((g) => {
+    return g.options.some((o) => {
+      return o.value === selected;
+    });
+  });
+  if (!known) {
+    groups[0]?.options.push({ value: selected, label: selected, detail: "Not in the list right now", disabled: true });
+  }
+
+  return <Choice label="Model" className={className} disabled={disabled ?? false} value={selected} groups={groups} onValueChange={onChange} />;
 };

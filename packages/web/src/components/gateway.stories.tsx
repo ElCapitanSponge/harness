@@ -26,20 +26,33 @@ const seed = (queries: Seed["queries"]): { seed: Seed } => {
 
 export default { title: "Gateway/Pickers and meters" } satisfies Meta;
 
+const listOf = (canvasElement: HTMLElement) => {
+  return within(canvasElement.ownerDocument.body);
+};
+
 export const Models: StoryObj = {
   parameters: seed([[["catalogue"], catalogue]]),
   render: () => {
     return <div className="max-w-sm"><ModelPicker value="" onChange={fn()} /></div>;
   },
   play: async ({ canvasElement }) => {
-    const picker = within(canvasElement).getByLabelText("Model");
-    // Auto is chosen for you; ones that cannot run are listed but cannot be chosen.
-    await expect(picker).toHaveValue("auto");
-    await expect(within(picker).getByRole("option", { name: "Auto (Torii chooses)" })).toBeEnabled();
-    await expect(within(picker).getByRole("option", { name: /llama-70b/ })).toBeDisabled();
-    await expect(within(picker).getByRole("option", { name: /phi-4.*busy/ })).toBeDisabled();
+    const picker = within(canvasElement).getByRole("combobox", { name: "Model" });
+    // Auto is chosen for you, and the button shows only the label.
+    await expect(picker).toHaveTextContent("Auto (Torii chooses)");
+    await userEvent.click(picker);
+    const list = listOf(canvasElement);
+    await expect(list.getByRole("option", { name: "Auto (Torii chooses)" })).not.toHaveAttribute("aria-disabled");
+    // Models that cannot run are listed but cannot be chosen, and the second line says why, without a tooltip.
+    await expect(list.getByRole("option", { name: "qwen3-coder-30b" })).toHaveAccessibleDescription("Loaded");
+    await expect(list.getByRole("option", { name: "gemma-3-12b" })).toHaveAccessibleDescription("Loads when used");
+    await expect(list.getByRole("option", { name: "llama-70b" })).toHaveAttribute("aria-disabled", "true");
+    await expect(list.getByRole("option", { name: "llama-70b" })).toHaveAccessibleDescription("Cannot load here");
+    await expect(list.getByRole("option", { name: "phi-4" })).toHaveAttribute("aria-disabled", "true");
+    await expect(list.getByRole("option", { name: "phi-4" })).toHaveAccessibleDescription("Busy (RocketLeague.exe)");
     // A model too big while a call is running is listed, greyed out, with the reason.
-    await expect(within(picker).getByRole("option", { name: /llama-34b.*too big while Teams is running/ })).toBeDisabled();
+    await expect(list.getByRole("option", { name: "llama-34b" })).toHaveAttribute("aria-disabled", "true");
+    await expect(list.getByRole("option", { name: "llama-34b" })).toHaveAccessibleDescription("20 GB, too big while Teams is running");
+    await userEvent.keyboard("{Escape}");
   },
 };
 
@@ -50,7 +63,11 @@ export const ClaudeIsAChoiceForCodingToo: StoryObj = {
   },
   play: async ({ canvasElement }) => {
     // Claude is listed in every kind of conversation, coding included, and can be picked.
-    await expect(within(canvasElement).getByRole("option", { name: "claude:sonnet" })).toBeEnabled();
+    const picker = within(canvasElement).getByRole("combobox", { name: "Model" });
+    await expect(picker).toHaveTextContent("claude:sonnet");
+    await userEvent.click(picker);
+    await expect(listOf(canvasElement).getByRole("option", { name: "claude:sonnet" })).not.toHaveAttribute("aria-disabled");
+    await userEvent.keyboard("{Escape}");
   },
 };
 
@@ -61,7 +78,9 @@ export const ClaudeSaysWhichModelItUsed: StoryObj = {
   },
   play: async ({ canvasElement }) => {
     // Once a reply has named the model, the picker says which one Claude is using; before that it names none.
-    await expect(within(canvasElement).getByRole("group", { name: "Claude (through bastila), using claude-sonnet-5-5" })).toBeInTheDocument();
+    await userEvent.click(within(canvasElement).getByRole("combobox", { name: "Model" }));
+    await expect(listOf(canvasElement).getByRole("group", { name: "Claude (through bastila), using claude-sonnet-5-5" })).toBeInTheDocument();
+    await userEvent.keyboard("{Escape}");
   },
 };
 
@@ -83,10 +102,16 @@ export const EffortForModelsThatTakeIt: StoryObj = {
     if (!claude || !gptOss) {
       throw new Error("expected two effort pickers");
     }
-    await expect(within(claude).getAllByRole("option")).toHaveLength(6);
-    await expect(within(gptOss).getAllByRole("option")).toHaveLength(4);
-    await expect(claude).toHaveValue("high");
-    await expect(gptOss).toHaveValue("default");
+    await expect(claude).toHaveTextContent("Effort: high");
+    await expect(gptOss).toHaveTextContent("Default effort");
+    const list = listOf(canvasElement);
+    await userEvent.click(claude);
+    await expect(list.getAllByRole("option")).toHaveLength(6);
+    await expect(list.getByRole("option", { name: "Effort: max" })).toHaveAccessibleDescription("The most thinking, and the slowest");
+    await userEvent.keyboard("{Escape}");
+    await userEvent.click(gptOss);
+    await expect(list.getAllByRole("option")).toHaveLength(4);
+    await userEvent.keyboard("{Escape}");
   },
 };
 
@@ -97,11 +122,13 @@ export const NoModels: StoryObj = {
   },
   play: async ({ canvasElement }) => {
     // With nothing connected, Auto is all there is, and it will say why nothing can be chosen when a message is sent.
-    await expect(within(canvasElement).getByLabelText("Model")).toHaveValue("auto");
-    await expect(within(canvasElement).getByRole("option", { name: "No models: connect a device" })).toBeDisabled();
+    const picker = within(canvasElement).getByRole("combobox", { name: "Model" });
+    await expect(picker).toHaveTextContent("Auto (Torii chooses)");
+    await userEvent.click(picker);
+    await expect(listOf(canvasElement).getByRole("option", { name: "No models: connect a device" })).toHaveAttribute("aria-disabled", "true");
+    await userEvent.keyboard("{Escape}");
   },
 };
-
 const usage = (over: Partial<NonNullable<ConversationUsage["last"]>>, models: ConversationUsage["byModel"] = []): ConversationUsage => {
   return {
     last: { time: 0, model: "qwen3-coder-30b", device: "anakin", promptTokens: 6200, completionTokens: 400, contextLength: 32_768, estimated: false, ...over },
