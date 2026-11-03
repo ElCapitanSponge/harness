@@ -414,6 +414,9 @@ export const createApp = ({ registry, apiKey, relay, sessions, library, rules, g
     if (parsed.data.pinned !== undefined) {
       session.setPinned(parsed.data.pinned);
     }
+    if (parsed.data.archived !== undefined) {
+      session.setArchived(parsed.data.archived);
+    }
     return c.json(session.info());
   });
 

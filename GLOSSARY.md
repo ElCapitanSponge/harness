@@ -35,7 +35,7 @@ A task the model hands, with the agent tool, to a conversation of its own on the
 The connected device the browser is on, found by address or chosen by the person, where New code session here starts a session. It needs a node agent, since a browser cannot read files. See docs/guides/coding-sessions.md.
 
 **Project group**:
-The sidebar gathers conversations by project, a folder on a device, with chats in a group of their own. A group names its folder and says "This device" or the other device's name, collapses and expands (kept on the gateway so every client agrees), and has a button to start a new session in that project. A conversation can be pinned to a **Pinned** group above the projects; the pin is stored on the gateway with the conversation. See docs/guides/coding-sessions.md.
+The sidebar gathers conversations by project, a folder on a device, with chats in a group of their own. A group names its folder and says "This device" or the other device's name, collapses and expands (kept on the gateway so every client agrees), and has a button to start a new session in that project. A conversation can be pinned to a **Pinned** group above the projects; the pin is stored on the gateway with the conversation. A conversation can be archived into an **Archive** section at the bottom, which stays closed until opened; nothing is deleted, and archiving unpins. See docs/guides/coding-sessions.md.
 
 **Parity checklist**:
 The list of what Torii does that Claude Code does, and what it still lacks, kept in docs/reference/claude-code-parity.md and the tracking issue #112. A gap becomes a ticket when it is picked up.

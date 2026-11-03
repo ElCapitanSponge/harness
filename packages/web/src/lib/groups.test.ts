@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { groupSessions } from "./groups";
+import { ARCHIVE_ENTRY, groupKey, groupSessions } from "./groups";
 import type { SessionInfo } from "./types";
 
 const code = (id: string, device: string, root: string, parent?: string): SessionInfo => {
@@ -57,5 +57,24 @@ describe("grouping conversations by project", () => {
     expect(groupSessions([{ ...code("a", "pc", "p"), pinned: true }], "pc").map((g) => {
       return g.kind;
     })).toEqual(["pinned"]);
+  });
+
+  it("puts archived conversations in an Archive group at the end, newest first, and in no other group", () => {
+    const groups = groupSessions([code("a", "pc", "p"), { ...code("b", "pc", "p"), archived: true, updated: 5 }, { ...chat("c"), archived: true, updated: 9 }, { ...code("d", "pc", "p"), pinned: true, archived: true, updated: 1 }, chat("e")], "pc");
+    expect(groups.map((g) => {
+      return `${g.kind}:${g.items.map((i) => {
+        return i.info.id;
+      }).join(",")}`;
+    })).toEqual(["project:a", "chats:e", "archive:c,b,d"]);
+    expect(groups[groups.length - 1]).toMatchObject({ key: groupKey(ARCHIVE_ENTRY.device, ARCHIVE_ENTRY.root), name: "Archive", here: false });
+  });
+
+  it("makes no Archive group when nothing is archived, and drops a project left empty by archiving", () => {
+    expect(groupSessions([code("a", "pc", "p")], "pc").map((g) => {
+      return g.kind;
+    })).toEqual(["project"]);
+    expect(groupSessions([{ ...code("a", "pc", "p"), archived: true }], "pc").map((g) => {
+      return g.kind;
+    })).toEqual(["archive"]);
   });
 });

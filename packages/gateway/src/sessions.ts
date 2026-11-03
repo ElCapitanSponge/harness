@@ -35,6 +35,8 @@ export interface StoredSession {
   effort?: Effort;
   // Pinned to the top of the sidebar.
   pinned?: boolean;
+  // Put away in the Archive section of the sidebar.
+  archived?: boolean;
   // How many of the events the person has read.
   read?: number;
   // How changes are treated: ask (the default), edits, plan or bypass.
@@ -301,6 +303,8 @@ export class Session {
   // How changes are treated in this conversation.
   private mode: PermissionMode;
   pinned = false;
+  // Put away in the Archive section of the sidebar. Nothing is deleted.
+  archived = false;
   // How many of the events the person has read, in any client.
   read = 0;
   // Why the person declined the last action, if they said, so the model is told.
@@ -328,12 +332,13 @@ export class Session {
   private sendFirst: string | undefined;
 
   constructor(
-    init: Pick<StoredSession, "id" | "title" | "model" | "device" | "root" | "created" | "updated"> & { pinned?: boolean; read?: number; mode?: PermissionMode; parent?: string; depth?: number; effort?: Effort; history: ChatMessage[]; events?: SessionEvent[] },
+    init: Pick<StoredSession, "id" | "title" | "model" | "device" | "root" | "created" | "updated"> & { pinned?: boolean; archived?: boolean; read?: number; mode?: PermissionMode; parent?: string; depth?: number; effort?: Effort; history: ChatMessage[]; events?: SessionEvent[] },
     private deps: SessionDeps,
     autoApprove = false,
   ) {
     this.mode = init.mode ?? (autoApprove ? "bypass" : "ask");
     this.pinned = init.pinned === true;
+    this.archived = init.archived === true;
     this.read = init.read ?? init.events?.length ?? 0;
     this.id = init.id;
     this.parent = init.parent;
@@ -385,6 +390,7 @@ export class Session {
       mode: this.mode,
       ...(this.parent ? { parent: this.parent } : {}),
       ...(this.pinned ? { pinned: true } : {}),
+      ...(this.archived ? { archived: true } : {}),
       ...(this.waiting() ? { waiting: this.waiting() } : {}),
       read: this.read,
       ...(this.queue.length > 0 ? { queued: this.queued(), ...(this.held ? { queueHeld: true } : {}) } : {}),
@@ -393,7 +399,7 @@ export class Session {
   }
 
   toStored(): StoredSession {
-    return { id: this.id, title: this.title, model: this.model, device: this.device, root: this.root, created: this.created, updated: this.updated, effort: this.effort, mode: this.mode, ...(this.pinned ? { pinned: true } : {}), read: this.read, ...(this.parent ? { parent: this.parent } : {}), depth: this.depth, history: [...this.history], events: [...this.events] };
+    return { id: this.id, title: this.title, model: this.model, device: this.device, root: this.root, created: this.created, updated: this.updated, effort: this.effort, mode: this.mode, ...(this.pinned ? { pinned: true } : {}), ...(this.archived ? { archived: true } : {}), read: this.read, ...(this.parent ? { parent: this.parent } : {}), depth: this.depth, history: [...this.history], events: [...this.events] };
   }
 
   // Replays what has already happened, then follows live. Returns an unsubscribe function.
@@ -438,6 +444,17 @@ export class Session {
   setPinned(pinned: boolean): void {
     if (pinned !== this.pinned) {
       this.pinned = pinned;
+      this.deps.persist?.(this);
+    }
+  }
+
+  // Putting a conversation away also unpins it: the two do not go together. Bringing it back leaves it unpinned.
+  setArchived(archived: boolean): void {
+    if (archived !== this.archived) {
+      this.archived = archived;
+      if (archived) {
+        this.pinned = false;
+      }
       this.deps.persist?.(this);
     }
   }

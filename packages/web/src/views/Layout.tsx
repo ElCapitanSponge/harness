@@ -78,7 +78,8 @@ const Sidebar = ({ onNavigate }: { onNavigate: () => void }) => {
           collapsed={collapsed}
           pathname={pathname}
           onToggle={(group, value) => {
-            setCollapsed.mutate({ device: group.device, root: group.root, collapsed: value });
+            // The Archive is stored the other way round: an entry in the list means it is open.
+            setCollapsed.mutate({ device: group.device, root: group.root, collapsed: group.kind === "archive" ? !value : value });
           }}
           onNew={(group) => {
             void navigate(group.kind === "project" ? `/?device=${encodeURIComponent(group.device)}&root=${encodeURIComponent(group.root)}` : "/");

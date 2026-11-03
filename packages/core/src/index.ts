@@ -277,9 +277,9 @@ export const LibraryImport = z.object({
 export const SessionRead = z.object({ events: z.number().int().min(0) });
 // Changing the words of a message that is waiting in the queue.
 export const QueuedEdit = z.object({ text: z.string().min(1) });
-export const SessionRename = z.object({ title: z.string().trim().min(1).max(120).optional(), pinned: z.boolean().optional() }).refine((v) => {
-  return v.title !== undefined || v.pinned !== undefined;
-}, { message: "send a title or pinned" });
+export const SessionRename = z.object({ title: z.string().trim().min(1).max(120).optional(), pinned: z.boolean().optional(), archived: z.boolean().optional() }).refine((v) => {
+  return v.title !== undefined || v.pinned !== undefined || v.archived !== undefined;
+}, { message: "send a title, pinned or archived" });
 
 // What happens in a coding session, in order. Sent to clients as server-sent events.
 export type SessionEvent
@@ -431,6 +431,8 @@ export interface SessionInfo {
   parent?: string;
   // Pinned to the top of the sidebar.
   pinned?: boolean;
+  // Put away in the sidebar's Archive section. Nothing is deleted, and archiving a pinned conversation unpins it.
+  archived?: boolean;
   // What the conversation is waiting for the person to answer, if anything: an approval or a question.
   waiting?: "approval" | "question";
   // How many of its events the person has read, in any client. Fewer than `events` means there is something new to read; absent means all of it.

@@ -262,6 +262,19 @@ export const usePinConversation = () => {
   });
 };
 
+// Puts a conversation away in the Archive section of the sidebar, or brings it back. Nothing is deleted.
+export const useArchiveConversation = () => {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { id: string; archived: boolean }) => {
+      return api<SessionInfo>(`/sessions/${input.id}`, { method: "PATCH", body: { archived: input.archived } });
+    },
+    onSuccess: () => {
+      void client.invalidateQueries({ queryKey: ["sessions"] });
+    },
+  });
+};
+
 export const useDeleteConversation = () => {
   const client = useQueryClient();
   return useMutation({
