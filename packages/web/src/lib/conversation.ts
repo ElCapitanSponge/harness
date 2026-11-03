@@ -28,12 +28,27 @@ export interface ChangedFile {
   diffs: { patch?: string; note?: string }[];
 }
 
+// One version of the plan document: as the model wrote it, or as the person edited it when they approved it.
+export interface PlanVersion {
+  version: number;
+  markdown: string;
+  by: "model" | "person";
+}
+
+// What goes with the approval of a plan: the document as the person edited it, and what the conversation becomes (the HTTP body's names).
+export interface PlanReply {
+  plan?: string;
+  next?: "ask" | "edits";
+}
+
 export interface ConversationState {
   items: Item[];
   // Files the session changed, most recently changed first, and the model's plan as it stands. Both are rebuilt from the stored
   // events when a conversation is reopened.
   changes: ChangedFile[];
   plan: PlanStep[];
+  // Every version of the plan document, oldest first; the last is in force.
+  planDocs: PlanVersion[];
   // Screenshots the agent browser took, newest first.
   shots: ToolImage[];
   // Messages sent while a turn was running, waiting their turn, as the gateway keeps them; and whether they are held back because the last turn
@@ -54,7 +69,7 @@ import type { ActionEntry } from "./actions";
 import { MODE_LABELS } from "./modes";
 
 export const emptyConversation = (): ConversationState => {
-  return { items: [], changes: [], plan: [], shots: [], queue: [], queueHeld: false, busy: false, cursor: 0, next: 1 };
+  return { items: [], changes: [], plan: [], planDocs: [], shots: [], queue: [], queueHeld: false, busy: false, cursor: 0, next: 1 };
 };
 
 export type StreamEvent = SessionEvent | { type: "queue"; messages: QueuedInfo[]; held: boolean } | { type: "thinking-delta"; text: string } | { type: "text-delta"; text: string } | { type: "stage"; stage: StageName; detail?: string };
@@ -233,6 +248,9 @@ export const applyEvent = (state: ConversationState, event: StreamEvent, now: nu
 
     case "screenshot":
       return { ...state, cursor, shots: [event.shot, ...state.shots] };
+
+    case "plan-document":
+      return { ...state, cursor, planDocs: [...state.planDocs, { version: event.version, markdown: event.markdown, by: event.by }] };
 
     case "plan":
       return { ...state, cursor, plan: event.steps };

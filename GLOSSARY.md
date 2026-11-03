@@ -111,6 +111,10 @@ _Avoid_: chat (which means conversation without file access), run
 One message from the owner and everything the model does in answer, until it replies without asking for another tool, is declined, is cancelled or hits the step limit.
 _Avoid_: request, step
 
+**Plan**:
+What the model works from in a coding session: a list of steps with their progress, and in plan first mode a markdown document (the approach, the steps, the files, the risks) that the owner reads, may edit and approves. Each version of the document is stored with the conversation, not in the project folder. See docs/guides/coding-sessions.md.
+_Avoid_: to-do list, spec
+
 **Queued message**:
 A message the owner sends while a turn is running. The gateway keeps it, so every client shows the same queue, and starts it as the next turn when the running one finishes; several go one at a time, in order. It can be reworded, removed, or sent now, which cancels the running turn. After a turn that was declined, cancelled or failed the queue is held, not sent for the owner, and goes on after the next turn that finishes. It is lost if the gateway restarts.
 _Avoid_: pending message, draft (a draft is what is typed and not yet sent)

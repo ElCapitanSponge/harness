@@ -36,7 +36,17 @@ const Frame = ({ seed, dark, ownRouter, children }: { seed: Seed; dark: boolean;
 };
 
 const preview: Preview = {
-  parameters: { layout: "fullscreen", controls: { matchers: { color: /(background|color)$/i } } },
+  parameters: {
+    layout: "fullscreen",
+    controls: { matchers: { color: /(background|color)$/i } },
+    // The two phone sizes the app is checked at; a story picks one with `globals: { viewport: { value: "phone", isRotated: false } }`.
+    viewport: {
+      options: {
+        phone: { name: "Phone 375x667", type: "mobile", styles: { width: "375px", height: "667px" } },
+        phoneTall: { name: "Phone 390x844", type: "mobile", styles: { width: "390px", height: "844px" } },
+      },
+    },
+  },
   globalTypes: {
     theme: { description: "Theme", toolbar: { title: "Theme", icon: "paintbrush", items: ["light", "dark"], dynamicTitle: true } },
   },

@@ -245,7 +245,10 @@ export const SessionCreate = z.object({
 });
 export const SessionMode = z.object({ mode: PermissionMode });
 // `always` is true to allow that tool for the rest of the conversation, or "project" to remember it for that folder on that device.
-export const SessionApproval = z.object({ approve: z.boolean(), always: z.union([z.boolean(), z.literal("project")]).optional(), reason: z.string().trim().max(500).optional() });
+// The longest plan document, in characters.
+export const MAX_PLAN_DOCUMENT = 20_000;
+// Answering an approval. For a plan, `plan` is the document as the person edited it and `next` is what the conversation becomes once it is approved.
+export const SessionApproval = z.object({ approve: z.boolean(), always: z.union([z.boolean(), z.literal("project")]).optional(), reason: z.string().trim().max(500).optional(), plan: z.string().trim().min(1).max(MAX_PLAN_DOCUMENT).optional(), next: z.enum(["ask", "edits"]).optional() });
 // `model` picks the model for this message and those after it, so one conversation can move between models, devices and Claude.
 // `skill` is a skill the person started with / in the page; `text` is what they typed (the skill's name and its arguments).
 // Pictures sent with a message: base64, within the limits in image.ts.
@@ -294,6 +297,8 @@ export type SessionEvent
     | { type: "screenshot"; shot: ToolImage }
     // The model's plan as it stands.
     | { type: "plan"; steps: PlanStep[] }
+    // The plan as a markdown document, one event for each version: as the model wrote it, or as the person edited it before approving. The latest is in force.
+    | { type: "plan-document"; version: number; markdown: string; by: "model" | "person" }
     // The start of a conversation brought in from another tool. Nothing was sent to a model.
     | { type: "imported"; source: string; turns: number }
     // A skill the person started: its name, what they gave it, and the instructions it put in the conversation.

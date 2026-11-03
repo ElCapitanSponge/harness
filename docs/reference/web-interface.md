@@ -30,10 +30,10 @@ The sidebar lists conversations grouped by project (see [Projects in the sidebar
 - The **context meter** shows how full the model's window is, with **Compact now**. Automatic compaction is marked by a tick on the bar. A compaction, automatic or from **Compact now**, shows a note in the thread as soon as it starts, which becomes a divider with the counts when it finishes, or says why it failed. See [Usage](../guides/usage.md).
 - The status line shows the stage of a request (finding a device, loading a model, waiting, thinking, writing). See [Progress](../guides/progress.md).
 - **Changes** next to the message box sets the permission mode (ask, accept edits, plan first, run without asking).
-- A tool the model wants to use that changes things shows an approval card with what will happen (the diff, the whole command and folder, or the new file): **Allow**, allow for this conversation, allow always in this project, or **Decline** with an optional reason. Declining ends the turn.
+- A tool the model wants to use that changes things shows an approval card with what will happen (the diff, the whole command and folder, or the new file): **Allow**, allow for this conversation, allow always in this project, or **Decline** with an optional reason. Declining ends the turn. A plan in plan first mode is an approval card with the plan as a document: **Edit** it, **Request changes** (a decline with a reason), or approve and choose what follows, asking before each change or accepting file edits.
 - A failed turn shows the reason and **Retry**.
 - The conversation menu has **Pin to top**, **Rename**, **Export as markdown**, **Archive** and **Delete**. Archived conversations are listed in an **Archive** section at the bottom of the sidebar (closed until opened), and the menu there offers **Unarchive**. **Delete** asks first and offers **Archive instead**.
-- In a coding session the panel button opens the plan and the changed files with their diffs ([Coding sessions](../guides/coding-sessions.md#the-session-panel)).
+- In a coding session the panel button opens the plan (the document, with its versions, **Copy** and **Download .md**, above the steps) and the changed files with their diffs ([Coding sessions](../guides/coding-sessions.md#the-session-panel)).
 - A skill you start shows as a collapsed block; its text opens on a click.
 
 ## The message box
@@ -53,3 +53,15 @@ The message box takes markdown, and colours it as you type (see [Markdown in the
 | `/` at the start (coding sessions) | Open the skill menu. Up and Down move, Enter or Tab completes the name, Escape closes it. |
 
 Inside a fenced code block Enter adds a line instead of sending, so code can be pasted whole. The toolbar has the same formatting as buttons and a **Preview**. What you typed and did not send is kept per conversation, so a refresh does not lose it.
+
+## On a phone and other touchscreens
+
+The layout adapts to the width of the screen (the sidebar is a drawer below the `md` width) and to how the screen is used. Where the browser reports a touchscreen (`pointer: coarse`, so a phone or tablet but not a mouse), the page changes in these ways:
+
+- **Targets are 44px.** Buttons, fields, menu items, list rows, the toggles that open a tool action and the sidebar links are at least 44px tall, and an icon button is 44px square. Switches, checkboxes and the button that removes an attached image keep their look but can be tapped within 44px around them.
+- **Nothing waits for hover.** The copy buttons (on a message and on a code block) and the **+** beside a project are shown all the time.
+- **Choices have taller rows.** The model, effort and **Changes** lists are easier to tap.
+- **Nothing scrolls sideways.** The conversation header and the row of pickers wrap onto a second line, a long folder, device or model name breaks instead of widening the page, and the context panel is never wider than the screen.
+- **The keyboard does not cover the message box.** In browsers that support it (Chrome on Android) the page shrinks when the on-screen keyboard opens.
+
+With a mouse none of this changes.

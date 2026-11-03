@@ -112,6 +112,7 @@ export const ManyItems: StoryObj = {
 };
 
 export const PhoneWidth: StoryObj = {
+  globals: { viewport: { value: "phone", isRotated: false } },
   render: () => {
     return <Demo groups={modes} start="ask" className="w-80" />;
   },

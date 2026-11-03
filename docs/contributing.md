@@ -85,6 +85,10 @@ These are enforced by the linter, not by review. A rule is an error or it is off
 
 Never call `window.confirm`, `alert` or `prompt` (ESLint `no-alert` fails on them). To ask for a yes or no, use `ConfirmDialog` from `components/ui/overlay.tsx`: it is a Radix alert dialog that takes focus on Cancel, closes on Escape and ignores a click outside. Pick `tone="destructive"` for something that cannot be undone and `tone="risky"` for something that lowers a safeguard. The caller owns `open`, so keep the dialog open while the action runs and show its error in the dialog.
 
+### Touchscreens
+
+Design for a phone first and give the mouse its extras. Anything revealed on hover (`opacity-0` with `group-hover:`) must also be shown on touch with `pointer-coarse:opacity-100`; `src/touch.test.tsx` fails on a line that does not. Touch sizes come from the shared parts: `Button`, `Input`, `Select` and `Choice` grow to 44px under `pointer-coarse:`, so use them rather than a bare `<button>`, and when you do write one add `pointer-coarse:min-h-11`. A control that is small by design (a switch, a checkbox) keeps its look and takes an invisible `pointer-coarse:after:` area instead. Do not rely on `title` to say what an icon does: a phone never shows it.
+
 ### Storybook and front-end tests
 
 `pnpm storybook` opens Storybook 10 on port 6006 with the app's theme and a light/dark toggle in the toolbar. `pnpm --filter @harness/web build-storybook` builds a static copy (CI checks it builds).

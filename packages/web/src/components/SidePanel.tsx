@@ -3,8 +3,9 @@ import { useState } from "react";
 import type { PlanStep } from "@harness/core";
 import { Diff } from "@/components/Diff";
 import { FileBrowser } from "@/components/FileBrowser";
+import { PlanDocument } from "@/components/PlanDocument";
 import { Button } from "@/components/ui/button";
-import type { ChangedFile } from "@/lib/conversation";
+import type { ChangedFile, PlanVersion } from "@/lib/conversation";
 import type { ToolImage } from "@harness/core";
 import type { BackgroundTask } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -116,7 +117,7 @@ const Counts = ({ file }: { file: ChangedFile }) => {
 // What the session has done, beside the conversation: the model's plan and the files it changed or created, newest first. Finished tasks
 // and done plan steps can be cleared. A file
 // opens to its diff. At phone width it is a drawer over the conversation.
-export const SidePanel = ({ changes, plan, tasks = [], shots = [], files, onClearTasks, onClearPlan, clearError, onClose }: { changes: ChangedFile[]; plan: PlanStep[]; tasks?: BackgroundTask[]; shots?: ToolImage[]; onClearTasks?: () => void; onClearPlan?: () => void; clearError?: string; files?: { device: string; root: string; onAdd: (path: string, text: string, shortened: boolean) => void }; onClose: () => void }) => {
+export const SidePanel = ({ changes, plan, planDocs = [], tasks = [], shots = [], files, onClearTasks, onClearPlan, clearError, onClose }: { changes: ChangedFile[]; plan: PlanStep[]; planDocs?: PlanVersion[]; tasks?: BackgroundTask[]; shots?: ToolImage[]; onClearTasks?: () => void; onClearPlan?: () => void; clearError?: string; files?: { device: string; root: string; onAdd: (path: string, text: string, shortened: boolean) => void }; onClose: () => void }) => {
   const [openPath, setOpenPath] = useState<string | undefined>();
   const open = changes.find((f) => {
     return f.path === openPath;
@@ -140,6 +141,7 @@ export const SidePanel = ({ changes, plan, tasks = [], shots = [], files, onClea
               <>
                 {files ? <FileBrowser device={files.device} root={files.root} onAdd={files.onAdd} /> : null}
                 {clearError ? <p className="text-xs text-destructive" role="alert">{clearError}</p> : null}
+                {planDocs.length > 0 ? <PlanDocument versions={planDocs} /> : null}
                 {plan.length > 0 ? <Plan steps={plan} onClear={onClearPlan} /> : null}
                 {tasks.length > 0 ? <Tasks tasks={tasks} onClear={onClearTasks} /> : null}
                 {shots.length > 0 ? <Shots shots={shots} /> : null}
@@ -150,7 +152,7 @@ export const SidePanel = ({ changes, plan, tasks = [], shots = [], files, onClea
                     {changes.map((f) => {
                       return (
                         <li key={f.path}>
-                          <button type="button" className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left hover:bg-muted" onClick={() => {
+                          <button type="button" className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left pointer-coarse:min-h-11 hover:bg-muted" onClick={() => {
                             setOpenPath(f.path);
                           }}
                           >

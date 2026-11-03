@@ -85,7 +85,7 @@ export const FileBrowser = ({ device, root, onAdd }: { device: string; root: str
                   const path = dir === "" ? clean : `${dir}/${clean}`;
                   return (
                     <li key={name} className="flex items-center gap-1">
-                      <button type="button" className="flex min-w-0 flex-1 items-center gap-2 rounded-md px-2 py-1 text-left hover:bg-muted" disabled={busy} onClick={() => {
+                      <button type="button" className="flex min-w-0 flex-1 items-center gap-2 rounded-md px-2 py-1 text-left pointer-coarse:min-h-11 hover:bg-muted" disabled={busy} onClick={() => {
                         if (isDir) {
                           void open(path);
                         } else {

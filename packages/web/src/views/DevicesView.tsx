@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Badge, Input, Switch, Textarea } from "@/components/ui/fields";
 import { Dialog, DialogContent, DialogTrigger } from "@/components/ui/overlay";
 import { keyStore } from "@/lib/api";
+import { copyText } from "@/lib/clipboard";
 import { desktopApi, rootNameFor } from "@/lib/desktop";
 import { useDeviceSettings, useNodes, useSaveSettings } from "@/lib/queries";
 import type { NodeRecord, SettingKey, SettingsReport } from "@/lib/types";
@@ -67,7 +68,7 @@ const ToolGroupControl = ({ group, label, hint, value, onChange, disabled, tools
               role="radio"
               aria-checked={value === a.value}
               disabled={disabled}
-              className={cn("rounded-md px-3 py-1 font-semibold text-muted-foreground hover:text-foreground disabled:opacity-60", value === a.value && "bg-accent text-accent-foreground")}
+              className={cn("rounded-md px-3 py-1 font-semibold text-muted-foreground pointer-coarse:min-h-11 hover:text-foreground disabled:opacity-60", value === a.value && "bg-accent text-accent-foreground")}
               onClick={() => {
                 onChange(a.value);
               }}
@@ -198,7 +199,7 @@ const SettingsForm = ({ node, report }: { node: NodeRecord; report: SettingsRepo
               <div className="grid gap-1.5 sm:grid-cols-2">
                 {rootNames.map((name) => {
                   return (
-                    <label key={name} className="flex items-center gap-2 text-[13px]">
+                    <label key={name} className="flex items-center gap-2 text-[13px] pointer-coarse:min-h-11">
                       <Switch disabled={off("readOnlyRoots")} checked={readOnly.includes(name)} aria-label={`${name} is read-only`} onCheckedChange={(checked) => {
                         setReadOnly(checked ? [...readOnly, name] : readOnly.filter((n) => {
                           return n !== name;
@@ -346,7 +347,10 @@ const AddDevice = () => {
               <div key={c.label} className="flex items-center justify-between gap-3 rounded-lg border p-3">
                 <span className="font-semibold">{c.label}</span>
                 <Button onClick={() => {
-                  void navigator.clipboard.writeText(c.build(keyStore.state)).then(() => {
+                  void copyText(c.build(keyStore.state)).then((ok) => {
+                    if (!ok) {
+                      return;
+                    }
                     setCopied(c.label);
                   });
                 }}

@@ -4,6 +4,7 @@ import ReactMarkdown from "react-markdown";
 import rehypeHighlight from "rehype-highlight";
 import remarkGfm from "remark-gfm";
 import { Button } from "@/components/ui/button";
+import { copyText } from "@/lib/clipboard";
 
 const languageOf = (children: ReactNode): string => {
   if (isValidElement<{ className?: string }>(children)) {
@@ -19,7 +20,10 @@ const CodeBlock = ({ children }: ComponentProps<"pre">) => {
   const language = languageOf(children);
 
   const copy = (): void => {
-    void navigator.clipboard.writeText(ref.current?.innerText ?? "").then(() => {
+    void copyText(ref.current?.innerText ?? "").then((ok) => {
+      if (!ok) {
+        return;
+      }
       setCopied(true);
       setTimeout(() => {
         setCopied(false);
@@ -29,9 +33,9 @@ const CodeBlock = ({ children }: ComponentProps<"pre">) => {
 
   return (
     <div className="group/code my-3 overflow-hidden rounded-lg border bg-code">
-      <div className="flex items-center justify-between border-b px-3 py-1 text-xs text-muted-foreground">
+      <div className="flex items-center justify-between border-b px-3 py-1 text-xs text-muted-foreground pointer-coarse:py-0">
         <span>{language || "code"}</span>
-        <Button variant="subtle" size="sm" onClick={copy} aria-label="Copy code" className="opacity-0 transition-opacity focus-visible:opacity-100 group-hover/code:opacity-100">
+        <Button variant="subtle" size="sm" onClick={copy} aria-label="Copy code" className="opacity-0 transition-opacity focus-visible:opacity-100 group-hover/code:opacity-100 pointer-coarse:opacity-100">
           {copied ? <Check /> : <Copy />}
           {copied ? "Copied" : "Copy"}
         </Button>
