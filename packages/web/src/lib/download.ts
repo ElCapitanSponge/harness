@@ -31,3 +31,15 @@ export const downloadSkill = async (name: string): Promise<void> => {
   link.remove();
   URL.revokeObjectURL(url);
 };
+
+// Text the page already has (a plan document), handed to the browser as a file to save. Nothing is fetched.
+export const saveText = (filename: string, text: string, type = "text/markdown"): void => {
+  const url = URL.createObjectURL(new Blob([text], { type }));
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  document.body.append(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+};

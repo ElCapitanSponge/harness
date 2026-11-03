@@ -30,10 +30,10 @@ The sidebar lists conversations grouped by project (see [Projects in the sidebar
 - The **context meter** shows how full the model's window is, with **Compact now**. Automatic compaction is marked by a tick on the bar and a divider in the thread. See [Usage](../guides/usage.md).
 - The status line shows the stage of a request (finding a device, loading a model, waiting, thinking, writing). See [Progress](../guides/progress.md).
 - **Changes** next to the message box sets the permission mode (ask, accept edits, plan first, run without asking).
-- A tool the model wants to use that changes things shows an approval card with what will happen (the diff, the whole command and folder, or the new file): **Allow**, allow for this conversation, allow always in this project, or **Decline** with an optional reason. Declining ends the turn.
+- A tool the model wants to use that changes things shows an approval card with what will happen (the diff, the whole command and folder, or the new file): **Allow**, allow for this conversation, allow always in this project, or **Decline** with an optional reason. Declining ends the turn. A plan in plan first mode is an approval card with the plan as a document: **Edit** it, **Request changes** (a decline with a reason), or approve and choose what follows, asking before each change or accepting file edits.
 - A failed turn shows the reason and **Retry**.
 - The conversation menu has **Pin to top**, **Rename**, **Export as markdown**, **Archive** and **Delete**. Archived conversations are listed in an **Archive** section at the bottom of the sidebar (closed until opened), and the menu there offers **Unarchive**. **Delete** asks first and offers **Archive instead**.
-- In a coding session the panel button opens the plan and the changed files with their diffs ([Coding sessions](../guides/coding-sessions.md#the-session-panel)).
+- In a coding session the panel button opens the plan (the document, with its versions, **Copy** and **Download .md**, above the steps) and the changed files with their diffs ([Coding sessions](../guides/coding-sessions.md#the-session-panel)).
 - A skill you start shows as a collapsed block; its text opens on a click.
 
 ## The message box

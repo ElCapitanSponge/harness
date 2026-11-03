@@ -1,4 +1,4 @@
-import type { PlanStep } from "@harness/core";
+import { MAX_PLAN_DOCUMENT, type PlanStep } from "@harness/core";
 import type { ToolSpec } from "./helpers.js";
 
 // The model's own to-do list for a session. It touches no files and runs on the gateway, which keeps the plan with the session and
@@ -24,6 +24,18 @@ export const readPlan = (args: Record<string, unknown>): PlanStep[] => {
   });
 };
 
+// The plan as a markdown document, if the model sent one. It is optional, because the step list is what keeps progress.
+export const readPlanDocument = (args: Record<string, unknown>): string | undefined => {
+  const markdown = args.markdown;
+  if (markdown === undefined || markdown === null) {
+    return undefined;
+  }
+  if (typeof markdown !== "string" || markdown.length > MAX_PLAN_DOCUMENT) {
+    throw new Error(`"markdown" must be text of at most ${String(MAX_PLAN_DOCUMENT)} characters`);
+  }
+  return markdown.trim() === "" ? undefined : markdown.trim();
+};
+
 // What the plan tool says in plan mode: the model can only read until the person approves the plan it sends.
 export const planToolForPlanMode = (): ToolSpec => {
   return {
@@ -32,7 +44,7 @@ export const planToolForPlanMode = (): ToolSpec => {
       ...planTool.def,
       function: {
         ...planTool.def.function,
-        description: "You are in plan mode: you can look at things but not change anything. Investigate, then send your plan with this tool. The person has to approve it before you can make changes; if they do not, you are told why, and you revise it.",
+        description: "You are in plan mode: you can look at things but not change anything. Investigate, then send your plan with this tool: the steps, and the plan as a markdown document in \"markdown\" (the approach, the steps, the files you will touch, the risks). The person reads it, may edit it, and has to approve it before you can make changes; if they do not, you are told why, and you revise it. If they edited it, you are shown the version to follow.",
       },
     },
   };
@@ -47,6 +59,7 @@ export const planTool: ToolSpec = {
       parameters: {
         type: "object",
         properties: {
+          markdown: { type: "string", description: "The plan as a markdown document: the approach, the steps, the files you will touch and the risks. Send it with your first plan, and again whenever you change it." },
           steps: {
             type: "array",
             description: "The whole plan, in order",
