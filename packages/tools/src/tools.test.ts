@@ -171,6 +171,7 @@ describe("tool metadata", () => {
       task_stop: false,
       tasks_list: false,
       tasks_stop_all: false,
+      tasks_clear_finished: false,
     });
   });
 });

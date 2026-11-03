@@ -762,6 +762,37 @@ describe("Session side panel data", () => {
     expect(relay.callTool).not.toHaveBeenCalled();
   });
 
+  it("clears the finished steps as a new plan event, tells the model, and refuses while a turn is running", async () => {
+    const steps = [{ text: "read the code", status: "done" }, { text: "fix it", status: "in_progress" }, { text: "test it", status: "pending" }];
+    script({ role: "assistant", content: null, tool_calls: [call("1", "plan", { steps })] }, { role: "assistant", content: "ok" }, { role: "assistant", content: "carrying on" });
+    const s = create();
+    s.send("do it");
+    await until(() => {
+      return types(s).includes("done");
+    });
+    expect(s.clearDonePlan()).toEqual({ ok: true, cleared: 1 });
+    expect(s.events.findLast((e) => {
+      return e.type === "plan";
+    })).toEqual({ type: "plan", steps: steps.slice(1) });
+    // Nothing more to clear, and no event for it.
+    expect(s.clearDonePlan()).toEqual({ ok: true, cleared: 0 });
+    expect(types(s).filter((t) => {
+      return t === "plan";
+    })).toHaveLength(2);
+
+    s.send("go on");
+    expect(s.clearDonePlan()).toMatchObject({ ok: false, reason: expect.stringContaining("busy") as string });
+    await until(() => {
+      return types(s).filter((t) => {
+        return t === "done";
+      }).length === 2;
+    });
+    const sent = complete.mock.calls.at(-1)?.[1] ?? [];
+    expect(sent.some((m) => {
+      return m.role === "system" && textOf(m.content).includes("The person cleared the finished steps from the plan") && textOf(m.content).includes("1. fix it (in_progress)");
+    })).toBe(true);
+  });
+
   it("tells the model what is wrong with a plan it got wrong, and keeps going", async () => {
     script({ role: "assistant", content: null, tool_calls: [call("1", "plan", { steps: [] })] }, { role: "assistant", content: "ok" });
     const s = create();

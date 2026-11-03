@@ -15,10 +15,16 @@ const STATUS: Record<PlanStep["status"], { icon: typeof Check; label: string }> 
   pending: { icon: Circle, label: "to do" },
 };
 
-const Plan = ({ steps }: { steps: PlanStep[] }) => {
+const Plan = ({ steps, onClear }: { steps: PlanStep[]; onClear?: () => void }) => {
+  const anyDone = steps.some((s) => {
+    return s.status === "done";
+  });
   return (
     <section aria-label="Plan" className="grid gap-1">
-      <h3 className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground"><ListChecks className="size-4" /> Plan</h3>
+      <div className="flex items-center gap-1.5">
+        <h3 className="flex flex-1 items-center gap-1.5 text-xs font-semibold text-muted-foreground"><ListChecks className="size-4" /> Plan</h3>
+        {onClear && anyDone ? <Button type="button" variant="subtle" size="sm" onClick={onClear}>Clear done</Button> : null}
+      </div>
       <ol className="grid gap-1">
         {steps.map((s, i) => {
           const { icon: Icon, label } = STATUS[s.status];
@@ -55,10 +61,16 @@ const FileDetail = ({ file, onBack }: { file: ChangedFile; onBack: () => void })
   );
 };
 
-const Tasks = ({ tasks }: { tasks: BackgroundTask[] }) => {
+const Tasks = ({ tasks, onClear }: { tasks: BackgroundTask[]; onClear?: () => void }) => {
+  const anyFinished = tasks.some((t) => {
+    return t.status !== "running";
+  });
   return (
     <section aria-label="Background tasks" className="grid gap-1">
-      <h3 className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground"><Terminal className="size-4" /> Running in the background</h3>
+      <div className="flex items-center gap-1.5">
+        <h3 className="flex flex-1 items-center gap-1.5 text-xs font-semibold text-muted-foreground"><Terminal className="size-4" /> Running in the background</h3>
+        {onClear && anyFinished ? <Button type="button" variant="subtle" size="sm" onClick={onClear}>Clear finished</Button> : null}
+      </div>
       <ul className="grid gap-1">
         {tasks.map((t) => {
           return (
@@ -101,9 +113,10 @@ const Counts = ({ file }: { file: ChangedFile }) => {
   );
 };
 
-// What the session has done, beside the conversation: the model's plan and the files it changed or created, newest first. A file
+// What the session has done, beside the conversation: the model's plan and the files it changed or created, newest first. Finished tasks
+// and done plan steps can be cleared. A file
 // opens to its diff. At phone width it is a drawer over the conversation.
-export const SidePanel = ({ changes, plan, tasks = [], shots = [], files, onClose }: { changes: ChangedFile[]; plan: PlanStep[]; tasks?: BackgroundTask[]; shots?: ToolImage[]; files?: { device: string; root: string; onAdd: (path: string, text: string, shortened: boolean) => void }; onClose: () => void }) => {
+export const SidePanel = ({ changes, plan, tasks = [], shots = [], files, onClearTasks, onClearPlan, clearError, onClose }: { changes: ChangedFile[]; plan: PlanStep[]; tasks?: BackgroundTask[]; shots?: ToolImage[]; onClearTasks?: () => void; onClearPlan?: () => void; clearError?: string; files?: { device: string; root: string; onAdd: (path: string, text: string, shortened: boolean) => void }; onClose: () => void }) => {
   const [openPath, setOpenPath] = useState<string | undefined>();
   const open = changes.find((f) => {
     return f.path === openPath;
@@ -126,8 +139,9 @@ export const SidePanel = ({ changes, plan, tasks = [], shots = [], files, onClos
           : (
               <>
                 {files ? <FileBrowser device={files.device} root={files.root} onAdd={files.onAdd} /> : null}
-                {plan.length > 0 ? <Plan steps={plan} /> : null}
-                {tasks.length > 0 ? <Tasks tasks={tasks} /> : null}
+                {clearError ? <p className="text-xs text-destructive" role="alert">{clearError}</p> : null}
+                {plan.length > 0 ? <Plan steps={plan} onClear={onClearPlan} /> : null}
+                {tasks.length > 0 ? <Tasks tasks={tasks} onClear={onClearTasks} /> : null}
                 {shots.length > 0 ? <Shots shots={shots} /> : null}
                 <section aria-label="Changed files" className="grid gap-1">
                   <h3 className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground"><FileText className="size-4" /> Files</h3>

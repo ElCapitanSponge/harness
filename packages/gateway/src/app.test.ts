@@ -560,6 +560,40 @@ describe("background tasks of a session", () => {
     relay.callTool.mockRejectedValue(new Error("not connected"));
     expect(await (await app.request(`/sessions/${code.id}/tasks`)).json()).toEqual([]);
   });
+  it("clears the finished tasks through the device, and says so when the device's agent is too old", async () => {
+    registry.upsert(beat({ roots: ["proj"], allowedTools: ["read_file"] }));
+    const app = build();
+    const code = await (await app.request("/sessions", json({ model: "qwen", device: "pc", root: "proj" }))).json() as { id: string };
+    const clear = (id: string) => {
+      return app.request(`/sessions/${id}/tasks/finished`, { method: "DELETE" });
+    };
+    relay.callTool.mockResolvedValue({ ok: true, output: "cleared 2 tasks" });
+    const done = await clear(code.id);
+    expect(done.status).toBe(200);
+    expect(await done.json()).toEqual({ cleared: 2 });
+    expect(relay.callTool).toHaveBeenCalledWith("pc", "proj", "tasks_clear_finished", {}, expect.objectContaining({ session: code.id }));
+
+    expect((await clear("nope")).status).toBe(404);
+    const chat = await (await app.request("/sessions", json({ model: "qwen" }))).json() as { id: string };
+    expect(await (await clear(chat.id)).json()).toEqual({ cleared: 0 });
+
+    relay.callTool.mockResolvedValue({ ok: false, output: "error: unknown tool \"tasks_clear_finished\"" });
+    const old = await clear(code.id);
+    expect(old.status).toBe(501);
+    expect(await old.json()).toMatchObject({ error: { message: expect.stringContaining("older agent") as string } });
+
+    relay.callTool.mockRejectedValue(new Error("not connected"));
+    expect(await (await clear(code.id)).json()).toEqual({ cleared: 0 });
+  });
+
+  it("clears the done steps of the plan, with nothing to clear for a session that has none", async () => {
+    const app = build();
+    const chat = await (await app.request("/sessions", json({ model: "qwen" }))).json() as { id: string };
+    const res = await app.request(`/sessions/${chat.id}/plan/done`, { method: "DELETE" });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ cleared: 0 });
+    expect((await app.request("/sessions/nope/plan/done", { method: "DELETE" })).status).toBe(404);
+  });
 });
 
 describe("answering a question", () => {

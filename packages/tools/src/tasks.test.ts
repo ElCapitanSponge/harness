@@ -2,7 +2,7 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { listTasks, startTask, stopAllTasks, stopSessionTasks, stopTask, taskOutput } from "./tasks.js";
+import { clearFinishedTasks, listTasks, startTask, stopAllTasks, stopSessionTasks, stopTask, taskOutput } from "./tasks.js";
 import { findTool, toolNamesFor } from "./tools.js";
 
 let dir: string;
@@ -86,6 +86,24 @@ describe("background tasks", () => {
   });
 });
 
+describe("clearing finished tasks", () => {
+  it("forgets the ones that exited or were stopped, keeps the running ones, and only for that session", async () => {
+    const quick = startTask("clear-a", "node quick.js", dir);
+    const stopped = startTask("clear-a", "node server.js", dir);
+    const running = startTask("clear-a", "node server.js", dir);
+    const other = startTask("clear-b", "node quick.js", dir);
+    stopTask("clear-a", stopped.id);
+    await until(() => {
+      return taskOutput("clear-a", quick.id, 5).info.status === "exited" && taskOutput("clear-b", other.id, 5).info.status === "exited";
+    });
+    expect(clearFinishedTasks("clear-a")).toBe(2);
+    expect(listTasks("clear-a")).toEqual([expect.objectContaining({ id: running.id, status: "running" }) as unknown]);
+    expect(listTasks("clear-b")).toHaveLength(1);
+    expect(clearFinishedTasks("clear-a")).toBe(0);
+    expect(await findTool("tasks_clear_finished")?.run({}, { cwd: dir, session: "clear-b" })).toBe("cleared 1 tasks");
+  });
+});
+
 describe("the task tools", () => {
   it("run_command starts a background task and the other tools read and stop it, for the session in the call", async () => {
     const run = findTool("run_command");
@@ -106,6 +124,7 @@ describe("the task tools", () => {
     expect(toolNamesFor("change", "off")).toEqual(expect.arrayContaining(["run_command", "task_output", "task_stop"]));
     expect(toolNamesFor("change", "change")).not.toContain("tasks_list");
     expect(toolNamesFor("change", "change")).not.toContain("tasks_stop_all");
+    expect(toolNamesFor("change", "change")).not.toContain("tasks_clear_finished");
     expect(findTool("run_command")?.needsApproval).toBe(true);
   });
 });
