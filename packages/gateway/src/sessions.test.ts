@@ -1687,6 +1687,96 @@ describe("Plan first", () => {
     expect(namesAt(1)).not.toContain("write_file");
   });
 
+  const planWith = (markdown: string) => {
+    return { role: "assistant" as const, content: null, tool_calls: [call("p", "plan", { steps, markdown })] };
+  };
+
+  it("keeps the plan as a document, one stored version each, and goes on with the person's edit and the mode they chose", async () => {
+    registry.upsert(beat({ allowedTools: ["read_file", "write_file"] }));
+    let told = "";
+    let step = 0;
+    complete.mockImplementation(async (_m, messages) => {
+      step++;
+      if (step === 1) {
+        return planWith("# Plan\n\n- fix the bug");
+      }
+      told = textOf(messages.findLast((m) => {
+        return m.role === "tool";
+      })?.content);
+      return { role: "assistant", content: "ok" };
+    });
+    const s = sessions.create({ model: "qwen", device: "pc", root: "proj", mode: "plan" });
+    s.send("fix it");
+    await until(() => {
+      return approvals(s).length === 1;
+    });
+    // The person is shown the document, not the step list.
+    expect(approvals(s)[0]).toMatchObject({ tool: "plan", preview: { kind: "file", title: "The plan", text: "# Plan\n\n- fix the bug" } });
+    expect(s.planDocuments()).toEqual([{ type: "plan-document", version: 1, markdown: "# Plan\n\n- fix the bug", by: "model" }]);
+
+    s.answer(approvals(s)[0]?.id ?? "", true, false, undefined, { edited: "# Plan\n\n- fix the bug\n- add a test", next: "edits" });
+    await until(() => {
+      return types(s).includes("done");
+    });
+    expect(s.planDocuments().map((d) => {
+      return [d.version, d.by];
+    })).toEqual([[1, "model"], [2, "person"]]);
+    expect(told).toContain("with the person's changes");
+    expect(told).toContain("- add a test");
+    expect(told).toContain("File edits are accepted without asking");
+    expect(s.permission).toBe("edits");
+    expect(s.events).toContainEqual({ type: "mode", mode: "edits" });
+  });
+
+  it("adds no version when the plan is approved as it was, and asks before each change unless told otherwise", async () => {
+    registry.upsert(beat({ allowedTools: ["read_file", "write_file"] }));
+    let told = "";
+    let step = 0;
+    complete.mockImplementation(async (_m, messages) => {
+      step++;
+      if (step === 1) {
+        return planWith("# Plan\n\n- fix the bug");
+      }
+      told = textOf(messages.findLast((m) => {
+        return m.role === "tool";
+      })?.content);
+      return { role: "assistant", content: "ok" };
+    });
+    const s = sessions.create({ model: "qwen", device: "pc", root: "proj", mode: "plan" });
+    s.send("fix it");
+    await until(() => {
+      return approvals(s).length === 1;
+    });
+    // An edit that is the same text is not a new version.
+    s.answer(approvals(s)[0]?.id ?? "", true, false, undefined, { edited: "# Plan\n\n- fix the bug\n" });
+    await until(() => {
+      return types(s).includes("done");
+    });
+    expect(s.planDocuments()).toHaveLength(1);
+    expect(told).toContain("The plan is approved.");
+    expect(told).not.toContain("with the person's changes");
+    expect(s.permission).toBe("ask");
+  });
+
+  it("shows the step list for a plan sent without a document, and stores no version", async () => {
+    registry.upsert(beat({ allowedTools: ["read_file"] }));
+    complete.mockImplementationOnce(async () => {
+      return plan(steps);
+    }).mockImplementation(async () => {
+      return { role: "assistant", content: "ok" };
+    });
+    const s = sessions.create({ model: "qwen", device: "pc", root: "proj", mode: "plan" });
+    s.send("fix it");
+    await until(() => {
+      return approvals(s).length === 1;
+    });
+    expect(s.planDocuments()).toEqual([]);
+    s.answer(approvals(s)[0]?.id ?? "", true);
+    await until(() => {
+      return types(s).includes("done");
+    });
+  });
+
   it("does not let an always-allow or a remembered rule skip the plan's approval", async () => {
     registry.upsert(beat({ allowedTools: ["read_file"] }));
     const rules = { has: () => {

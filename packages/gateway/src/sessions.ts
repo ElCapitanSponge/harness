@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { effortFor, noImagesReason, type ApprovalPreview, type PermissionMode, sseData, supportsImages, type ImageAttachment, textOf, type ChatMessage, type Effort, type NodeRecord, type PlanStep, type LiveSessionEvent, type QueuedInfo, type SessionEvent, type SessionInfo, type Tool, type ToolCall } from "@harness/core";
-import { MAX_SUBAGENTS, MAX_SUBAGENT_DEPTH, agentTool, askTool, contextPrompt, fileChange, planTool, planToolForPlanMode, readQuestion, readPlan, readSubagentTask, runTurn, systemPrompt, type ProjectContext, type SkillSummary, tools as allTools, type StreamHooks, type ToolSpec } from "@harness/tools";
+import { MAX_SUBAGENTS, MAX_SUBAGENT_DEPTH, agentTool, askTool, contextPrompt, fileChange, planTool, planToolForPlanMode, readQuestion, readPlan, readPlanDocument, readSubagentTask, runTurn, systemPrompt, type ProjectContext, type SkillSummary, tools as allTools, type StreamHooks, type ToolSpec } from "@harness/tools";
 import type { Registry } from "./registry.js";
 import type { Relay } from "./relay.js";
 import type { ModelLoader } from "./loader.js";
@@ -22,6 +22,12 @@ export interface CallOptions {
 }
 
 export type Complete = (model: string, messages: ChatMessage[], tools: Tool[], signal: AbortSignal, hooks?: StreamHooks, options?: CallOptions) => Promise<ChatMessage>;
+
+// What the person adds when they approve a plan: the document as they edited it, and what the conversation becomes (ask before each change, or accept file edits).
+export interface PlanAnswer {
+  edited?: string | undefined;
+  next?: "ask" | "edits" | undefined;
+}
 
 // Everything needed to bring a session back after a restart. Always taken at a turn boundary, never mid-turn.
 export interface StoredSession {
@@ -287,7 +293,7 @@ export class Session {
   private listeners = new Set<(event: SessionEvent | LiveSessionEvent) => void>();
   private history: ChatMessage[];
   private abort: AbortController | undefined;
-  private approvals = new Map<string, (approved: boolean, always?: boolean | "project", reason?: string) => void>();
+  private approvals = new Map<string, (approved: boolean, always?: boolean | "project", reason?: string, plan?: PlanAnswer) => void>();
   private questions = new Map<string, (answer: string | undefined) => void>();
   // Sub-agents: the conversation that started this one (if any) and how deep it is; the ones this conversation has started; the tools
   // it may use at most (a sub-agent is given a subset of its parent's); and the names it was offered at its last turn.
@@ -309,6 +315,8 @@ export class Session {
   read = 0;
   // Why the person declined the last action, if they said, so the model is told.
   private declined: string | undefined;
+  // What came with the last approval of a plan, read once the plan tool call resumes.
+  private planAnswer: PlanAnswer | undefined;
   // When the history was last compacted and how big it was after, so the meter can show that before the next reply.
   compaction: { time: number; tokensAfter: number } | undefined;
   // Which model on which device made the latest call, to label the reply that follows.
@@ -457,6 +465,22 @@ export class Session {
       }
       this.deps.persist?.(this);
     }
+  }
+
+  // Every version of the plan document, oldest first. The latest is the one in force.
+  planDocuments(): Extract<SessionEvent, { type: "plan-document" }>[] {
+    return this.events.filter((e): e is Extract<SessionEvent, { type: "plan-document" }> => {
+      return e.type === "plan-document";
+    });
+  }
+
+  // A new version is a new stored event (history is never edited); the same text as the latest is not a new version.
+  private addPlanDocument(markdown: string, by: "model" | "person"): void {
+    const versions = this.planDocuments();
+    if (versions.at(-1)?.markdown === markdown) {
+      return;
+    }
+    this.emit({ type: "plan-document", version: versions.length + 1, markdown, by });
   }
 
   // The plan as the model last sent it, or as the person last cleared it: the latest plan event.
@@ -758,12 +782,12 @@ export class Session {
   }
 
   // Answers a pending approval. Returns false if there is no such approval (already answered or timed out).
-  answer(approvalId: string, approved: boolean, always: boolean | "project" = false, reason?: string): boolean {
+  answer(approvalId: string, approved: boolean, always: boolean | "project" = false, reason?: string, plan?: PlanAnswer): boolean {
     const settle = this.approvals.get(approvalId);
     if (!settle) {
       return false;
     }
-    settle(approved, always, reason);
+    settle(approved, always, reason, plan);
     return true;
   }
 
@@ -802,7 +826,7 @@ export class Session {
     const id = randomUUID();
     this.declined = undefined;
     return new Promise<boolean>((resolve) => {
-      const settle = (approved: boolean, always: boolean | "project" = false, reason?: string): void => {
+      const settle = (approved: boolean, always: boolean | "project" = false, reason?: string, plan?: PlanAnswer): void => {
         clearTimeout(timer);
         this.approvals.delete(id);
         if (approved && sticky && always === true) {
@@ -812,6 +836,7 @@ export class Session {
           this.deps.rules?.add(this.device, this.root, tool);
         }
         this.declined = approved ? undefined : reason;
+        this.planAnswer = approved ? plan : undefined;
         this.emit({ type: "approval-resolved", id, approved, ...(reason ? { reason } : {}) });
         resolve(approved);
       };
@@ -1119,17 +1144,32 @@ export class Session {
           // The plan is the session's own, kept here and shown in the side panel; it touches no device.
           if (name === "plan") {
             const steps = readPlan(args);
+            const markdown = readPlanDocument(args);
             this.emit({ type: "plan", steps });
+            if (markdown !== undefined) {
+              this.addPlanDocument(markdown, "model");
+            }
             if (this.mode === "plan") {
-              const approved = await this.askToApprove("plan", "Approve this plan? The model stays read-only until you do.", { kind: "file", title: "The plan", text: steps.map((s, i) => {
+              const approved = await this.askToApprove("plan", "Approve this plan? The model stays read-only until you do.", { kind: "file", title: "The plan", text: markdown ?? steps.map((s, i) => {
                 return `${String(i + 1)}. ${s.text}`;
               }).join("\n") }, false);
               if (!approved) {
                 return `The person did not approve the plan${this.declined ? `: ${this.declined}` : ""}. Revise it, or ask what they want.`;
               }
-              this.setMode("ask");
+              // What the person approved: possibly their own edit of the document, and what the conversation becomes now.
+              const answer = this.planAnswer;
+              const edited = answer?.edited?.trim() ?? "";
+              const changed = edited !== "" && edited !== markdown;
+              if (changed) {
+                this.addPlanDocument(edited, "person");
+              }
+              const next = answer?.next ?? "ask";
+              this.setMode(next);
               inUse.splice(0, inUse.length, ...full);
-              return "The plan is approved. You can now make changes; each change still asks the person as usual.";
+              const how = next === "edits" ? "File edits are accepted without asking; other changes still ask the person." : "Each change still asks the person as usual.";
+              return changed
+                ? `The plan is approved, with the person's changes. This is the plan to follow:\n\n${edited}\n\nYou can now make changes. ${how}`
+                : `The plan is approved. You can now make changes; ${how}`;
             }
             return `plan saved: ${String(steps.filter((s) => {
               return s.status === "done";

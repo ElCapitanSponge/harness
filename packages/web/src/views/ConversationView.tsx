@@ -158,7 +158,7 @@ const Conversation = ({ id }: { id: string }) => {
   // Auto picks a model that can read images when it can; a model picked by hand is checked here.
   const next = picked || model;
   const imageNote = next === "auto" || next === "" || supportsImages(next) ? "" : noImagesReason(next);
-  const panelCount = state.changes.length + state.shots.length + (state.plan.length > 0 ? 1 : 0);
+  const panelCount = state.changes.length + state.shots.length + (state.plan.length > 0 || state.planDocs.length > 0 ? 1 : 0);
 
   return (
     <div className="flex min-h-0 min-w-0 flex-1">
@@ -281,7 +281,7 @@ const Conversation = ({ id }: { id: string }) => {
       </div>
       {panel && info?.kind === "code"
         ? (
-            <SidePanel changes={state.changes} plan={state.plan} tasks={tasks.data} shots={state.shots} clearError={clearTasks.error?.message ?? clearPlan.error?.message} onClearTasks={clearFinishedTasks} onClearPlan={clearDonePlan} files={info.device !== "" ? { device: info.device, root: info.root, onAdd: addContext } : undefined} onClose={() => {
+            <SidePanel changes={state.changes} plan={state.plan} planDocs={state.planDocs} tasks={tasks.data} shots={state.shots} clearError={clearTasks.error?.message ?? clearPlan.error?.message} onClearTasks={clearFinishedTasks} onClearPlan={clearDonePlan} files={info.device !== "" ? { device: info.device, root: info.root, onAdd: addContext } : undefined} onClose={() => {
               setPanel(false);
             }}
             />

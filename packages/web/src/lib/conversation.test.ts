@@ -141,6 +141,20 @@ describe("compaction", () => {
   });
 });
 
+describe("the plan as a document", () => {
+  it("keeps every version in order, as stored events, apart from the step list", () => {
+    const state = run([
+      { type: "plan", steps: [{ text: "a", status: "pending" }] },
+      { type: "plan-document", version: 1, markdown: "# Plan", by: "model" },
+      { type: "plan-document", version: 2, markdown: "# Plan\n\n- more", by: "person" },
+    ]);
+    expect(state.planDocs).toEqual([{ version: 1, markdown: "# Plan", by: "model" }, { version: 2, markdown: "# Plan\n\n- more", by: "person" }]);
+    expect(state.plan).toEqual([{ text: "a", status: "pending" }]);
+    expect(state.items).toEqual([]);
+    expect(state.cursor).toBe(3);
+  });
+});
+
 describe("progress before the first word", () => {
   it("is busy with a timer from the moment of sending, follows the stages, and clears when the turn ends", () => {
     const sent = markBusy(emptyConversation(), 5000);
