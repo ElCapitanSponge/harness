@@ -1,5 +1,5 @@
 import { toOpenAIResponse, toSse } from "@harness/claude";
-import { ChatRequest, DeviceToolRequest, ModelLoad, ModelUnload, ImportParse, LibraryImport, SessionAnswer, SessionApproval, SessionCreate, SessionMode, SessionImport, SessionMessage, SessionRead, SessionRename, flattenError } from "@harness/core";
+import { ChatRequest, DeviceToolRequest, ModelLoad, ModelUnload, ImportParse, LibraryImport, QueuedEdit, SessionAnswer, SessionApproval, SessionCreate, SessionMode, SessionImport, SessionMessage, SessionRead, SessionRename, flattenError } from "@harness/core";
 import { findTool, type ProjectContext } from "@harness/tools";
 import { Hono, type Context } from "hono";
 import { bearerAuth } from "./auth.js";
@@ -265,6 +265,50 @@ export const createApp = ({ registry, apiKey, relay, sessions, library, rules, g
     }
     try {
       session.send(parsed.data.text, parsed.data.model, parsed.data.effort, parsed.data.skill, parsed.data.images);
+    } catch (err) {
+      return c.json({ error: { message: (err as Error).message } }, 409);
+    }
+    return c.json(session.info(), 202);
+  });
+
+  // Messages sent while a turn was running wait here until it ends. They can be reworded, taken back, or sent at once.
+  app.patch("/sessions/:id/queue/:queueId", async (c) => {
+    const session = sessions.get(c.req.param("id"));
+    if (!session) {
+      return c.json({ error: { message: "no such session" } }, 404);
+    }
+    const parsed = QueuedEdit.safeParse(await c.req.json().catch(() => {
+      return undefined;
+    }));
+    if (!parsed.success) {
+      return c.json({ error: flattenError(parsed.error) }, 400);
+    }
+    if (!session.editQueued(c.req.param("queueId"), parsed.data.text)) {
+      return c.json({ error: { message: "that message is no longer waiting" } }, 404);
+    }
+    return c.json(session.info());
+  });
+
+  app.delete("/sessions/:id/queue/:queueId", (c) => {
+    const session = sessions.get(c.req.param("id"));
+    if (!session) {
+      return c.json({ error: { message: "no such session" } }, 404);
+    }
+    if (!session.removeQueued(c.req.param("queueId"))) {
+      return c.json({ error: { message: "that message is no longer waiting" } }, 404);
+    }
+    return c.json(session.info());
+  });
+
+  app.post("/sessions/:id/queue/:queueId/send", (c) => {
+    const session = sessions.get(c.req.param("id"));
+    if (!session) {
+      return c.json({ error: { message: "no such session" } }, 404);
+    }
+    try {
+      if (!session.sendQueuedNow(c.req.param("queueId"))) {
+        return c.json({ error: { message: "that message is no longer waiting" } }, 404);
+      }
     } catch (err) {
       return c.json({ error: { message: (err as Error).message } }, 409);
     }

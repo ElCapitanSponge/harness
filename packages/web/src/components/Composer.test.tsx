@@ -43,6 +43,21 @@ describe("Composer drafts", () => {
     expect(screen.getByRole("button", { name: "Stop" })).toBeInTheDocument();
   });
 
+  it("sends while a turn is running when the page queues, and keeps Stop beside it", async () => {
+    const onSend = vi.fn();
+    const onStop = vi.fn();
+    render(<Composer draftKey="q" busy canQueue onSend={onSend} onStop={onStop} />);
+    // With nothing written there is only Stop; once there is text the message can be queued.
+    expect(screen.queryByRole("button", { name: "Queue message" })).not.toBeInTheDocument();
+    await userEvent.type(screen.getByLabelText("Message"), "after this{Enter}");
+    expect(onSend).toHaveBeenCalledWith("after this");
+    expect(screen.getByLabelText("Message")).toHaveValue("");
+    await userEvent.type(screen.getByLabelText("Message"), "and this");
+    await userEvent.click(screen.getByRole("button", { name: "Queue message" }));
+    expect(onSend).toHaveBeenLastCalledWith("and this");
+    expect(screen.getByRole("button", { name: "Stop" })).toBeInTheDocument();
+  });
+
   it("still works when the browser blocks storage", async () => {
     const spy = vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => {
       throw new Error("blocked");

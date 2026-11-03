@@ -46,7 +46,7 @@ const Tool = ({ label, onClick, disabled, pressed, children }: { label: string; 
 // The message box. It takes markdown: a toolbar and the usual shortcuts (Ctrl or Cmd with B, I, E for code, K for a link), lists
 // that carry on, a live preview, and Enter that adds a line inside a code block instead of sending. What was typed and not sent
 // is kept for each conversation, so a refresh does not lose it.
-export const Composer = ({ draftKey, busy, disabled, placeholder, skills, imageNote, insertion, project, onCommand, onSend, onStop }: { draftKey: string; busy: boolean; disabled?: boolean; placeholder?: string; skills?: SkillInfo[]; imageNote?: string; insertion?: { id: number; text: string }; project?: Project; onCommand?: (name: string, args: string) => void; onSend: (text: string, images?: ImageAttachment[]) => void; onStop?: () => void }) => {
+export const Composer = ({ draftKey, busy, disabled, placeholder, skills, imageNote, insertion, project, onCommand, onSend, onStop, canQueue }: { draftKey: string; busy: boolean; canQueue?: boolean; disabled?: boolean; placeholder?: string; skills?: SkillInfo[]; imageNote?: string; insertion?: { id: number; text: string }; project?: Project; onCommand?: (name: string, args: string) => void; onSend: (text: string, images?: ImageAttachment[]) => void; onStop?: () => void }) => {
   const name = `harness-draft-${draftKey}`;
   const [text, setText] = useState(() => {
     return read(name);
@@ -197,7 +197,7 @@ export const Composer = ({ draftKey, busy, disabled, placeholder, skills, imageN
 
   const submit = (): void => {
     const value = text.trim();
-    if (!value || busy || disabled) {
+    if (!value || (busy && !canQueue) || disabled) {
       return;
     }
     const command = onCommand ? parseCommand(value) : undefined;
@@ -303,7 +303,8 @@ export const Composer = ({ draftKey, busy, disabled, placeholder, skills, imageN
     submit();
   };
 
-  const busyWithText = busy || (disabled ?? false);
+  // With a queue, a turn running does not stop the person sending: the message waits its turn.
+  const busyWithText = (busy && !canQueue) || (disabled ?? false);
 
   return (
     <form
@@ -518,7 +519,7 @@ export const Composer = ({ draftKey, busy, disabled, placeholder, skills, imageN
                     aria-expanded={listed || project ? menu || mentionOpen : undefined}
                     aria-controls={mentionOpen ? `${name}-files` : menu ? `${name}-skills` : undefined}
                     aria-activedescendant={mentionOpen && found.candidates[mentionChosen] ? `${name}-file-${found.candidates[mentionChosen].path}` : menu && matches[chosen] ? `${name}-skill-${matches[chosen].name}` : undefined}
-                    placeholder={placeholder ?? "Message (markdown works)"}
+                    placeholder={placeholder ?? (busy && canQueue ? "Write the next message; it is sent when this turn ends" : "Message (markdown works)")}
                     className="relative block max-h-[40vh] min-h-9 w-full resize-none overflow-y-auto bg-transparent px-2 py-1.5 text-transparent caret-foreground outline-none [scrollbar-gutter:stable] selection:bg-primary/30 placeholder:text-muted-foreground forced-colors:text-[CanvasText]"
                     onScroll={(ev) => {
                       if (backdrop.current) {
@@ -551,11 +552,14 @@ export const Composer = ({ draftKey, busy, disabled, placeholder, skills, imageN
                   <Square className="fill-current" />
                 </Button>
               )
-            : (
-                <Button type="submit" variant="primary" size="icon" disabled={busyWithText || !text.trim()} aria-label="Send">
+            : null}
+          {!(busy && onStop) || (canQueue && text.trim() !== "")
+            ? (
+                <Button type="submit" variant="primary" size="icon" disabled={busyWithText || !text.trim()} aria-label={busy && canQueue ? "Queue message" : "Send"}>
                   <ArrowUp />
                 </Button>
-              )}
+              )
+            : null}
         </div>
       </div>
       <p className="mt-1 px-2 text-xs text-muted-foreground">Enter sends. Shift+Enter adds a line. Inside a code block Enter adds a line and Ctrl+Enter sends.</p>
