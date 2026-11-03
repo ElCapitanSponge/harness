@@ -8,7 +8,7 @@ import type { SessionInfo } from "./types";
 export interface Group {
   // A project (a folder on a device), the conversations pinned to the top, or the chats that have no project.
   kind: "pinned" | "project" | "chats";
-  // "device\u0000root", or "" for chats.
+  // groupKey of the device and root; chats have neither, so theirs is groupKey("", ""), as the collapsed list stores it.
   key: string;
   device: string;
   root: string;
@@ -56,7 +56,7 @@ export const groupSessions = (list: SessionInfo[], thisDevice: string | undefine
     };
   }));
   if (chats.length > 0) {
-    out.push({ kind: "chats", key: "", device: "", root: "", name: "Chats", here: false, items: nested(chats) });
+    out.push({ kind: "chats", key: groupKey("", ""), device: "", root: "", name: "Chats", here: false, items: nested(chats) });
   }
   return out;
 };

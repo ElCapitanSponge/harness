@@ -14,8 +14,8 @@ vi.mock("@/lib/api", () => {
 
 const { ThisDevice } = await import("./ThisDevice");
 
-const node = (nodeId: string): NodeRecord => {
-  return { nodeId, kind: "local", busy: false, models: [], roots: ["proj"], lastSeen: 0 };
+const node = (nodeId: string, roots: string[] = ["proj"]): NodeRecord => {
+  return { nodeId, kind: "local", busy: false, models: [], roots, lastSeen: 0 };
 };
 
 const Where = () => {
@@ -23,9 +23,9 @@ const Where = () => {
   return <p data-testid="where">{location.pathname}{location.search}</p>;
 };
 
-const show = (matched: string[]) => {
+const show = (matched: string[], nodes: NodeRecord[] = [node("anakin"), node("bastila")]) => {
   api.mockImplementation((path: string) => {
-    return Promise.resolve(path === "/whoami" ? { address: "100.64.0.7", devices: matched } : [node("anakin"), node("bastila")]);
+    return Promise.resolve(path === "/whoami" ? { address: "100.64.0.7", devices: matched } : nodes);
   });
   return render(
     <QueryClientProvider client={new QueryClient()}>
@@ -40,15 +40,27 @@ const show = (matched: string[]) => {
   );
 };
 
+// The code option lives in the menu behind the split button's arrow.
+const openMenu = async () => {
+  await userEvent.click(await screen.findByRole("button", { name: "More ways to start" }));
+};
+
 beforeEach(() => {
   localStorage.clear();
   api.mockReset();
 });
 
-describe("This device", () => {
+describe("The New split button", () => {
+  it("starts a conversation from its main part", async () => {
+    show([]);
+    await userEvent.click(await screen.findByRole("button", { name: /New conversation/ }));
+    expect(screen.getByTestId("where")).toHaveTextContent(/^\/$/);
+  });
+
   it("offers a code session on the device the gateway matched, and goes to the start page with it chosen", async () => {
     show(["anakin"]);
-    await userEvent.click(await screen.findByRole("button", { name: /New code session here/ }));
+    await openMenu();
+    await userEvent.click(await screen.findByRole("menuitem", { name: /New code session here/ }));
     expect(screen.getByTestId("where")).toHaveTextContent("/?mode=code&device=anakin");
     expect(screen.getByText(/This device is anakin/)).toBeInTheDocument();
   });
@@ -58,8 +70,9 @@ describe("This device", () => {
     const select = await screen.findByLabelText("This device is");
     await screen.findByRole("option", { name: "bastila" });
     await userEvent.selectOptions(select, "bastila");
-    expect(await screen.findByRole("button", { name: /New code session here/ })).toBeInTheDocument();
-    expect(screen.getByText(/This device is bastila/)).toBeInTheDocument();
+    expect(await screen.findByText(/This device is bastila/)).toBeInTheDocument();
+    await openMenu();
+    expect(await screen.findByRole("menuitem", { name: /New code session here/ })).toBeInTheDocument();
     first.unmount();
 
     // Opened again, the page still knows.
@@ -73,8 +86,21 @@ describe("This device", () => {
     expect(await screen.findByText(/There is no agent on this device/)).toBeInTheDocument();
     const link = screen.getByRole("link", { name: /guide/ });
     expect(link).toHaveAttribute("href", expect.stringContaining("/docs/guides/") as string);
+    await openMenu();
+    // Another device has an agent, so a code session is still offered, just not "here".
+    expect(await screen.findByRole("menuitem", { name: "New code session" })).toBeEnabled();
     await waitFor(() => {
-      expect(screen.queryByRole("button", { name: /New code session here/ })).not.toBeInTheDocument();
+      expect(screen.queryByRole("menuitem", { name: /New code session here/ })).not.toBeInTheDocument();
     });
+  });
+
+  it("turns the code option off, and says why, when no device has an agent", async () => {
+    show([], [node("anakin", [])]);
+    await openMenu();
+    const item = await screen.findByRole("menuitem", { name: /New code session/ });
+    expect(item).toHaveAttribute("aria-disabled", "true");
+    expect(screen.getByText(/No device has an agent connected/)).toBeInTheDocument();
+    await userEvent.click(item);
+    expect(screen.getByTestId("where")).not.toHaveTextContent("mode=code");
   });
 });

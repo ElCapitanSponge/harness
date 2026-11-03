@@ -1,5 +1,5 @@
 import { useSelector } from "@tanstack/react-store";
-import { BarChart3, Menu as MenuIcon, Monitor, Moon, PanelLeftClose, FileUp, Plus, ShieldCheck, Sparkles, Sun, SunMoon, LogOut } from "lucide-react";
+import { BarChart3, Menu as MenuIcon, Monitor, Moon, PanelLeftClose, FileUp, ShieldCheck, Sparkles, Sun, SunMoon, LogOut } from "lucide-react";
 import { useState } from "react";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router";
 import { ClaudeMeter } from "@/components/ClaudeMeter";
@@ -68,13 +68,6 @@ const Sidebar = ({ onNavigate }: { onNavigate: () => void }) => {
         <span className="flex size-7 items-center justify-center rounded-lg bg-primary text-primary-foreground"><ToriiMark className="size-4.5" /></span>
         Torii
       </div>
-      <Button variant="primary" size="lg" className="justify-start" onClick={() => {
-        void navigate("/");
-        onNavigate();
-      }}
-      >
-        <Plus /> New conversation
-      </Button>
       <ThisDevice onNavigate={onNavigate} />
 
       <nav aria-label="Conversations" className="-mx-1 mt-1 flex-1 overflow-y-auto overflow-x-hidden px-1">

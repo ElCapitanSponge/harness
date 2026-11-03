@@ -47,7 +47,7 @@ export const MenuContent = ({ className, ...props }: ComponentProps<typeof MenuP
 export const MenuItem = ({ className, danger, ...props }: ComponentProps<typeof MenuPrimitive.Item> & { danger?: boolean }) => {
   return (
     <MenuPrimitive.Item
-      className={cn("flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-sm outline-none data-[highlighted]:bg-muted [&_svg]:size-4", danger && "text-destructive", className)}
+      className={cn("flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-sm outline-none data-[highlighted]:bg-muted data-[disabled]:pointer-events-none data-[disabled]:opacity-50 [&_svg]:size-4", danger && "text-destructive", className)}
       {...props}
     />
   );
