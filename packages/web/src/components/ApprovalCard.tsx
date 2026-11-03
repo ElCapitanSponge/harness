@@ -1,6 +1,7 @@
 import { ShieldQuestion } from "lucide-react";
 import { useState } from "react";
 import type { ApprovalPreview } from "@harness/core";
+import { Diff } from "@/components/Diff";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/fields";
 import { cn } from "@/lib/utils";
@@ -23,16 +24,19 @@ const Preview = ({ preview }: { preview: ApprovalPreview }) => {
   return (
     <div className="grid gap-1" aria-label="What will happen">
       <div className="break-all text-xs font-semibold text-muted-foreground">{preview.title}</div>
-      <pre className="max-h-64 overflow-y-auto overflow-x-hidden rounded-md border bg-muted/40 py-1 font-mono text-xs">
-        {preview.text.split("\n").map((line, i) => {
-          const diff = preview.kind === "diff";
-          return (
-            <div key={`${String(i)}-${line.slice(0, 12)}`} className={cn("whitespace-pre-wrap px-2 [overflow-wrap:anywhere]", diff && line.startsWith("+") && "bg-success/15 text-success", diff && line.startsWith("-") && "bg-destructive/15 text-destructive", diff && line.startsWith("@@") && "text-muted-foreground")}>
-              {line === "" ? " " : line}
-            </div>
-          );
-        })}
-      </pre>
+      {preview.kind === "diff"
+        ? <Diff patch={preview.text} className="max-h-64 overflow-y-auto overflow-x-hidden" />
+        : (
+            <pre className="max-h-64 overflow-y-auto overflow-x-hidden rounded-md border bg-muted/40 py-1 font-mono text-xs">
+              {preview.text.split("\n").map((line, i) => {
+                return (
+                  <div key={`${String(i)}-${line.slice(0, 12)}`} className="whitespace-pre-wrap px-2 [overflow-wrap:anywhere]">
+                    {line === "" ? " " : line}
+                  </div>
+                );
+              })}
+            </pre>
+          )}
     </div>
   );
 };
