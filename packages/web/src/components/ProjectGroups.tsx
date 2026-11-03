@@ -89,7 +89,7 @@ export const ProjectGroups = ({ groups, collapsed, pathname, onToggle, onNew, on
                           </NavLink>
                           <ConversationActions
                             info={c}
-                            className="absolute right-0.5 top-1/2 size-7 -translate-y-1/2 opacity-0 focus-visible:opacity-100 group-hover:opacity-100 data-[state=open]:opacity-100"
+                            className="absolute right-0.5 top-1/2 size-7 -translate-y-1/2 text-muted-foreground hover:text-foreground"
                             onDeleted={() => {
                               if (pathname === `/c/${c.id}`) {
                                 onDeleted(c);

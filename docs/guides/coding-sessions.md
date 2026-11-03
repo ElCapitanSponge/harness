@@ -116,7 +116,7 @@ The sidebar groups conversations by project, as Claude Code does: one group for 
 
 ## New code session here
 
-The sidebar's **New code session here** starts a coding session on the device the browser is on, with that device and the model picker already set. A browser cannot read files, so the device needs a node agent running ([Windows](windows.md), [macOS](macos.md), [Linux](linux.md)).
+The sidebar has one **New conversation** button with an arrow beside it. The arrow's menu offers **New code session here**, which starts a coding session on the device the browser is on, with that device and the model picker already set. A browser cannot read files, so the device needs a node agent running ([Windows](windows.md), [macOS](macos.md), [Linux](linux.md)).
 
 How the page knows which device it is on:
 
