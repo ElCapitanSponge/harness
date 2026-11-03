@@ -1,4 +1,5 @@
 import { parseArgs } from "node:util";
+import type { PrintOptions } from "./print.js";
 
 export type Command
   = | { name: "nodes" }
@@ -8,7 +9,7 @@ export type Command
     | { name: "import"; file: string; all: boolean; pick?: number; model?: string }
     | { name: "settings"; device: string; key?: string; value?: unknown }
     | { name: "chat"; model: string; prompt: string }
-    | { name: "code"; model: string; prompt: string; yes: boolean; device?: string; root?: string; resume?: string; continue: boolean }
+    | { name: "code"; model: string; prompt: string; yes: boolean; device?: string; root?: string; resume?: string; continue: boolean; print?: PrintOptions | undefined }
     | { name: "tool"; device: string; root: string; tool: string; args: Record<string, unknown> }
     | { name: "load"; model: string; contextLength?: number; device?: string }
     | { name: "unload"; model?: string; device?: string }
@@ -28,10 +29,12 @@ Usage:
   harness settings <device> [key json] show a device's settings, or change one (the device must run
                                         with REMOTE_CONFIG=1), e.g. settings anakin claude true
   harness chat [-m model] [prompt...]   one-shot chat, or interactive with no prompt
-  harness code [-m model] [-y] [-d device [-r root]] [--continue | --resume id] [prompt...]
+  harness code [-m model] [-y] [-d device [-r root]] [--continue | --resume id] [-p [--output-format json]] [prompt...]
                                         work on the files in the current directory (read, edit, run
                                         commands). Runs on this machine; claude models launch Claude Code.
                                         --continue / --resume go back to a saved coding session
+                                        -p is for scripts: it never asks, prints only the final reply
+                                        (or one JSON object), and exits 0 only if the turn got a reply
   harness tool <device> <root> <tool> [json-args]
                                         run one tool on a connected device (debugging the remote tools)
   harness load <model> [-c tokens] [-d device]
@@ -41,6 +44,23 @@ Usage:
 
 Models: a loaded model id, "auto", "claude", or "claude:<alias>" (e.g. claude:sonnet).
 Env: GATEWAY_URL (default http://127.0.0.1:8787)`;
+
+// Apart from the rest because a name with a hyphen has to be quoted, and then the style wants every name in the same object quoted.
+const LONG_OPTIONS = { "output-format": { type: "string" } } as const;
+
+// Print mode is on with -p; --output-format only makes sense there.
+const printOptions = (print: boolean | undefined, format: string | undefined): PrintOptions | undefined => {
+  if (format !== undefined && format !== "text" && format !== "json") {
+    throw new Error(`--output-format must be text or json, not "${format}"`);
+  }
+  if (!print) {
+    if (format !== undefined) {
+      throw new Error("--output-format only works with --print (-p)");
+    }
+    return undefined;
+  }
+  return { format: format === "json" ? "json" : "text" };
+};
 
 export const parseCommand = (argv: string[]): Command => {
   const { values, positionals } = parseArgs({
@@ -55,6 +75,8 @@ export const parseCommand = (argv: string[]): Command => {
       root: { type: "string", short: "r" },
       resume: { type: "string" },
       continue: { type: "boolean" },
+      print: { type: "boolean", short: "p" },
+      ...LONG_OPTIONS,
       all: { type: "boolean" },
       number: { type: "string", short: "n" },
     },
@@ -106,7 +128,7 @@ export const parseCommand = (argv: string[]): Command => {
     case "chat":
       return { name: "chat", model: values.model ?? "auto", prompt: rest.join(" ").trim() };
     case "code":
-      return { name: "code", model: values.model ?? "auto", prompt: rest.join(" ").trim(), yes: values.yes ?? false, device: values.device, root: values.root, resume: values.resume, continue: values.continue ?? false };
+      return { name: "code", model: values.model ?? "auto", prompt: rest.join(" ").trim(), yes: values.yes ?? false, device: values.device, root: values.root, resume: values.resume, continue: values.continue ?? false, print: printOptions(values.print, values["output-format"]) };
     case "tool": {
       const [device, root, tool, json] = rest;
       if (!device || !root || !tool) {

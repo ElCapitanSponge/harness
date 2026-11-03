@@ -63,6 +63,22 @@ describe("parseCommand", () => {
     expect(parseCommand(["code", "--resume", "ab12"])).toMatchObject({ name: "code", resume: "ab12", continue: false });
   });
 
+  it("parses -p as print mode, with text output unless --output-format json is given", () => {
+    expect(parseCommand(["code", "-p", "fix it"])).toMatchObject({ name: "code", prompt: "fix it", print: { format: "text" } });
+    expect(parseCommand(["code", "--print", "--output-format", "json", "-y", "fix it"])).toMatchObject({ yes: true, print: { format: "json" } });
+    expect(parseCommand(["code", "-p", "--continue"])).toMatchObject({ continue: true, print: { format: "text" } });
+    expect(parseCommand(["code", "fix it"])).toMatchObject({ prompt: "fix it", print: undefined });
+  });
+
+  it("refuses an output format that is not text or json, and one given without -p", () => {
+    expect(() => {
+      return parseCommand(["code", "-p", "--output-format", "xml", "x"]);
+    }).toThrow("must be text or json");
+    expect(() => {
+      return parseCommand(["code", "--output-format", "json", "x"]);
+    }).toThrow("only works with --print");
+  });
+
   it("parses tool with a device, root, tool and optional JSON args", () => {
     expect(parseCommand(["tool", "pc", "proj", "list_dir"])).toEqual({ name: "tool", device: "pc", root: "proj", tool: "list_dir", args: {} });
     expect(parseCommand(["tool", "pc", "proj", "read_file", "{\"path\":\"a.txt\"}"])).toMatchObject({ args: { path: "a.txt" } });

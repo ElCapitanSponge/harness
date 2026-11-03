@@ -41,7 +41,7 @@ An item with a number has its ticket; each of the others gets one, with its bloc
 - [ ] **Hooks.** Commands that run before or after a tool call or at the end of a turn.
 - [ ] **A git worktree for each session.** Sessions that work on the same project without touching each other's files.
 - [x] **Resume and continue on the command line.** `harness code --resume` and `--continue` for the sessions the gateway keeps (#126).
-- [ ] **A print mode on the command line.** `-p` for scripts: it never asks, can print JSON, and exits non-zero unless the turn ended with a reply (`claude -p`, #145). A prompt on the command line already runs one turn and exits.
+- [x] **A print mode on the command line.** `harness code -p` for scripts: it never asks, can print JSON with `--output-format json`, and exits non-zero unless the turn ended with a reply (`claude -p`, #145).
 - [ ] **A status line.** A line of the person's own choosing under the message box (#144, waiting on the owner's answers).
 - [ ] **Output styles.** Changing how the model words its replies.
 - [ ] **Editing a project's memory from the page.** Viewing and editing `AGENTS.md` and `CLAUDE.md` without leaving the conversation (`/init` writes one, but there is no editor; #146).
