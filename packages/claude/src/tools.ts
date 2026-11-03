@@ -6,7 +6,13 @@ import type { Tool, ToolCall } from "@harness/core";
 // its result in that same form, and the reply is read for requests, which become ordinary tool calls for the coding loop.
 
 const OPEN = "<tool_call>";
-const CLOSE = "</tool_call>";
+const CLOSE = "\u003c/tool_call>";
+const CLOSE_PATTERN = /<\/tool_call>/g;
+const UNREADABLE = "(unreadable tool request)";
+
+// Tool-call markup the reader cannot turn into a call, which must never reach the chat as raw text: the invoke forms of other tool
+// protocols, and an opening tag that was never closed, or a closing tag with no opening.
+const LEFTOVER = /<\/?(?:antml:)?(?:invoke|parameter|function_calls)\b|<\/?tool_call>/g;
 
 // What Claude is told about the tools. It must not believe it has other tools, or the ones it was started with.
 export const toolInstructions = (tools: Tool[]): string => {
@@ -49,25 +55,56 @@ export interface ParsedReply {
   unknown: string[];
 }
 
-// Reads Claude's reply for tool requests. A block that is not valid JSON, or names no tool, is not a call.
+type Span = readonly [number, number];
+
+// Fenced code and inline code. Markup in there is the model talking about tags, and is left as written.
+const codeSpans = (text: string): Span[] => {
+  return [...text.matchAll(/```[\s\S]*?(?:```|$)|`[^`\n]*`/g)].map((m): Span => {
+    return [m.index, m.index + m[0].length];
+  });
+};
+
+// The first match of `pattern` at or after `from` that is not inside code.
+const findOutsideCode = (text: string, spans: readonly Span[], pattern: RegExp, from: number): RegExpExecArray | undefined => {
+  const re = new RegExp(pattern.source, "g");
+  re.lastIndex = from;
+  for (let m = re.exec(text); m !== null; m = re.exec(text)) {
+    const at = m.index;
+    if (!spans.some(([start, end]) => {
+      return at >= start && at < end;
+    })) {
+      return m;
+    }
+  }
+  return undefined;
+};
+
+// Reads Claude's reply for tool requests. A block that is not valid JSON, or names no tool, is not a call. Markup that is left over
+// (an unclosed block, or the invoke form) is cut from the text, from where it starts to the end, and reported as unreadable, so
+// the person sees a plain note and never the raw tags. Markup inside code is not read at all.
 export const parseToolCalls = (reply: string, tools: Tool[]): ParsedReply => {
   const known = new Set(tools.map((t) => {
     return t.function.name;
   }));
   const calls: ToolCall[] = [];
   const unknown: string[] = [];
+  const spans = codeSpans(reply);
   let text = "";
-  let rest = reply;
+  let cursor = 0;
   for (;;) {
-    const open = rest.indexOf(OPEN);
-    const close = open === -1 ? -1 : rest.indexOf(CLOSE, open + OPEN.length);
-    if (open === -1 || close === -1) {
-      text += rest;
+    const marker = findOutsideCode(reply, spans, LEFTOVER, cursor);
+    if (!marker) {
+      text += reply.slice(cursor);
       break;
     }
-    text += rest.slice(0, open);
-    const body = rest.slice(open + OPEN.length, close).trim();
-    rest = rest.slice(close + CLOSE.length);
+    text += reply.slice(cursor, marker.index);
+    const close = marker[0] === OPEN ? findOutsideCode(reply, spans, CLOSE_PATTERN, marker.index + OPEN.length) : undefined;
+    if (!close) {
+      unknown.push(UNREADABLE);
+      break;
+    }
+    const body = reply.slice(marker.index + OPEN.length, close.index).trim();
+    cursor = close.index + close[0].length;
     try {
       const parsed = JSON.parse(body) as { name?: unknown; arguments?: unknown };
       if (typeof parsed.name !== "string") {
@@ -81,7 +118,7 @@ export const parseToolCalls = (reply: string, tools: Tool[]): ParsedReply => {
       calls.push({ id: `call_${randomUUID().slice(0, 8)}`, type: "function", function: { name: parsed.name, arguments: JSON.stringify(args) } });
     } catch {
       // Not a call. Left out, rather than shown as half-written markup.
-      unknown.push("(unreadable tool request)");
+      unknown.push(UNREADABLE);
     }
   }
   return { text: text.trim(), calls, unknown };
