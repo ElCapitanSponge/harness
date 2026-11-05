@@ -140,6 +140,20 @@ describe("imported conversations", () => {
     })).toEqual([Date.parse("2026-01-02T03:04:05Z"), Date.parse("2026-01-02T03:04:20Z")]);
   });
 
+  it("takes the end of a reply that finished with a tool result", () => {
+    const lines = [
+      { type: "user", timestamp: "2026-01-02T03:04:05Z", message: { role: "user", content: "fix the bug" } },
+      { type: "assistant", timestamp: "2026-01-02T03:04:09Z", message: { role: "assistant", content: [{ type: "text", text: "Looking." }, { type: "tool_use", name: "Read", input: { path: "a.ts" } }] } },
+      { type: "user", timestamp: "2026-01-02T03:04:30Z", message: { role: "user", content: [{ type: "tool_result", content: "file text" }] } },
+    ].map((l) => {
+      return JSON.stringify(l);
+    }).join("\n");
+    const turns = parseImportFile("session.jsonl", lines).conversations[0]?.turns;
+    expect(turns?.map((t) => {
+      return t.at;
+    })).toEqual([Date.parse("2026-01-02T03:04:05Z"), Date.parse("2026-01-02T03:04:30Z")]);
+  });
+
   it("reads message times from a ChatGPT export, where they are in seconds", () => {
     const node = (id: string, parent: string | null, role: string, text: string, seconds: number | null) => {
       return [id, { id, parent, message: { author: { role }, content: { content_type: "text", parts: [text] }, create_time: seconds, metadata: {} } }] as const;

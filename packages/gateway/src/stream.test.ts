@@ -3,6 +3,7 @@ import { isLiveEvent } from "@harness/core";
 import { describe, expect, it, vi } from "vitest";
 import { Registry } from "./registry.js";
 import { Sessions, assembleStream, createCompleter, type Complete } from "./sessions.js";
+import "./event-matchers.js";
 
 const LF = String.fromCharCode(10);
 const sse = (...chunks: unknown[]): Response => {
@@ -156,7 +157,7 @@ describe("live events in a session", () => {
       return e.type;
     })).toEqual(["user", "thinking", "text", "done"]);
     expect(s.events.some(isLiveEvent)).toBe(false);
-    expect(s.events[1]).toMatchObject({ type: "thinking", text: "let me think" });
+    expect(s.events[1]).toEqualEvents({ type: "thinking", text: "let me think" });
   });
 
   it("replays only stored events to a late watcher", async () => {

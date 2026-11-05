@@ -36,9 +36,12 @@ export const sentTime = (at: number | undefined, now: number = Date.now(), opts:
     return undefined;
   }
   const { locale, timeZone } = opts;
-  const clock = new Intl.DateTimeFormat(locale, { timeZone, hour: "2-digit", minute: "2-digit" }).format(d);
-  const today = dayKey(d, timeZone) === dayKey(new Date(now), timeZone);
-  const sameYear = dayKey(d, timeZone).slice(0, 4) === dayKey(new Date(now), timeZone).slice(0, 4);
+  // Always the 24-hour clock (`14:32`), whatever the language, so it reads the same everywhere.
+  const clock = new Intl.DateTimeFormat(locale, { timeZone, hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).format(d);
+  const day = dayKey(d, timeZone);
+  const current = dayKey(new Date(now), timeZone);
+  const today = day === current;
+  const sameYear = day.slice(0, 4) === current.slice(0, 4);
   const date = new Intl.DateTimeFormat(locale, { timeZone, day: "numeric", month: "short", ...(sameYear ? {} : { year: "numeric" }) }).format(d);
   return {
     text: today ? clock : `${date}, ${clock}`,

@@ -31,6 +31,11 @@ describe("sentTime", () => {
     expect(t?.text).toBe("10:30");
   });
 
+  it("uses the 24-hour clock in every language, with midnight as 00", () => {
+    expect(sentTime(Date.parse("2026-11-05T14:32:00Z"), now, { locale: "en-US", timeZone: "UTC" })?.text).toBe("14:32");
+    expect(sentTime(Date.parse("2026-11-05T00:05:00Z"), now, { locale: "en-US", timeZone: "UTC" })?.text).toBe("00:05");
+  });
+
   it("shows nothing when there is no time or it is not a time", () => {
     expect(sentTime(undefined, now, opts)).toBeUndefined();
     expect(sentTime(Number.NaN, now, opts)).toBeUndefined();
