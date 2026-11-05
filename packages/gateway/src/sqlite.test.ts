@@ -99,6 +99,15 @@ describe("sqliteStore", () => {
     expect((db.prepare("SELECT COUNT(*) AS n FROM events").get() as { n: number }).n).toBe(2);
   });
 
+  it("keeps the time on an event across a reload, and none on an event stored without one", async () => {
+    const db = openDatabase(":memory:");
+    const store = sqliteStore(db);
+    await store.save(session({ events: [{ type: "user", text: "old" }, { type: "user", text: "new", at: 1_793_862_717_263 }, { type: "done", stopped: false, at: 1_793_862_718_000 }] }));
+    const events = store.loadAll()[0]?.events;
+    expect(events).toEqual([{ type: "user", text: "old" }, { type: "user", text: "new", at: 1_793_862_717_263 }, { type: "done", stopped: false, at: 1_793_862_718_000 }]);
+    expect(events?.[0] && "at" in events[0]).toBe(false);
+  });
+
   it("lists the most recently updated conversation first", async () => {
     const store = sqliteStore(openDatabase(":memory:"));
     await store.save(session({ updated: 1 }));

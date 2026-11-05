@@ -33,13 +33,24 @@ export const WithoutATime: Story = {
 };
 
 export const FromYouWithATime: Story = {
-  args: item({ kind: "user", id: 41, text: "Sent a minute ago", at: Date.now() - 60_000 }),
+  args: item({ kind: "user", id: 41, text: "Sent just now", at: Date.now() }),
   play: async ({ canvasElement }) => {
     // Today's message shows the clock time only; the full date, time and zone are on hover and to a screen reader.
     const time = canvasElement.querySelector("time");
     await expect(time).not.toBeNull();
-    await expect(time?.textContent).toMatch(/^\d{1,2}[:.]\d{2}/);
-    await expect(time?.getAttribute("title")).toBe(time?.getAttribute("aria-label"));
+    await expect(time?.textContent).toMatch(/^\d{2}:\d{2}$/);
+    const button = time?.closest("button");
+    await expect(button?.getAttribute("title")).toBe(button?.getAttribute("aria-label"));
+  },
+};
+
+export const FullDateOnTap: Story = {
+  // The full date, time and zone are one tap (or one Tab) away, since a phone never shows a tooltip.
+  args: item({ kind: "user", id: 43, text: "Tap my time", at: Date.now() }),
+  play: async ({ canvasElement }) => {
+    const time = canvasElement.querySelector("time");
+    await userEvent.click(time?.closest("button") ?? canvasElement);
+    await expect(time?.textContent).toContain(String(new Date().getFullYear()));
   },
 };
 

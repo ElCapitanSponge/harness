@@ -156,9 +156,9 @@ Inside, each call is one line. A command or a file read expands to what it retur
 
 ## When a message was sent
 
-Each message, yours and the model's, shows its time beside it, small and muted. Today's messages show the time only (`14:32`); an earlier day also shows the date, and the year when it is not this one. Hover over the time, or tab to it, for the full date and time with the zone. The time is when the gateway recorded the message, not when your browser received it, so every browser, the desktop app and a reload show the same value. It is stored as UTC and shown in your browser's time zone. A reply shows the time it finished.
+Each message, yours and the model's, shows its time beside it, small and muted. Today's messages show the time only (`14:32`); an earlier day also shows the date, and the year when it is not this one. Hover over the time for the full date and time with the zone, or tab to it or tap it (it is a button) and the full date, time and zone replace the short form until you move on or tap again. The clock is 24-hour, whatever the browser's language. The time is when the gateway recorded the message, not when your browser received it, so every browser and a reload show the same value. It is stored as UTC and shown in your browser's time zone. A reply shows the time it finished.
 
-A conversation saved before times were kept has none for its old messages, and shows no time there rather than a wrong one; new messages in it have one. An imported conversation keeps the time the source gave for each message when it has one (a Claude Code transcript and a Claude.ai export do; a ChatGPT export gives its message times too). A message waiting in the queue shows when it was queued.
+A conversation saved before times were kept has none for its old messages, and shows no time there rather than a wrong one; new messages in it have one. An imported conversation keeps the time the source gave for each message when it has one (a Claude Code transcript, a ChatGPT export and a Claude.ai export do, for each message that carries one; a pasted transcript has none). A message waiting in the queue shows when it was queued; once it starts, its message in the thread shows when it started, and rewording a queued message keeps the time it was queued.
 
 ## Markdown in the message box
 

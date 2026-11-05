@@ -197,10 +197,10 @@ export const applyEvent = (state: ConversationState, event: StreamEvent, now: nu
 
     case "text":
       if (last?.kind === "assistant" && last.streaming) {
-        return replaceLast({ ...last, text: event.text, streaming: false, model: event.model, device: event.device, reason: event.reason, at: event.at });
+        return replaceLast({ ...last, text: event.text, streaming: false, model: event.model, device: event.device, reason: event.reason, ...(event.at === undefined ? {} : { at: event.at }) });
       }
       return push(settle(state.items, now), (id) => {
-        return { kind: "assistant", id, text: event.text, streaming: false, model: event.model, device: event.device, reason: event.reason, at: event.at };
+        return { kind: "assistant", id, text: event.text, streaming: false, model: event.model, device: event.device, reason: event.reason, ...(event.at === undefined ? {} : { at: event.at }) };
       });
 
     case "compacting":

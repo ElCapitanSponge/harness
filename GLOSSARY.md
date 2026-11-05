@@ -120,7 +120,7 @@ A message the owner sends while a turn is running. The gateway keeps it, so ever
 _Avoid_: pending message, draft (a draft is what is typed and not yet sent)
 
 **Sent time**:
-When the gateway recorded a message or event, stored with it as UTC (`at`, milliseconds since the epoch) and shown beside the message in the browser's own zone: the time alone for today, the date as well for an earlier day, and the full date, time and zone on hover or focus. It is the gateway's time, not the client's, so every client and a reload show the same. An imported conversation keeps the time its source gave. Events stored before times were kept have none, and show none. A queued message has the time it was queued.
+When the gateway recorded a message or event, stored with it as UTC (`at`, milliseconds since the epoch) and shown beside the message in the browser's own zone: the time alone for today, the date as well for an earlier day, and the full date, time and zone on hover, focus or tap. It is the gateway's time, not the client's, so every client and a reload show the same. An imported conversation keeps the time its source gave. Events stored before times were kept have none, and show none. A queued message has the time it was queued.
 _Avoid_: timestamp (in code, `at`), received time
 
 **Tool**:

@@ -244,6 +244,8 @@ const parseClaudeCodeFile = (text: string): ParsedImport => {
       const last = turns.at(-1);
       if (last) {
         last.text = `${last.text}\n\n${body}`;
+        // The reply was still going until its last tool result came back.
+        Object.assign(last, stamp(entry.timestamp));
       }
       continue;
     }
