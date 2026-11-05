@@ -170,6 +170,40 @@ describe("the project context tool", () => {
   });
 });
 
+describe("the instruction tools", () => {
+  const save = { name: "AGENTS.md", text: "Use pnpm.\n", version: "absent" };
+
+  it("lets a device that only reads give a file's text, but does not let it save", async () => {
+    expect((await call(["read_file"], "proj", "read_instruction", { name: "AGENTS.md" })).ok).toBe(true);
+    const refused = await call(["read_file", "grep"], "proj", "write_instruction", save);
+    expect(refused.ok).toBe(false);
+    expect(refused.output).toContain("not allowed");
+    await expect(fs.access(path.join(dir, "AGENTS.md"))).rejects.toThrow();
+  });
+
+  it("saves where the device lets its own tools change things", async () => {
+    const saved = await call(["write_file"], "proj", "write_instruction", save);
+    expect(saved.ok).toBe(true);
+    expect(JSON.parse(saved.output)).toMatchObject({ saved: true });
+    expect(await fs.readFile(path.join(dir, "AGENTS.md"), "utf8")).toBe("Use pnpm.\n");
+  });
+
+  it("refuses a save in a read-only folder and says why, even where the device lets its tools change things", async () => {
+    const server = createToolServer({ roots: { proj: dir }, allowed: ["write_file"], readOnly: ["proj"] });
+    let result: TunnelMessage | undefined;
+    await server.handle({ type: "tool", id: "t1", root: "proj", name: "write_instruction", args: save }, (m) => {
+      return (result = m);
+    });
+    expect(result).toMatchObject({ type: "tool-result", ok: false, output: expect.stringContaining("read-only") as string });
+    await expect(fs.access(path.join(dir, "AGENTS.md"))).rejects.toThrow();
+  });
+
+  it("gives nothing to a device that allows only tools that reach out of it", async () => {
+    expect((await call(["web_fetch"], "proj", "read_instruction", { name: "AGENTS.md" })).ok).toBe(false);
+    expect((await call(["web_fetch"], "proj", "write_instruction", save)).ok).toBe(false);
+  });
+});
+
 describe("what a write changed", () => {
   it("is sent beside the result for the person, and the result itself carries no diff", async () => {
     const server = createToolServer({ roots: { proj: dir }, allowed: ["write_file"] });

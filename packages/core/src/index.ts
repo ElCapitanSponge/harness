@@ -244,6 +244,12 @@ export const SessionCreate = z.object({
   mode: PermissionMode.optional(),
 });
 export const SessionMode = z.object({ mode: PermissionMode });
+
+// The project's instruction files the person can read and change from the page: these two, in the project root, and no other file.
+export const INSTRUCTION_NAMES = ["AGENTS.md", "CLAUDE.md"] as const;
+export type InstructionName = (typeof INSTRUCTION_NAMES)[number];
+// A save: the new text, and the version of the file it was opened at, so a file that changed since is not overwritten.
+export const InstructionSave = z.object({ text: z.string().max(100_000), version: z.string().min(1).max(100) });
 // `always` is true to allow that tool for the rest of the conversation, or "project" to remember it for that folder on that device.
 // The longest plan document, in characters.
 export const MAX_PLAN_DOCUMENT = 20_000;

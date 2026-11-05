@@ -535,6 +535,121 @@ describe("importing and exporting conversations", () => {
   });
 });
 
+describe("a project's instruction files, from a session", () => {
+  const start = async () => {
+    registry.upsert(beat({ roots: ["proj"], allowedTools: ["read_file"] }));
+    const app = build();
+    const code = await (await app.request("/sessions", json({ model: "qwen", device: "pc", root: "proj" }))).json() as { id: string };
+    const chat = await (await app.request("/sessions", json({ model: "qwen" }))).json() as { id: string };
+    relay.callTool.mockClear();
+    const put = (id: string, name: string, body: unknown) => {
+      return app.request(`/sessions/${id}/instructions/${name}`, { method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+    };
+    return { app, code: code.id, chat: chat.id, put };
+  };
+
+  it("lists the two files with whether each exists and how long it is, and says why one cannot be opened", async () => {
+    const { app, code, chat } = await start();
+    // The route asks for AGENTS.md first, then CLAUDE.md.
+    relay.callTool.mockResolvedValueOnce({ ok: true, output: JSON.stringify({ name: "AGENTS.md", exists: true, text: "Use pnpm.", version: "1-9" }) });
+    relay.callTool.mockResolvedValueOnce({ ok: false, output: "CLAUDE.md is too long to edit here (30000 characters); edit it on the device" });
+    expect(await (await app.request(`/sessions/${code}/instructions`)).json()).toEqual([
+      { name: "AGENTS.md", exists: true, length: 9 },
+      { name: "CLAUDE.md", note: "CLAUDE.md is too long to edit here (30000 characters); edit it on the device" },
+    ]);
+    expect(relay.callTool).toHaveBeenCalledWith("pc", "proj", "read_instruction", { name: "AGENTS.md" }, expect.objectContaining({ session: code }));
+    expect(await (await app.request(`/sessions/${chat}/instructions`)).json()).toEqual([]);
+    expect((await app.request("/sessions/nope/instructions")).status).toBe(404);
+  });
+
+  it("gives one file's text and version", async () => {
+    const { app, code } = await start();
+    const file = { name: "AGENTS.md", exists: true, text: "Use pnpm.\n", version: "1-10" };
+    relay.callTool.mockResolvedValue({ ok: true, output: JSON.stringify(file) });
+    const res = await app.request(`/sessions/${code}/instructions/AGENTS.md`);
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual(file);
+    expect(relay.callTool).toHaveBeenCalledWith("pc", "proj", "read_instruction", { name: "AGENTS.md" }, expect.objectContaining({ session: code }));
+  });
+
+  it("never asks the device for any other name or path", async () => {
+    const { app, code, put } = await start();
+    for (const name of ["package.json", "agents.md", "..%2FAGENTS.md", "docs%2FAGENTS.md", "AGENTS.md%2F"]) {
+      expect((await app.request(`/sessions/${code}/instructions/${name}`)).status, name).toBe(404);
+      expect((await put(code, name, { text: "x", version: "absent" })).status, name).toBe(404);
+    }
+    expect(relay.callTool).not.toHaveBeenCalled();
+  });
+
+  it("has nothing to read or save in a conversation with no project folder", async () => {
+    const { app, chat, put } = await start();
+    expect((await app.request(`/sessions/${chat}/instructions/AGENTS.md`)).status).toBe(409);
+    expect((await put(chat, "AGENTS.md", { text: "x", version: "absent" })).status).toBe(409);
+    expect(relay.callTool).not.toHaveBeenCalled();
+  });
+
+  it("saves through the device, with the version it was opened at", async () => {
+    const { code, put } = await start();
+    relay.callTool.mockResolvedValue({ ok: true, output: JSON.stringify({ saved: true, version: "2-12", length: 12 }) });
+    const res = await put(code, "AGENTS.md", { text: "Use pnpm.\nGo.", version: "1-10" });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ saved: true, version: "2-12", length: 12 });
+    expect(relay.callTool).toHaveBeenCalledWith("pc", "proj", "write_instruction", { name: "AGENTS.md", text: "Use pnpm.\nGo.", version: "1-10" }, expect.objectContaining({ session: code }));
+  });
+
+  it("refuses a save over a file that changed, with 409 and the file's current version", async () => {
+    const { code, put } = await start();
+    relay.callTool.mockResolvedValue({ ok: true, output: JSON.stringify({ saved: false, conflict: true, message: "AGENTS.md changed on disk after you opened it; reload it to see what changed", version: "3-20" }) });
+    const res = await put(code, "AGENTS.md", { text: "mine", version: "1-10" });
+    expect(res.status).toBe(409);
+    expect(await res.json()).toEqual({ error: { message: "AGENTS.md changed on disk after you opened it; reload it to see what changed" }, conflict: true, version: "3-20" });
+  });
+
+  it("refuses a save with no version or with text that is not text, without asking the device", async () => {
+    const { code, put } = await start();
+    expect((await put(code, "AGENTS.md", { text: "x" })).status).toBe(400);
+    expect((await put(code, "AGENTS.md", { text: 5, version: "1-1" })).status).toBe(400);
+    expect((await put(code, "AGENTS.md", { text: "x".repeat(100_001), version: "1-1" })).status).toBe(400);
+    expect(relay.callTool).not.toHaveBeenCalled();
+  });
+
+  it("says why the device refused: a read-only folder, a device that does not change files, an older agent, or nothing to reach", async () => {
+    const { app, code, put } = await start();
+    const read = () => {
+      return app.request(`/sessions/${code}/instructions/AGENTS.md`);
+    };
+    const save = () => {
+      return put(code, "AGENTS.md", { text: "x", version: "absent" });
+    };
+
+    relay.callTool.mockResolvedValue({ ok: false, output: "project root \"proj\" is read-only on this device, so write_instruction is not allowed there" });
+    const locked = await save();
+    expect(locked.status).toBe(403);
+    expect(await locked.json()).toEqual({ error: { message: "project root \"proj\" is read-only on this device, so write_instruction is not allowed there" } });
+
+    relay.callTool.mockResolvedValue({ ok: false, output: "tool \"write_instruction\" is not allowed on this device" });
+    const refused = await save();
+    expect(refused.status).toBe(403);
+    expect(await refused.json()).toMatchObject({ error: { message: expect.stringContaining("does not let the agent change files") as string } });
+
+    relay.callTool.mockResolvedValue({ ok: false, output: "error: unknown tool \"read_instruction\"" });
+    const old = await read();
+    expect(old.status).toBe(501);
+    expect(await old.json()).toMatchObject({ error: { message: expect.stringContaining("older agent") as string } });
+
+    relay.callTool.mockResolvedValue({ ok: false, output: "AGENTS.md is not a text file" });
+    const odd = await read();
+    expect(odd.status).toBe(502);
+    expect(await odd.json()).toEqual({ error: { message: "AGENTS.md is not a text file" } });
+
+    relay.callTool.mockRejectedValue(new Error("not connected"));
+    const offline = await save();
+    expect(offline.status).toBe(503);
+    expect(await offline.json()).toEqual({ error: { message: "Could not reach the device, so nothing was saved: not connected" } });
+    expect((await read()).status).toBe(503);
+  });
+});
+
 describe("background tasks of a session", () => {
   it("lists what the device says the session has running, nothing for a chat, and stops them when the session is deleted", async () => {
     registry.upsert(beat({ roots: ["proj"], allowedTools: ["read_file"] }));

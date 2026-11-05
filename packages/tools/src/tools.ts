@@ -4,6 +4,7 @@ import { browserTools } from "./browser-tools.js";
 import { devTools } from "./dev-tools.js";
 import { fileChange } from "./diff.js";
 import { num, resolveInside, show, str, truncate, type ToolLevel, type ToolSpec } from "./helpers.js";
+import { instructionTools } from "./instructions.js";
 import { runShell } from "./shell.js";
 import { skillTools } from "./skills.js";
 import { startTask } from "./tasks.js";
@@ -270,7 +271,7 @@ const runCommand: ToolSpec = {
   },
 };
 
-export const tools: ToolSpec[] = [readFile, listDir, grep, writeFile, editFile, runCommand, webFetch, ...devTools, ...skillTools, ...taskTools, ...browserTools];
+export const tools: ToolSpec[] = [readFile, listDir, grep, writeFile, editFile, runCommand, webFetch, ...devTools, ...skillTools, ...instructionTools, ...taskTools, ...browserTools];
 
 // The names of the tools a device offers: each group is off, read-only, or able to change things.
 export const toolNamesFor = (device: ToolLevel | "off", remote: ToolLevel | "off"): string[] => {
