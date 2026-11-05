@@ -1546,6 +1546,29 @@ describe("Permission modes", () => {
     expect(file?.preview).toEqual({ kind: "file", title: "b.txt (7 characters)", text: "one\ntwo" });
   });
 
+  it("shows every change of an edit_file call that lists several edits", async () => {
+    allowAll();
+    const s = sessions.create({ model: "qwen", device: "pc", root: "proj" });
+    complete.mockImplementationOnce(async () => {
+      return { role: "assistant", content: null, tool_calls: [call("e", "edit_file", { path: "a.ts", edits: [{ old_string: "const a = 1;", new_string: "const a = 2;" }, { old_string: "const b = 1;", new_string: "const b = 2;" }] })] };
+    }).mockImplementation(async () => {
+      return { role: "assistant", content: "done" };
+    });
+    s.send("go");
+    await until(() => {
+      return asked(s).length === 1;
+    });
+    s.answer(asked(s)[0]?.id ?? "", true);
+    await until(() => {
+      return types(s).includes("done");
+    });
+    const text = asked(s)[0]?.preview?.text ?? "";
+    expect(text).toContain("-const a = 1;");
+    expect(text).toContain("+const a = 2;");
+    expect(text).toContain("-const b = 1;");
+    expect(text).toContain("+const b = 2;");
+  });
+
   it("allows a tool for the conversation or always in this project, and remembers the project rule", async () => {
     allowAll();
     const remembered = new Set<string>();

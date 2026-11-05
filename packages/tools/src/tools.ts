@@ -202,16 +202,40 @@ const writeFile: ToolSpec = {
   },
 };
 
+const objectOf = (value: unknown): Record<string, unknown> => {
+  return typeof value === "object" && value !== null ? Object.fromEntries(Object.entries(value)) : {};
+};
+
+// One edit, on text that already uses plain \n. The label names the edit in an error when a call has several.
+const applyEdit = (body: string, oldText: unknown, newText: unknown, all: boolean, label: string): string => {
+  if (typeof oldText !== "string" || typeof newText !== "string") {
+    throw new Error(`${label}"old_string" and "new_string" must be strings`);
+  }
+  const from = oldText.replace(/\r\n/g, "\n");
+  const to = newText.replace(/\r\n/g, "\n");
+  if (!from) {
+    throw new Error(`${label}old_string must not be empty`);
+  }
+  const count = body.split(from).length - 1;
+  if (count === 0) {
+    throw new Error(`${label}old_string was not found; read the file again and copy it exactly`);
+  }
+  if (count > 1 && !all) {
+    throw new Error(`${label}old_string matches ${count} times; include more surrounding context, or set replace_all`);
+  }
+  return body.split(from).join(to);
+};
+
 const editFile: ToolSpec = {
   def: {
     type: "function",
     function: {
       name: "edit_file",
-      description: "Replace one exact occurrence of old_string with new_string in a file. old_string must match exactly once, so include enough context.",
+      description: "Replace exact text in a file. Give old_string and new_string, or an edits list of such pairs, applied in order and all or nothing (if one fails, the file is left unchanged and the error names it). Each old_string must match exactly once, so include enough context, unless replace_all is true: then every match is replaced. Write line breaks as \\n; the file's own line endings (CRLF or LF) are matched and kept.",
       parameters: {
         type: "object",
-        properties: { path: { type: "string" }, old_string: { type: "string" }, new_string: { type: "string" } },
-        required: ["path", "old_string", "new_string"],
+        properties: { path: { type: "string" }, old_string: { type: "string" }, new_string: { type: "string" }, replace_all: { type: "boolean", description: "Replace every match instead of requiring exactly one" }, edits: { type: "array", description: "Several edits to one file, applied in order. Use instead of old_string and new_string.", items: { type: "object", properties: { old_string: { type: "string" }, new_string: { type: "string" }, replace_all: { type: "boolean" } }, required: ["old_string", "new_string"] } } },
+        required: ["path"],
       },
     },
   },
@@ -223,22 +247,26 @@ const editFile: ToolSpec = {
   },
   async run(a, ctx) {
     const file = await resolveInside(ctx.cwd, str(a, "path"));
-    const oldText = str(a, "old_string");
-    const newText = str(a, "new_string");
-    if (!oldText) {
-      throw new Error("old_string must not be empty");
+    const given = a.edits;
+    if (given !== undefined && a.old_string !== undefined) {
+      throw new Error("give either edits or old_string and new_string, not both");
+    }
+    if (Array.isArray(given) && given.length === 0) {
+      throw new Error("edits must not be empty");
     }
     const text = await readText(file);
-    const count = text.split(oldText).length - 1;
-    if (count === 0) {
-      throw new Error("old_string was not found; read the file again and copy it exactly");
+    // Matched and edited with plain \n, then written back in the file's own ending, so the file never ends up with both.
+    const crlf = text.includes("\r\n");
+    let edited = text.replace(/\r\n/g, "\n");
+    if (Array.isArray(given)) {
+      for (const [i, one] of given.entries()) {
+        const e = objectOf(one);
+        edited = applyEdit(edited, e.old_string, e.new_string, e.replace_all === true, `edit ${i + 1}: `);
+      }
+    } else {
+      edited = applyEdit(edited, a.old_string, a.new_string, a.replace_all === true, "");
     }
-    if (count > 1) {
-      throw new Error(`old_string matches ${count} times; include more surrounding context`);
-    }
-    const updated = text.replace(oldText, () => {
-      return newText;
-    });
+    const updated = crlf ? edited.replace(/\n/g, "\r\n") : edited;
     await fs.writeFile(file, updated, "utf8");
     ctx.report?.(fileChange(rel(ctx.cwd, file), text, updated));
     return `edited ${rel(ctx.cwd, file)}`;
