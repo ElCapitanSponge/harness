@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import type { PermissionMode } from "@harness/core";
+import type { InstructionName, PermissionMode } from "@harness/core";
 import { api } from "./api";
-import type { Catalogue, ClaudeStatus, ConversationUsage, NodeRecord, BackgroundTask, LibrarySkill, PermissionRule, SessionInfo, SettingsReport, SkillsFolder, UsageSummary } from "./types";
+import type { Catalogue, ClaudeStatus, ConversationUsage, InstructionEntry, InstructionFile, NodeRecord, BackgroundTask, LibrarySkill, PermissionRule, SessionInfo, SettingsReport, SkillsFolder, UsageSummary } from "./types";
 
 // Every model on every device, and whether Claude is reachable. Refreshed so a device that connects shows up.
 export const useCatalogue = () => {
@@ -67,6 +67,45 @@ export const useClearDonePlan = (id: string) => {
   return useMutation({
     mutationFn: () => {
       return api<{ cleared: number }>(`/sessions/${id}/plan/done`, { method: "DELETE" });
+    },
+  });
+};
+
+// The project's instruction files on the session's device, with whether each exists and how long it is.
+export const useInstructions = (id: string) => {
+  return useQuery({
+    queryKey: ["instructions", id],
+    queryFn: () => {
+      return api<InstructionEntry[]>(`/sessions/${id}/instructions`);
+    },
+    retry: false,
+  });
+};
+
+// One instruction file, read when it is opened. It is not refreshed behind the person's back: what they are editing stays theirs until they
+// reload it or save.
+export const useInstructionFile = (id: string, name: InstructionName) => {
+  return useQuery({
+    queryKey: ["instruction", id, name],
+    queryFn: () => {
+      return api<InstructionFile>(`/sessions/${id}/instructions/${name}`);
+    },
+    retry: false,
+    staleTime: Infinity,
+    gcTime: 0,
+  });
+};
+
+// Save an instruction file on the device. A file that changed after it was opened is refused (409), and nothing is written.
+export const useSaveInstruction = (id: string, name: InstructionName) => {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (body: { text: string; version: string }) => {
+      return api<{ saved: true; version: string; length: number }>(`/sessions/${id}/instructions/${name}`, { method: "PUT", body });
+    },
+    onSuccess: () => {
+      void client.invalidateQueries({ queryKey: ["instructions", id] });
+      void client.invalidateQueries({ queryKey: ["instruction", id, name] });
     },
   });
 };

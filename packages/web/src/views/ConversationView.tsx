@@ -281,7 +281,7 @@ const Conversation = ({ id }: { id: string }) => {
       </div>
       {panel && info?.kind === "code"
         ? (
-            <SidePanel changes={state.changes} plan={state.plan} planDocs={state.planDocs} tasks={tasks.data} shots={state.shots} clearError={clearTasks.error?.message ?? clearPlan.error?.message} onClearTasks={clearFinishedTasks} onClearPlan={clearDonePlan} files={info.device !== "" ? { device: info.device, root: info.root, onAdd: addContext } : undefined} onClose={() => {
+            <SidePanel changes={state.changes} plan={state.plan} planDocs={state.planDocs} tasks={tasks.data} shots={state.shots} clearError={clearTasks.error?.message ?? clearPlan.error?.message} onClearTasks={clearFinishedTasks} onClearPlan={clearDonePlan} files={info.device !== "" ? { device: info.device, root: info.root, onAdd: addContext } : undefined} memory={info.device !== "" ? id : undefined} onClose={() => {
               setPanel(false);
             }}
             />

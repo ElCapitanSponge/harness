@@ -4,6 +4,7 @@ import type { PlanStep } from "@harness/core";
 import { Diff } from "@/components/Diff";
 import { FileBrowser } from "@/components/FileBrowser";
 import { PlanDocument } from "@/components/PlanDocument";
+import { ProjectMemory } from "@/components/ProjectMemory";
 import { Button } from "@/components/ui/button";
 import type { ChangedFile, PlanVersion } from "@/lib/conversation";
 import type { ToolImage } from "@harness/core";
@@ -117,7 +118,7 @@ const Counts = ({ file }: { file: ChangedFile }) => {
 // What the session has done, beside the conversation: the model's plan and the files it changed or created, newest first. Finished tasks
 // and done plan steps can be cleared. A file
 // opens to its diff. At phone width it is a drawer over the conversation.
-export const SidePanel = ({ changes, plan, planDocs = [], tasks = [], shots = [], files, onClearTasks, onClearPlan, clearError, onClose }: { changes: ChangedFile[]; plan: PlanStep[]; planDocs?: PlanVersion[]; tasks?: BackgroundTask[]; shots?: ToolImage[]; onClearTasks?: () => void; onClearPlan?: () => void; clearError?: string; files?: { device: string; root: string; onAdd: (path: string, text: string, shortened: boolean) => void }; onClose: () => void }) => {
+export const SidePanel = ({ changes, plan, planDocs = [], tasks = [], shots = [], files, memory, onClearTasks, onClearPlan, clearError, onClose }: { changes: ChangedFile[]; plan: PlanStep[]; planDocs?: PlanVersion[]; tasks?: BackgroundTask[]; shots?: ToolImage[]; onClearTasks?: () => void; onClearPlan?: () => void; clearError?: string; files?: { device: string; root: string; onAdd: (path: string, text: string, shortened: boolean) => void }; memory?: string; onClose: () => void }) => {
   const [openPath, setOpenPath] = useState<string | undefined>();
   const open = changes.find((f) => {
     return f.path === openPath;
@@ -139,6 +140,7 @@ export const SidePanel = ({ changes, plan, planDocs = [], tasks = [], shots = []
             )
           : (
               <>
+                {memory ? <ProjectMemory id={memory} /> : null}
                 {files ? <FileBrowser device={files.device} root={files.root} onAdd={files.onAdd} /> : null}
                 {clearError ? <p className="text-xs text-destructive" role="alert">{clearError}</p> : null}
                 {planDocs.length > 0 ? <PlanDocument versions={planDocs} /> : null}

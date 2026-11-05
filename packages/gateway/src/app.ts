@@ -1,5 +1,5 @@
 import { toOpenAIResponse, toSse } from "@harness/claude";
-import { ChatRequest, DeviceToolRequest, ModelLoad, ModelUnload, ImportParse, LibraryImport, QueuedEdit, SessionAnswer, SessionApproval, SessionCreate, SessionMode, SessionImport, SessionMessage, SessionRead, SessionRename, flattenError } from "@harness/core";
+import { ChatRequest, DeviceToolRequest, ModelLoad, ModelUnload, ImportParse, LibraryImport, QueuedEdit, SessionAnswer, SessionApproval, SessionCreate, SessionMode, SessionImport, SessionMessage, SessionRead, SessionRename, InstructionSave, INSTRUCTION_NAMES, flattenError, type InstructionName } from "@harness/core";
 import { findTool, type ProjectContext } from "@harness/tools";
 import { Hono, type Context } from "hono";
 import { bearerAuth } from "./auth.js";
@@ -475,6 +475,120 @@ export const createApp = ({ registry, apiKey, relay, sessions, library, rules, g
     } catch {
       return c.json({ cleared: 0 });
     }
+  });
+
+  // What to tell the person when the device refuses to read or save an instruction file.
+  const instructionProblem = (output: string, action: "read" | "change"): { status: 403 | 501 | 502; message: string } => {
+    if (output.includes("unknown tool")) {
+      return { status: 501, message: "This device runs an older agent that cannot read or save instruction files. Update the agent on it." };
+    }
+    // A read-only folder says so itself, with its name.
+    if (output.includes("is read-only on this device")) {
+      return { status: 403, message: output };
+    }
+    if (output.includes("is not allowed on this device")) {
+      return { status: 403, message: `This device does not let the agent ${action} files, so this cannot be done from here.` };
+    }
+    return { status: 502, message: output };
+  };
+
+  // How long a device has to read or save an instruction file.
+  const INSTRUCTION_TIMEOUT_MS = 10_000;
+
+  // The session and the file a request for one instruction file names, or the reply to give instead. Only the two names, and only for a
+  // conversation that has a project folder; the device checks both again.
+  const instructionTarget = (c: Context): { session: NonNullable<ReturnType<Sessions["get"]>>; name: InstructionName } | { reply: Response } => {
+    const session = sessions.get(c.req.param("id") ?? "");
+    if (!session) {
+      return { reply: c.json({ error: { message: "no such session" } }, 404) };
+    }
+    const name = INSTRUCTION_NAMES.find((n) => {
+      return n === c.req.param("name");
+    });
+    if (!name) {
+      return { reply: c.json({ error: { message: `only ${INSTRUCTION_NAMES.join(" and ")} can be read or changed here` } }, 404) };
+    }
+    if (session.device === "") {
+      return { reply: c.json({ error: { message: "this conversation has no project folder" } }, 409) };
+    }
+    return { session, name };
+  };
+
+  // Asks the session's device to read or save a file. Gives what it answered, or the reply to give when it could not be reached or refused.
+  const askInstruction = async (c: Context, session: NonNullable<ReturnType<Sessions["get"]>>, tool: "read_instruction" | "write_instruction", args: Record<string, unknown>, unreachable: string): Promise<{ output: string } | { reply: Response }> => {
+    let result: Awaited<ReturnType<typeof relay.callTool>>;
+    try {
+      result = await relay.callTool(session.device, session.root, tool, args, { session: session.id, timeoutMs: INSTRUCTION_TIMEOUT_MS });
+    } catch (err) {
+      return { reply: c.json({ error: { message: `${unreachable}: ${err instanceof Error ? err.message : String(err)}` } }, 503) };
+    }
+    if (!result.ok) {
+      const problem = instructionProblem(result.output, tool === "read_instruction" ? "read" : "change");
+      return { reply: c.json({ error: { message: problem.message } }, problem.status) };
+    }
+    return { output: result.output };
+  };
+
+  // The project's instruction files (AGENTS.md and CLAUDE.md) as the session's device has them, for the person to read and change from the
+  // page. Only those two names, only in the session's own project folder, and the device checks both again. A conversation with no
+  // project folder has none. What a file says is never written to the log.
+  app.get("/sessions/:id/instructions", async (c) => {
+    const session = sessions.get(c.req.param("id"));
+    if (!session) {
+      return c.json({ error: { message: "no such session" } }, 404);
+    }
+    if (session.device === "") {
+      return c.json([]);
+    }
+    try {
+      return c.json(await Promise.all(INSTRUCTION_NAMES.map(async (name) => {
+        const result = await relay.callTool(session.device, session.root, "read_instruction", { name }, { session: session.id, timeoutMs: INSTRUCTION_TIMEOUT_MS });
+        if (!result.ok) {
+          // A file that cannot be opened here (too long, not text, or the device will not say) is listed with why, and no length.
+          return { name, note: instructionProblem(result.output, "read").message };
+        }
+        const file = JSON.parse(result.output) as { exists: boolean; text: string };
+        return { name, exists: file.exists, length: file.text.length };
+      })));
+    } catch (err) {
+      return c.json({ error: { message: `Could not reach the device: ${err instanceof Error ? err.message : String(err)}` } }, 503);
+    }
+  });
+
+  app.get("/sessions/:id/instructions/:name", async (c) => {
+    const target = instructionTarget(c);
+    if ("reply" in target) {
+      return target.reply;
+    }
+    const answer = await askInstruction(c, target.session, "read_instruction", { name: target.name }, "Could not reach the device");
+    if ("reply" in answer) {
+      return answer.reply;
+    }
+    return c.json(JSON.parse(answer.output) as unknown);
+  });
+
+  // Save a file, if it is still at the version the page opened. A file that changed since is refused with 409, and its current version, so
+  // the page can show what happened and offer to reload. A save is the person's own act, so it asks for no approval.
+  app.put("/sessions/:id/instructions/:name", async (c) => {
+    const target = instructionTarget(c);
+    if ("reply" in target) {
+      return target.reply;
+    }
+    const parsed = InstructionSave.safeParse(await c.req.json().catch(() => {
+      return undefined;
+    }));
+    if (!parsed.success) {
+      return c.json({ error: flattenError(parsed.error) }, 400);
+    }
+    const answer = await askInstruction(c, target.session, "write_instruction", { name: target.name, text: parsed.data.text, version: parsed.data.version }, "Could not reach the device, so nothing was saved");
+    if ("reply" in answer) {
+      return answer.reply;
+    }
+    const saved = JSON.parse(answer.output) as { saved: boolean; message?: string; version: string; length?: number };
+    if (!saved.saved) {
+      return c.json({ error: { message: saved.message ?? "The file changed on the device after you opened it." }, conflict: true, version: saved.version }, 409);
+    }
+    return c.json({ saved: true, version: saved.version, length: saved.length });
   });
 
   // Take the steps that are done off the plan. The model is told, and a reload shows the cleared plan.

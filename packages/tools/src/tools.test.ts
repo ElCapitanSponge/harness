@@ -161,6 +161,8 @@ describe("tool metadata", () => {
       skill: false,
       start_skill: false,
       project_context: false,
+      read_instruction: false,
+      write_instruction: false,
       browser_open: true,
       browser_read: false,
       browser_click: true,

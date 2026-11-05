@@ -1,3 +1,5 @@
+import type { InstructionName } from "@harness/core";
+
 // The shapes the gateway returns, for the parts of its API the page uses.
 export type { ClaudeStatus, ClaudeWindow, ConversationUsage, ModelUsage, NodeRecord, SessionEvent, SessionInfo, SettingKey, SettingsReport, UsageSummary } from "@harness/core";
 
@@ -39,6 +41,23 @@ export interface ParsedImport {
   conversations: ImportedConversation[];
   format: string;
   split: boolean;
+}
+
+// One of a project's instruction files as the session's device has it. `note` says why it cannot be opened here (too long, or the device
+// will not say), and then there is no `exists` or `length`.
+export interface InstructionEntry {
+  name: InstructionName;
+  exists?: boolean;
+  length?: number;
+  note?: string;
+}
+
+// A file's text, and its version: a save sends the version back, so a file that changed on the device since is not overwritten.
+export interface InstructionFile {
+  name: InstructionName;
+  exists: boolean;
+  text: string;
+  version: string;
 }
 
 // A command a coding session started in the background on its device.
