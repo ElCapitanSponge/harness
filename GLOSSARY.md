@@ -25,6 +25,9 @@ Bringing a conversation from another tool in as a saved conversation, marked wit
 **Session panel**:
 The panel beside a coding session showing the model's plan and the files it changed, with their diffs. See docs/guides/coding-sessions.md.
 
+**Project memory**:
+The section of the session panel that lists a project's AGENTS.md and CLAUDE.md, opens one to edit and saves it back to the device. A save is the person's own act, so it asks for no approval, and it is refused if the file changed after it was opened. See docs/guides/coding-sessions.md.
+
 **Question**:
 A decision the model puts to the person with the ask tool, shown as a card with options and a box for their own words. With nobody to answer, the model is told so and must not guess. See docs/guides/coding-sessions.md.
 
