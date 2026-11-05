@@ -74,7 +74,7 @@ const Editor = ({ id, name, onBack }: { id: string; name: InstructionName; onBac
             </>
           )
         : null}
-      {saved ? <p className="text-[13px] text-success" role="status">Saved. Your next message in this conversation is sent with the new text.</p> : null}
+      {saved ? <p className="text-[13px] text-success" role="status">Saved to the project folder on the device.</p> : null}
       {save.error
         ? (
             <div className="grid gap-1" role="alert">
@@ -167,7 +167,7 @@ export const ProjectMemory = ({ id }: { id: string }) => {
                     </Button>
                   )
                 : null}
-              {list.data && !sharedNote ? <p className="text-xs text-muted-foreground">These tell the model about the project. A change you save applies from your next message.</p> : null}
+              {list.data && !sharedNote ? <p className="text-xs text-muted-foreground">These tell the model about the project.</p> : null}
             </>
           )}
     </section>

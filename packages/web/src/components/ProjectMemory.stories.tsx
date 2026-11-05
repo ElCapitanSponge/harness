@@ -61,8 +61,7 @@ export const TwoFiles: StoryObj = {
     const canvas = within(canvasElement);
     await expect(await canvas.findByRole("button", { name: /AGENTS\.md.*2400 characters/ })).toBeVisible();
     await expect(canvas.getByRole("button", { name: /CLAUDE\.md.*12 characters/ })).toBeVisible();
-    // It says when a saved change applies.
-    await expect(canvas.getByText(/applies from your next message/)).toBeVisible();
+    await expect(canvas.getByText(/These tell the model about the project/)).toBeVisible();
   },
 };
 
@@ -137,8 +136,7 @@ export const Saved: StoryObj = {
   play: async ({ canvasElement }) => {
     const canvas = await editAgents(canvasElement);
     await userEvent.click(canvas.getByRole("button", { name: "Save" }));
-    // It says when the change applies.
-    await expect(await canvas.findByText(/Your next message in this conversation is sent with the new text/)).toBeVisible();
+    await expect(await canvas.findByText(/Saved to the project folder on the device/)).toBeVisible();
   },
 };
 

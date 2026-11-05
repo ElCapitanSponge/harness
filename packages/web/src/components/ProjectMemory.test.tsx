@@ -91,8 +91,7 @@ describe("Project memory", () => {
     await user.type(box("AGENTS.md"), " Run the tests.");
     expect(screen.getByText("Unsaved changes")).toBeTruthy();
     await user.click(screen.getByRole("button", { name: "Save" }));
-    expect(await screen.findByText(/Saved\./)).toBeTruthy();
-    expect(screen.getByText(/next message/)).toBeTruthy();
+    expect(await screen.findByText(/Saved to the project folder/)).toBeTruthy();
     expect(saves).toEqual([{ path: "/sessions/s1/instructions/AGENTS.md", body: { text: "Use pnpm. Run the tests.", version: "1-9" } }]);
     expect(disk["AGENTS.md"]?.text).toBe("Use pnpm. Run the tests.");
   });
@@ -104,7 +103,7 @@ describe("Project memory", () => {
     await screen.findByRole("textbox", { name: "AGENTS.md text" });
     await user.type(box("AGENTS.md"), " One.");
     await user.click(screen.getByRole("button", { name: "Save" }));
-    await screen.findByText(/Saved\./);
+    await screen.findByText(/Saved to the project folder/);
     await user.type(box("AGENTS.md"), " Two.");
     await user.click(screen.getByRole("button", { name: "Save" }));
     await waitFor(() => {
@@ -146,7 +145,7 @@ describe("Project memory", () => {
     expect(box("AGENTS.md").value).toBe("");
     await user.type(box("AGENTS.md"), "# Rules");
     await user.click(screen.getByRole("button", { name: "Save" }));
-    await screen.findByText(/Saved\./);
+    await screen.findByText(/Saved to the project folder/);
     expect(saves[0]?.body).toEqual({ text: "# Rules", version: "absent" });
     expect(disk["AGENTS.md"]?.text).toBe("# Rules");
   });
