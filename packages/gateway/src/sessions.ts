@@ -1245,8 +1245,20 @@ const previewOf = (tool: string, args: Record<string, unknown> | undefined, devi
     return { kind: "command", title: `${args.background === true ? "Runs in the background" : "Runs"} in ${device}:${root}`, text: text("command") };
   }
   if (tool === "edit_file") {
-    const change = fileChange(text("path"), text("old_string"), text("new_string"));
-    return { kind: "diff", title: text("path"), text: change.patch ?? "(no difference)" };
+    // One edit given as old_string and new_string, or a list of them in edits.
+    const edits: unknown = args.edits;
+    const listed: unknown[] = Array.isArray(edits) ? Array.from<unknown>(edits) : [args];
+    const patches = listed.map((one) => {
+      const fields: Record<string, unknown> = typeof one === "object" && one !== null ? Object.fromEntries(Object.entries(one)) : {};
+      const field = (key: string): string => {
+        const v = fields[key];
+        return typeof v === "string" ? v : "";
+      };
+      return fileChange(text("path"), field("old_string"), field("new_string")).patch ?? "";
+    }).filter((patch) => {
+      return patch !== "";
+    });
+    return { kind: "diff", title: text("path"), text: patches.length > 0 ? patches.join("\n") : "(no difference)" };
   }
   if (tool === "write_file") {
     const lines = text("content").split("\n");

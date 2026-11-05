@@ -21,7 +21,7 @@ harness code -m qwen3.5-9b "add a README section"                          # pic
 harness code -m claude:sonnet                                              # Claude Code, locally
 ```
 
-Tools: `read_file`, `list_dir`, `grep`, `write_file`, `edit_file`, `run_command`, plus the [developer tools](dev-tools.md). The model sees them as ordinary OpenAI tools, so any local model with tool calling works.
+Tools: `read_file`, `list_dir`, `grep`, `write_file`, `edit_file`, `run_command`, plus the [developer tools](dev-tools.md). The model sees them as ordinary OpenAI tools, so any local model with tool calling works. `edit_file` replaces exact text in a file: one change, or an `edits` list of changes applied in order, all or nothing (if one does not match, the file is left as it was and the error names that edit). Each text must match exactly once unless `replace_all` is set, which replaces every match. A line break written as `\n` matches and writes the file's own line endings, CRLF or LF, so an edit never leaves a file with both.
 
 - **Confined to the working directory.** File tools reject paths outside it, including through symlinks.
 - **Changes need your approval.** Reading is automatic. Writing, editing and running commands ask `[y/N/a]` (`a` = always allow that tool for the session). `-y` approves everything, so use it only in a throwaway directory or with a model you trust.

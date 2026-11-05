@@ -119,6 +119,32 @@ describe("edit_file", () => {
     await expect(run("edit_file", { path: "f.txt", old_string: "beta", new_string: "x" })).rejects.toThrow("matches 2 times");
     await expect(run("edit_file", { path: "f.txt", old_string: "", new_string: "x" })).rejects.toThrow("empty");
   });
+
+  it("replaces every match when replace_all is set", async () => {
+    await fs.writeFile(path.join(dir, "three.txt"), "beta one beta two beta");
+    await run("edit_file", { path: "three.txt", old_string: "beta", new_string: "B", replace_all: true });
+    expect(await fs.readFile(path.join(dir, "three.txt"), "utf8")).toBe("B one B two B");
+  });
+
+  it("edits a CRLF file with \n in the arguments and leaves it all CRLF", async () => {
+    await fs.writeFile(path.join(dir, "win.txt"), "one\r\ntwo\r\nthree\r\n");
+    await run("edit_file", { path: "win.txt", old_string: "two\nthree", new_string: "2\n3\n4" });
+    expect(await fs.readFile(path.join(dir, "win.txt"), "utf8")).toBe("one\r\n2\r\n3\r\n4\r\n");
+  });
+
+  it("leaves an LF file all LF, even when the arguments use CRLF", async () => {
+    await fs.writeFile(path.join(dir, "unix.txt"), "one\ntwo\nthree\n");
+    await run("edit_file", { path: "unix.txt", old_string: "two\r\nthree", new_string: "2\r\n3" });
+    expect(await fs.readFile(path.join(dir, "unix.txt"), "utf8")).toBe("one\n2\n3\n");
+  });
+
+  it("applies a list of edits in order, all or nothing, and names the one that failed", async () => {
+    await fs.writeFile(path.join(dir, "list.txt"), "a b c");
+    await run("edit_file", { path: "list.txt", edits: [{ old_string: "a", new_string: "x" }, { old_string: "x b", new_string: "y" }] });
+    expect(await fs.readFile(path.join(dir, "list.txt"), "utf8")).toBe("y c");
+    await expect(run("edit_file", { path: "list.txt", edits: [{ old_string: "y", new_string: "z" }, { old_string: "nope", new_string: "q" }] })).rejects.toThrow("edit 2");
+    expect(await fs.readFile(path.join(dir, "list.txt"), "utf8")).toBe("y c");
+  });
 });
 
 describe("run_command", () => {
