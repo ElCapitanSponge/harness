@@ -3,8 +3,8 @@ import type { ApprovalPreview, FileChange, ImageAttachment, PlanStep, QueuedInfo
 // What the page shows for a conversation, built up from the gateway's events. Kept free of React so it can be tested.
 
 export type Item
-  = | { kind: "user"; id: number; text: string; images?: ImageAttachment[] }
-    | { kind: "assistant"; id: number; text: string; streaming: boolean; model?: string; device?: string; reason?: string }
+  = | { kind: "user"; id: number; text: string; images?: ImageAttachment[]; at?: number }
+    | { kind: "assistant"; id: number; text: string; streaming: boolean; model?: string; device?: string; reason?: string; at?: number }
     | { kind: "thinking"; id: number; text: string; live: boolean; startedAt: number; seconds: number }
     // A run of tool activity between two messages, or a message and an approval or question. Open (live) while the turn is still adding to it.
     | { kind: "actions"; id: number; entries: ActionEntry[]; live: boolean }
@@ -139,7 +139,7 @@ export const applyEvent = (state: ConversationState, event: StreamEvent, now: nu
   switch (event.type) {
     case "user":
       return { ...push(state.items, (id) => {
-        return { kind: "user", id, text: event.text, ...(event.images ? { images: event.images } : {}) };
+        return { kind: "user", id, text: event.text, ...(event.images ? { images: event.images } : {}), ...(event.at === undefined ? {} : { at: event.at }) };
       }), busy: true, since: state.since ?? now, stage: undefined };
 
     case "stage":
@@ -176,10 +176,10 @@ export const applyEvent = (state: ConversationState, event: StreamEvent, now: nu
 
     case "text":
       if (last?.kind === "assistant" && last.streaming) {
-        return replaceLast({ ...last, text: event.text, streaming: false, model: event.model, device: event.device, reason: event.reason });
+        return replaceLast({ ...last, text: event.text, streaming: false, model: event.model, device: event.device, reason: event.reason, at: event.at });
       }
       return push(settle(state.items, now), (id) => {
-        return { kind: "assistant", id, text: event.text, streaming: false, model: event.model, device: event.device, reason: event.reason };
+        return { kind: "assistant", id, text: event.text, streaming: false, model: event.model, device: event.device, reason: event.reason, at: event.at };
       });
 
     case "compacted":

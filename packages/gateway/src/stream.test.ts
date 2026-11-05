@@ -156,7 +156,7 @@ describe("live events in a session", () => {
       return e.type;
     })).toEqual(["user", "thinking", "text", "done"]);
     expect(s.events.some(isLiveEvent)).toBe(false);
-    expect(s.events[1]).toEqual({ type: "thinking", text: "let me think" });
+    expect(s.events[1]).toMatchObject({ type: "thinking", text: "let me think" });
   });
 
   it("replays only stored events to a late watcher", async () => {

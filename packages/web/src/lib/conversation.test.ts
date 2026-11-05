@@ -83,7 +83,7 @@ describe("a conversation built from events", () => {
   });
 
   it("keeps the queue the gateway reports, which is live only and does not move the cursor", () => {
-    const waiting = run([{ type: "user", text: "q" }, { type: "queue", messages: [{ id: "a", text: "next", images: 0 }, { id: "b", text: "after", images: 1 }], held: false }]);
+    const waiting = run([{ type: "user", text: "q" }, { type: "queue", messages: [{ id: "a", text: "next", images: 0, at: 1 }, { id: "b", text: "after", images: 1, at: 2 }], held: false }]);
     expect(waiting.queue.map((m) => {
       return m.text;
     })).toEqual(["next", "after"]);
@@ -91,7 +91,7 @@ describe("a conversation built from events", () => {
     expect(waiting.cursor).toBe(1);
     expect(kinds(waiting)).toEqual(["user"]);
 
-    const held = run([{ type: "queue", messages: [{ id: "a", text: "next", images: 0 }], held: true }], waiting);
+    const held = run([{ type: "queue", messages: [{ id: "a", text: "next", images: 0, at: 1 }], held: true }], waiting);
     expect(held.queueHeld).toBe(true);
     expect(held.queue).toHaveLength(1);
     expect(run([{ type: "queue", messages: [], held: false }], held).queue).toEqual([]);
@@ -261,5 +261,25 @@ describe("modes and approvals", () => {
   it("notes a change of mode in the thread", () => {
     const state = run([{ type: "mode", mode: "plan" }]);
     expect(state.items[0]).toMatchObject({ kind: "note", tone: "info", text: expect.stringContaining("plan first") as string });
+  });
+});
+
+describe("message times", () => {
+  it("keeps the gateway's time on the person's message and on the finished reply", () => {
+    const state = run([
+      { type: "user", text: "q", at: 1_000 },
+      { type: "text-delta", text: "par" },
+      { type: "text", text: "part", at: 5_000 },
+      { type: "done", stopped: false, at: 5_001 },
+    ]);
+    expect(state.items[0]).toMatchObject({ kind: "user", at: 1_000 });
+    // The streaming piece has no stored time yet; the finished reply brings it.
+    expect(state.items[1]).toMatchObject({ kind: "assistant", streaming: false, at: 5_000 });
+  });
+
+  it("has no time for events stored before times were kept", () => {
+    const state = run([{ type: "user", text: "q" }, { type: "text", text: "a" }, { type: "done", stopped: false }]);
+    expect(state.items[0]).not.toHaveProperty("at");
+    expect(state.items[1]?.kind === "assistant" ? state.items[1].at : "wrong").toBeUndefined();
   });
 });

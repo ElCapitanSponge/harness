@@ -232,6 +232,8 @@ interface QueuedMessage {
   effort?: Effort | "default";
   skill?: { name: string; arguments?: string };
   images?: ImageAttachment[];
+  // When it was queued, in milliseconds since the epoch.
+  at: number;
 }
 
 interface SessionDeps {
@@ -417,10 +419,13 @@ export class Session {
     };
   }
 
+  // Stores an event and tells whoever is watching. The gateway stamps the time (`at`) so every client, and a reload, shows the same one;
+  // an event that already has one (an imported turn) keeps it.
   private emit(event: SessionEvent): void {
-    this.events.push(event);
+    const stamped: SessionEvent = event.at === undefined ? { ...event, at: Date.now() } : event;
+    this.events.push(stamped);
     for (const listener of this.listeners) {
-      listener(event);
+      listener(stamped);
     }
   }
 
@@ -519,7 +524,7 @@ export class Session {
       if (this.queue.length >= MAX_QUEUED) {
         throw new Error(`${String(MAX_QUEUED)} messages are already waiting`);
       }
-      this.queue.push({ id: randomUUID(), text, ...(model !== undefined ? { model } : {}), ...(effort !== undefined ? { effort } : {}), ...(skill ? { skill } : {}), ...(images && images.length > 0 ? { images } : {}) });
+      this.queue.push({ id: randomUUID(), text, at: Date.now(), ...(model !== undefined ? { model } : {}), ...(effort !== undefined ? { effort } : {}), ...(skill ? { skill } : {}), ...(images && images.length > 0 ? { images } : {}) });
       this.announceQueue();
       return "queued";
     }
@@ -553,7 +558,7 @@ export class Session {
 
   private queued(): QueuedInfo[] {
     return this.queue.map((q) => {
-      return { id: q.id, text: q.text, images: q.images?.length ?? 0 };
+      return { id: q.id, text: q.text, images: q.images?.length ?? 0, at: q.at };
     });
   }
 
@@ -1375,8 +1380,9 @@ export class Sessions {
   import(input: { title?: string; source: string; turns: Turn[]; model?: string; created?: number }): Session {
     const turns = limitTurns(input.turns);
     const now = Date.now();
-    const events: SessionEvent[] = [{ type: "imported", source: input.source, turns: turns.length }, ...turns.map((t): SessionEvent => {
-      return t.role === "user" ? { type: "user", text: t.text } : { type: "text", text: t.text };
+    const events: SessionEvent[] = [{ type: "imported", source: input.source, turns: turns.length, at: now }, ...turns.map((t): SessionEvent => {
+      const at = t.at === undefined ? {} : { at: t.at };
+      return t.role === "user" ? { type: "user", text: t.text, ...at } : { type: "text", text: t.text, ...at };
     })];
     const history: ChatMessage[] = [{ role: "system", content: CHAT_PROMPT }, ...turns.map((t): ChatMessage => {
       return { role: t.role, content: t.text };

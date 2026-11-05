@@ -133,7 +133,7 @@ describe("Session turns", () => {
     });
 
     expect(relay.callTool).toHaveBeenCalledWith("pc", "proj", "read_file", { path: "a.txt" }, { session: expect.any(String) as string });
-    expect(s.events).toEqual<SessionEvent[]>([
+    expect(s.events).toMatchObject<SessionEvent[]>([
       { type: "user", text: "what is in a.txt?" },
       { type: "tool", summary: "read a.txt", name: "read_file" },
       { type: "tool-output", name: "read_file", output: expect.any(String) as string },
@@ -343,7 +343,7 @@ describe("Session turns", () => {
     await until(() => {
       return types(s).includes("error");
     });
-    expect(s.events.at(-1)).toEqual({ type: "error", message: "model crashed" });
+    expect(s.events.at(-1)).toMatchObject({ type: "error", message: "model crashed" });
 
     script({ role: "assistant", content: "recovered" });
     s.send("second");
@@ -406,7 +406,7 @@ describe("Session turns", () => {
     await until(() => {
       return types(s).includes("done");
     });
-    expect(s.events.at(-1)).toEqual({ type: "done", stopped: true });
+    expect(s.events.at(-1)).toMatchObject({ type: "done", stopped: true });
   });
 });
 
@@ -482,7 +482,7 @@ describe("Session approvals", () => {
       return types(s).includes("done");
     });
     expect(relay.callTool).not.toHaveBeenCalled();
-    expect(s.events.at(-1)).toEqual({ type: "done", stopped: false, declined: true });
+    expect(s.events.at(-1)).toMatchObject({ type: "done", stopped: false, declined: true });
     expect(complete).toHaveBeenCalledTimes(1);
   });
 
@@ -694,7 +694,7 @@ describe("Session and a skill the person starts", () => {
       return types(s).includes("done");
     });
     expect(types(s)).toEqual(["user", "skill", "text", "done"]);
-    expect(s.events[1]).toEqual({ type: "skill", name: "tdd", arguments: "the parser", text: "[tdd] the parser" });
+    expect(s.events[1]).toMatchObject({ type: "skill", name: "tdd", arguments: "the parser", text: "[tdd] the parser" });
     expect(lastMessage).toContain("/tdd the parser");
     expect(lastMessage).toContain("[tdd] the parser");
   });
@@ -737,7 +737,7 @@ describe("Session side panel data", () => {
       return types(s).includes("done");
     });
     expect(types(s)).toEqual(["user", "tool", "change", "tool-output", "text", "done"]);
-    expect(s.events[2]).toEqual({ type: "change", change: expect.objectContaining({ path: "a.txt", added: 1 }) as unknown });
+    expect(s.events[2]).toMatchObject({ type: "change", change: expect.objectContaining({ path: "a.txt", added: 1 }) as unknown });
     // The model saw the tool's result and nothing of the diff.
     expect(shown[1]).toContain("wrote 5 characters to a.txt");
     expect(shown[1]).not.toContain("@@");
@@ -757,7 +757,7 @@ describe("Session side panel data", () => {
     })).toContain("plan");
     expect(s.events.find((e) => {
       return e.type === "plan";
-    })).toEqual({ type: "plan", steps });
+    })).toMatchObject({ type: "plan", steps });
     // The plan never goes to the device.
     expect(relay.callTool).not.toHaveBeenCalled();
   });
@@ -773,7 +773,7 @@ describe("Session side panel data", () => {
     expect(s.clearDonePlan()).toEqual({ ok: true, cleared: 1 });
     expect(s.events.findLast((e) => {
       return e.type === "plan";
-    })).toEqual({ type: "plan", steps: steps.slice(1) });
+    })).toMatchObject({ type: "plan", steps: steps.slice(1) });
     // Nothing more to clear, and no event for it.
     expect(s.clearDonePlan()).toEqual({ ok: true, cleared: 0 });
     expect(types(s).filter((t) => {
@@ -837,7 +837,7 @@ describe("Session with images", () => {
       return types(s).includes("done");
     });
     expect(seenContent).toEqual([{ type: "text", text: "what is this?" }, { type: "image_url", image_url: { url: "data:image/png;base64,iVBORw0KGgo=" } }]);
-    expect(s.events[0]).toEqual({ type: "user", text: "what is this?", images: [png] });
+    expect(s.events[0]).toMatchObject({ type: "user", text: "what is this?", images: [png] });
     expect(types(s)).not.toContain("notice");
   });
 
@@ -1064,7 +1064,7 @@ describe("Session question cancelled or unanswered", () => {
     });
     expect(s.events.find((e) => {
       return e.type === "question-resolved";
-    })).toEqual({ type: "question-resolved", id: expect.any(String) as string });
+    })).toMatchObject({ type: "question-resolved", id: expect.any(String) as string });
   });
 });
 
@@ -1411,7 +1411,7 @@ describe("Session and screenshots", () => {
     });
     expect(s.events.find((e) => {
       return e.type === "screenshot";
-    })).toEqual({ type: "screenshot", shot: { mediaType: "image/png", data: "SECRETPIXELS", url: "https://example.com/" } });
+    })).toMatchObject({ type: "screenshot", shot: { mediaType: "image/png", data: "SECRETPIXELS", url: "https://example.com/" } });
     expect(shown[1]).toContain("the person can see it");
     expect(shown[1]).not.toContain("SECRETPIXELS");
   });
@@ -1503,7 +1503,7 @@ describe("Permission modes", () => {
     const s = sessions.create({ model: "qwen", device: "pc", root: "proj" });
     s.setMode("edits");
     expect(s.permission).toBe("edits");
-    expect(s.events).toEqual([{ type: "mode", mode: "edits" }]);
+    expect(s.events).toMatchObject([{ type: "mode", mode: "edits" }]);
     s.setMode("edits");
     expect(s.events).toHaveLength(1);
 
@@ -1655,7 +1655,7 @@ describe("Plan first", () => {
       return types(s).includes("done");
     });
     expect(s.permission).toBe("ask");
-    expect(s.events).toContainEqual({ type: "mode", mode: "ask" });
+    expect(s.events).toContainEqual(expect.objectContaining({ type: "mode", mode: "ask" }));
     expect(namesAt(1)).toEqual(expect.arrayContaining(["write_file", "run_command"]));
   });
 

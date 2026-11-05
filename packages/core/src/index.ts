@@ -281,8 +281,12 @@ export const SessionRename = z.object({ title: z.string().trim().min(1).max(120)
   return v.title !== undefined || v.pinned !== undefined || v.archived !== undefined;
 }, { message: "send a title, pinned or archived" });
 
-// What happens in a coding session, in order. Sent to clients as server-sent events.
-export type SessionEvent
+// What happens in a coding session, in order. Sent to clients as server-sent events. Every stored event carries `at`, the time in
+// milliseconds since the epoch (UTC) that the gateway recorded it, or for an imported conversation the time the source gave. It is absent
+// on events stored before it was recorded, and clients show no time for those.
+export type SessionEvent = SessionEventBody & { at?: number };
+
+type SessionEventBody
   = | { type: "user"; text: string; images?: ImageAttachment[] }
     // Something the person should know that is not a failure, such as an image that was not sent to a model that cannot read it.
     | { type: "notice"; text: string }
@@ -327,6 +331,8 @@ export interface QueuedInfo {
   id: string;
   text: string;
   images: number;
+  // When the gateway queued it, in milliseconds since the epoch (UTC).
+  at: number;
 }
 
 export type LiveSessionEvent

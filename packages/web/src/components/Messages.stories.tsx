@@ -24,6 +24,35 @@ const item = (value: Item): { item: Item } => {
 
 export const FromYou: Story = { args: item({ kind: "user", id: 1, text: "Why does the build fail on Windows?" }) };
 
+export const WithoutATime: Story = {
+  // A message in a conversation stored before times were kept shows no time, not a wrong one.
+  args: item({ kind: "user", id: 40, text: "An old message" }),
+  play: async ({ canvasElement }) => {
+    await expect(canvasElement.querySelector("time")).toBeNull();
+  },
+};
+
+export const FromYouWithATime: Story = {
+  args: item({ kind: "user", id: 41, text: "Sent a minute ago", at: Date.now() - 60_000 }),
+  play: async ({ canvasElement }) => {
+    // Today's message shows the clock time only; the full date, time and zone are on hover and to a screen reader.
+    const time = canvasElement.querySelector("time");
+    await expect(time).not.toBeNull();
+    await expect(time?.textContent).toMatch(/^\d{1,2}[:.]\d{2}/);
+    await expect(time?.getAttribute("title")).toBe(time?.getAttribute("aria-label"));
+  },
+};
+
+export const ReplyWithAnEarlierTime: Story = {
+  args: item({ kind: "assistant", id: 42, streaming: false, text: "An answer from a while ago.", model: "gemma-3-12b", at: Date.parse("2025-03-04T10:15:00Z") }),
+  play: async ({ canvasElement }) => {
+    // An older message also shows its date, and the year when it is not this one.
+    const time = canvasElement.querySelector("time");
+    await expect(time?.textContent).toContain("2025");
+    await expect(time?.getAttribute("datetime")).toBe("2025-03-04T10:15:00.000Z");
+  },
+};
+
 export const FromYouWithMarkdown: Story = {
   args: item({ kind: "user", id: 30, text: "Please **summarise** this:\n\n- the feedback\n- the `ui` issues\n\n```ts\nconst a = 1;\n```" }),
   play: async ({ canvasElement }) => {
