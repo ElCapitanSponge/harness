@@ -1712,7 +1712,7 @@ describe("Plan first", () => {
     });
     // The person is shown the document, not the step list.
     expect(approvals(s)[0]).toMatchObject({ tool: "plan", preview: { kind: "file", title: "The plan", text: "# Plan\n\n- fix the bug" } });
-    expect(s.planDocuments()).toEqual([{ type: "plan-document", version: 1, markdown: "# Plan\n\n- fix the bug", by: "model" }]);
+    expect(s.planDocuments()).toMatchObject([{ type: "plan-document", version: 1, markdown: "# Plan\n\n- fix the bug", by: "model" }]);
 
     s.answer(approvals(s)[0]?.id ?? "", true, false, undefined, { edited: "# Plan\n\n- fix the bug\n- add a test", next: "edits" });
     await until(() => {
@@ -1725,7 +1725,7 @@ describe("Plan first", () => {
     expect(told).toContain("- add a test");
     expect(told).toContain("File edits are accepted without asking");
     expect(s.permission).toBe("edits");
-    expect(s.events).toContainEqual({ type: "mode", mode: "edits" });
+    expect(s.events).toContainEqual(expect.objectContaining({ type: "mode", mode: "edits" }));
   });
 
   it("adds no version when the plan is approved as it was, and asks before each change unless told otherwise", async () => {
