@@ -37,7 +37,7 @@ export const ProjectGroups = ({ groups, collapsed, pathname, onToggle, onNew, on
                     <button
                       type="button"
                       aria-expanded={!closed}
-                      className="flex min-w-0 flex-1 items-center gap-1 rounded-md px-1 py-1 text-left hover:bg-muted"
+                      className="flex min-w-0 flex-1 items-center gap-1 rounded-md px-1 py-1 text-left pointer-coarse:min-h-11 hover:bg-muted"
                       onClick={() => {
                         onToggle(group, !closed);
                       }}
@@ -57,7 +57,7 @@ export const ProjectGroups = ({ groups, collapsed, pathname, onToggle, onNew, on
               {group.kind === "pinned" || group.kind === "archive"
                 ? null
                 : (
-                    <Button variant="subtle" size="icon" className="size-7 opacity-0 focus-visible:opacity-100 group-hover/head:opacity-100" aria-label={group.kind === "project" ? `New session in ${group.name}` : "New chat"} title={group.kind === "project" ? "New session in this project" : "New chat"} onClick={() => {
+                    <Button variant="subtle" size="icon" className="size-7 opacity-0 focus-visible:opacity-100 group-hover/head:opacity-100 pointer-coarse:opacity-100" aria-label={group.kind === "project" ? `New session in ${group.name}` : "New chat"} title={group.kind === "project" ? "New session in this project" : "New chat"} onClick={() => {
                       onNew(group);
                     }}
                     >
@@ -77,7 +77,7 @@ export const ProjectGroups = ({ groups, collapsed, pathname, onToggle, onNew, on
                             to={`/c/${c.id}`}
                             onClick={onNavigate}
                             className={({ isActive }) => {
-                              return cn("flex items-center gap-2 rounded-md py-1.5 pl-2 pr-9 hover:bg-muted", isActive && "bg-accent font-semibold text-accent-foreground hover:bg-accent");
+                              return cn("flex items-center gap-2 rounded-md py-1.5 pl-2 pr-9 pointer-coarse:py-3 pointer-coarse:pr-12 hover:bg-muted", isActive && "bg-accent font-semibold text-accent-foreground hover:bg-accent");
                             }}
                           >
                             {status === "working"

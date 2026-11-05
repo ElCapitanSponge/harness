@@ -372,6 +372,7 @@ export const toMarkdown = (title: string, events: SessionEvent[]): string => {
     } else if (e.type === "tool") {
       parts.push(`> ${e.summary}`);
     } else if (e.type === "compacted") {
+      // Only the finished compaction marks the export; its start and a failure are left out on purpose.
       parts.push("> (earlier messages were summarised here)");
     }
   }

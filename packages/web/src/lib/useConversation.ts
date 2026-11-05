@@ -5,7 +5,7 @@ import { useEffect, useState } from "react";
 import { ApiError, api, authHeaders, keyStore, readEvents } from "./api";
 import type { Effort } from "@harness/core/effort";
 import type { ImageAttachment } from "@harness/core/image";
-import { applyEvent, emptyConversation, markBusy, type ConversationState, type StreamEvent } from "./conversation";
+import { applyEvent, emptyConversation, markBusy, type ConversationState, type PlanReply, type StreamEvent } from "./conversation";
 
 const pause = (ms: number, signal: AbortSignal): Promise<void> => {
   return new Promise((resolve) => {
@@ -119,8 +119,8 @@ export const useConversation = (id: string) => {
     });
   };
 
-  const answer = async (approvalId: string, approve: boolean, always: boolean | "project", reason?: string): Promise<void> => {
-    await api<unknown>(`/sessions/${id}/approvals/${approvalId}`, { method: "POST", body: { approve, always, ...(reason ? { reason } : {}) } }).catch(() => {
+  const answer = async (approvalId: string, approve: boolean, always: boolean | "project", reason?: string, plan?: PlanReply): Promise<void> => {
+    await api<unknown>(`/sessions/${id}/approvals/${approvalId}`, { method: "POST", body: { approve, always, ...(reason ? { reason } : {}), ...plan } }).catch(() => {
       return undefined;
     });
   };

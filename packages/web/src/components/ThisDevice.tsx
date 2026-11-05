@@ -87,7 +87,7 @@ export const ThisDevice = ({ onNavigate }: { onNavigate: () => void }) => {
         : (
             <p className="px-1 text-xs text-muted-foreground">
               This device is {nodeId}.{" "}
-              <button type="button" className="underline" onClick={() => {
+              <button type="button" className="underline pointer-coarse:inline-flex pointer-coarse:min-h-11 pointer-coarse:items-center" onClick={() => {
                 choose("none");
               }}
               >

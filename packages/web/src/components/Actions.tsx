@@ -43,7 +43,7 @@ const Entry = ({ entry, running }: { entry: ActionEntry; running: boolean }) => 
   return (
     <li>
       <details className="group/entry">
-        <summary className="flex w-full cursor-pointer list-none items-center gap-1.5 rounded-md px-1 py-0.5 text-xs hover:bg-muted">
+        <summary className="flex w-full cursor-pointer list-none items-center pointer-coarse:min-h-11 gap-1.5 rounded-md px-1 py-0.5 text-xs hover:bg-muted">
           <ChevronRight className="size-3 shrink-0 transition-transform group-open/entry:rotate-90" />
           {head}
         </summary>
@@ -64,7 +64,7 @@ export const Actions = ({ item }: { item: Extract<Item, { kind: "actions" }> }) 
   return (
     <details className="group rounded-lg text-muted-foreground" open={open}>
       <summary
-        className="flex w-fit max-w-full cursor-pointer list-none items-center gap-1.5 rounded-md px-1 py-0.5 text-xs font-semibold hover:bg-muted"
+        className="flex w-fit max-w-full cursor-pointer list-none items-center pointer-coarse:min-h-11 gap-1.5 rounded-md px-1 py-0.5 text-xs font-semibold hover:bg-muted"
         onClick={(ev) => {
           // The open state is ours, so a group that opens and folds by itself is not taken for a choice.
           ev.preventDefault();

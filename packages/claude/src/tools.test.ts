@@ -45,8 +45,8 @@ describe("reading Claude's reply for tool requests", () => {
     expect(parsed.text).toBe("ok");
   });
 
-  it("leaves a block that was never closed as the text it is", () => {
-    expect(parseToolCalls("start <tool_call>{\"name\":", tools)).toMatchObject({ text: "start <tool_call>{\"name\":", calls: [] });
+  it("cuts a block that was never closed and says it was unreadable, rather than showing the raw tag", () => {
+    expect(parseToolCalls("start <tool_call>{\"name\":", tools)).toEqual({ text: "start", calls: [], unknown: ["(unreadable tool request)"] });
   });
 
   it("treats arguments that are not an object as none", () => {

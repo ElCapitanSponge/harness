@@ -391,7 +391,7 @@ export const createApp = ({ registry, apiKey, relay, sessions, library, rules, g
     if (!parsed.success) {
       return c.json({ error: flattenError(parsed.error) }, 400);
     }
-    if (!session.answer(c.req.param("approvalId"), parsed.data.approve, parsed.data.always, parsed.data.reason)) {
+    if (!session.answer(c.req.param("approvalId"), parsed.data.approve, parsed.data.always, parsed.data.reason, { edited: parsed.data.plan, next: parsed.data.next })) {
       return c.json({ error: { message: "no such pending approval" } }, 404);
     }
     return c.json({ ok: true });

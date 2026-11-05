@@ -158,17 +158,17 @@ const Conversation = ({ id }: { id: string }) => {
   // Auto picks a model that can read images when it can; a model picked by hand is checked here.
   const next = picked || model;
   const imageNote = next === "auto" || next === "" || supportsImages(next) ? "" : noImagesReason(next);
-  const panelCount = state.changes.length + state.shots.length + (state.plan.length > 0 ? 1 : 0);
+  const panelCount = state.changes.length + state.shots.length + (state.plan.length > 0 || state.planDocs.length > 0 ? 1 : 0);
 
   return (
     <div className="flex min-h-0 min-w-0 flex-1">
       <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-        <header className="flex items-center gap-2 border-b bg-card px-4 py-2">
+        <header className="flex flex-wrap items-center gap-2 border-b bg-card px-4 py-2">
           {info?.kind === "code" ? <Code2 className="size-4 text-muted-foreground" /> : <MessageSquare className="size-4 text-muted-foreground" />}
-          <h1 className="min-w-0 flex-1 truncate text-base font-semibold">{info ? (info.title || "New conversation") : "Conversation"}</h1>
+          <h1 className="min-w-0 flex-1 basis-40 truncate text-base font-semibold">{info ? (info.title || "New conversation") : "Conversation"}</h1>
           {info ? <Badge tone="brand">{info.model === "auto" ? `Auto${info.chosen ? `: ${info.chosen.model}` : ""}` : info.model}</Badge> : null}
           {info ? <ContextMeter id={id} busy={state.busy} /> : null}
-          {info?.kind === "code" ? <Badge tone={info.deviceConnected ? "neutral" : "warning"}>{info.device}:{info.root}{info.deviceConnected ? "" : " offline"}</Badge> : null}
+          {info?.kind === "code" ? <Badge tone={info.deviceConnected ? "neutral" : "warning"} className="max-w-full [overflow-wrap:anywhere]">{info.device}:{info.root}{info.deviceConnected ? "" : " offline"}</Badge> : null}
           {notifications.permission === "default"
             ? (
                 <Button variant="subtle" size="icon" aria-label="Notify me when I am needed" title="Notify me when the model needs an answer and this page is in the background" onClick={notifications.ask}>
@@ -234,7 +234,7 @@ const Conversation = ({ id }: { id: string }) => {
         </div>
 
         {offline ? <p className="mx-auto w-full max-w-3xl px-4 pb-2 text-[13px] text-muted-foreground">The device {info.device} is offline, so this conversation is read-only until it reconnects.</p> : null}
-        <div className="mx-auto flex w-full max-w-3xl items-center gap-2 px-4 pb-1.5 text-xs text-muted-foreground">
+        <div className="mx-auto flex w-full max-w-3xl flex-wrap items-center gap-2 px-4 pb-1.5 text-xs text-muted-foreground">
           <span>Next message goes to</span>
           <ModePicker className="h-7 w-auto max-w-48 text-xs" value={info?.mode ?? "ask"} disabled={!info || info.kind === "chat"} onChange={(mode) => {
             setMode.mutate(mode);
@@ -281,7 +281,7 @@ const Conversation = ({ id }: { id: string }) => {
       </div>
       {panel && info?.kind === "code"
         ? (
-            <SidePanel changes={state.changes} plan={state.plan} tasks={tasks.data} shots={state.shots} clearError={clearTasks.error?.message ?? clearPlan.error?.message} onClearTasks={clearFinishedTasks} onClearPlan={clearDonePlan} files={info.device !== "" ? { device: info.device, root: info.root, onAdd: addContext } : undefined} onClose={() => {
+            <SidePanel changes={state.changes} plan={state.plan} planDocs={state.planDocs} tasks={tasks.data} shots={state.shots} clearError={clearTasks.error?.message ?? clearPlan.error?.message} onClearTasks={clearFinishedTasks} onClearPlan={clearDonePlan} files={info.device !== "" ? { device: info.device, root: info.root, onAdd: addContext } : undefined} onClose={() => {
               setPanel(false);
             }}
             />

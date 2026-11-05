@@ -1,4 +1,4 @@
-import { Bot, Brain, ChevronRight, CircleHelp, GitBranch, Layers, Sparkles, Loader2, Copy } from "lucide-react";
+import { Bot, Brain, ChevronRight, CircleHelp, GitBranch, Layers, Sparkles, Loader2, Copy, Check } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Link } from "react-router";
 import { Actions } from "@/components/Actions";
@@ -6,6 +6,7 @@ import { ApprovalCard, type Answer } from "@/components/ApprovalCard";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/fields";
 import { Markdown } from "@/components/Markdown";
+import { copyText } from "@/lib/clipboard";
 import type { ConversationState, Item } from "@/lib/conversation";
 import { SentAt } from "@/components/SentAt";
 import { compact as compactTokens } from "@/lib/format";
@@ -30,19 +31,25 @@ const useElapsed = (startedAt: number, running: boolean): number => {
   return Math.max(0, Math.round((now - startedAt) / 1000));
 };
 
-// Copies a message's text; hidden until the surrounding `group` is hovered or the button has focus.
+// Copies a message's text; hidden until the surrounding `group` is hovered or the button has focus. A touchscreen has no hover, so there it is always shown, with a larger area to tap.
 const CopyButton = ({ text }: { text: string }) => {
+  const [state, setState] = useState<"idle" | "copied" | "failed">("idle");
   return (
     <button
       type="button"
-      title="Copy message"
+      title={state === "failed" ? "Could not copy" : "Copy message"}
       aria-label="Copy message"
-      className="absolute right-1 top-1 rounded bg-muted/70 p-1 text-muted-foreground opacity-0 transition-opacity hover:text-foreground focus-visible:opacity-100 group-hover:opacity-100"
+      className="absolute right-1 top-1 rounded bg-muted/70 p-1 text-muted-foreground opacity-0 transition-opacity hover:text-foreground focus-visible:opacity-100 group-hover:opacity-100 pointer-coarse:opacity-100 pointer-coarse:after:absolute pointer-coarse:after:-inset-3 pointer-coarse:after:content-['']"
       onClick={() => {
-        void navigator.clipboard.writeText(text);
+        void copyText(text).then((ok) => {
+          setState(ok ? "copied" : "failed");
+          setTimeout(() => {
+            setState("idle");
+          }, 1500);
+        });
       }}
     >
-      <Copy className="size-3" />
+      {state === "copied" ? <Check className="size-3" /> : <Copy className="size-3" />}
     </button>
   );
 };
@@ -57,7 +64,7 @@ const Thinking = ({ item }: { item: Extract<Item, { kind: "thinking" }> }) => {
   const label = item.live ? `Thinking... ${String(elapsed)}s` : item.seconds > 0 ? `Thought for ${String(item.seconds)}s` : "Thinking";
   return (
     <details className="group rounded-lg text-muted-foreground" open={item.live}>
-      <summary className="flex w-fit cursor-pointer list-none items-center gap-1.5 rounded-md px-1 py-0.5 text-xs font-semibold hover:bg-muted">
+      <summary className="flex w-fit cursor-pointer list-none items-center pointer-coarse:min-h-11 gap-1.5 rounded-md px-1 py-0.5 text-xs font-semibold hover:bg-muted">
         <ChevronRight className="size-3.5 transition-transform group-open:rotate-90" />
         <Brain className="size-3.5" />
         {label}
@@ -170,7 +177,7 @@ export const Message = ({ item, model, onAnswer, onReply }: { item: Item; model:
       return (
         <div className="px-10">
           <details className="group rounded-lg text-muted-foreground">
-            <summary className="flex w-fit max-w-full cursor-pointer list-none items-center gap-1.5 rounded-md px-1 py-0.5 text-xs font-semibold hover:bg-muted">
+            <summary className="flex w-fit max-w-full cursor-pointer list-none items-center pointer-coarse:min-h-11 gap-1.5 rounded-md px-1 py-0.5 text-xs font-semibold hover:bg-muted">
               <ChevronRight className="size-3.5 shrink-0 transition-transform group-open:rotate-90" />
               <Sparkles className="size-3.5 shrink-0" />
               <span className="truncate">Skill: {item.name}{item.arguments ? ` - ${item.arguments}` : ""}</span>
@@ -188,6 +195,9 @@ export const Message = ({ item, model, onAnswer, onReply }: { item: Item; model:
       );
 
     case "compaction":
+      if (item.status !== "done") {
+        return <CompactionNote item={item} />;
+      }
       return (
         <div className="flex items-center gap-3 text-xs text-muted-foreground" role="separator" aria-label="Conversation compacted">
           <span className="h-px flex-1 bg-border" />
@@ -206,7 +216,7 @@ export const Message = ({ item, model, onAnswer, onReply }: { item: Item; model:
       return (
         <div className="px-10">
           <details className="group rounded-lg border bg-card p-2 text-[13px]">
-            <summary className="flex cursor-pointer list-none items-center gap-2">
+            <summary className="flex cursor-pointer list-none items-center pointer-coarse:min-h-11 gap-2">
               <ChevronRight className="size-3.5 shrink-0 transition-transform group-open:rotate-90" />
               <GitBranch className="size-4 shrink-0 text-primary" />
               <span className="min-w-0 flex-1 truncate font-semibold">Sub-agent: {item.task}</span>
@@ -234,6 +244,35 @@ export const Message = ({ item, model, onAnswer, onReply }: { item: Item; model:
 };
 
 // What the request is doing, in a few words.
+type UnfinishedCompaction = Exclude<Extract<Item, { kind: "compaction" }>, { status: "done" }>;
+
+// What the thread says about a compaction that has no divider yet: it has started, it failed, or it was cut off before it ended.
+const compactionNote = (item: UnfinishedCompaction): { label: string; text: string } => {
+  if (item.status === "running") {
+    const why = item.percent === undefined ? "summarising the earlier messages" : `the context is ${String(item.percent)}% full`;
+    return { label: "Compacting the conversation", text: `Compacting the conversation: ${why}` };
+  }
+  if (item.status === "failed") {
+    return { label: "Compaction failed", text: `Compaction failed: ${item.reason ?? "no reason given"}` };
+  }
+  return { label: "Compaction did not finish", text: "Compaction did not finish" };
+};
+
+const CompactionNote = ({ item }: { item: UnfinishedCompaction }) => {
+  const { label, text } = compactionNote(item);
+  const running = item.status === "running";
+  return (
+    <div className={cn("flex items-center gap-3 text-xs", item.status === "failed" ? "text-destructive" : "text-muted-foreground")} role={running ? "status" : "separator"} aria-label={label}>
+      <span className="h-px flex-1 bg-border" />
+      <span className="flex items-center gap-1.5">
+        {running ? <Loader2 className="size-3.5 animate-spin" /> : <Layers className="size-3.5" />}
+        {text}
+      </span>
+      <span className="h-px flex-1 bg-border" />
+    </div>
+  );
+};
+
 export const stageLabel = (stage: ConversationState["stage"]): string => {
   switch (stage?.name) {
     case undefined:

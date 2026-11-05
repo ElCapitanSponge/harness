@@ -9,7 +9,10 @@ export type Item
     // A run of tool activity between two messages, or a message and an approval or question. Open (live) while the turn is still adding to it.
     | { kind: "actions"; id: number; entries: ActionEntry[]; live: boolean }
     | { kind: "skill"; id: number; name: string; arguments: string; text: string }
-    | { kind: "compaction"; id: number; messages: number; tokensBefore: number; tokensAfter: number; manual: boolean }
+    // A compaction: running from the moment it starts, then the finished divider with its counts, or a failure. One that was still running when
+    // something else arrived did not finish (a stored start with no end is never shown as running for ever).
+    | { kind: "compaction"; id: number; status: "done"; messages: number; tokensBefore: number; tokensAfter: number; manual: boolean }
+    | { kind: "compaction"; id: number; status: "running" | "failed" | "interrupted"; manual: boolean; percent?: number; reason?: string }
     | { kind: "approval"; id: number; approvalId: string; tool: string; summary: string; status: "pending" | "allowed" | "declined"; preview?: ApprovalPreview; reason?: string }
     | { kind: "subagent"; id: number; childId: string; task: string; status: "running" | "done" | "failed"; result?: string; n: number; of: number; depth: number }
     | { kind: "question"; id: number; questionId: string; question: string; options: string[]; status: "pending" | "answered" | "unanswered"; answer?: string }
@@ -25,12 +28,27 @@ export interface ChangedFile {
   diffs: { patch?: string; note?: string }[];
 }
 
+// One version of the plan document: as the model wrote it, or as the person edited it when they approved it.
+export interface PlanVersion {
+  version: number;
+  markdown: string;
+  by: "model" | "person";
+}
+
+// What goes with the approval of a plan: the document as the person edited it, and what the conversation becomes (the HTTP body's names).
+export interface PlanReply {
+  plan?: string;
+  next?: "ask" | "edits";
+}
+
 export interface ConversationState {
   items: Item[];
   // Files the session changed, most recently changed first, and the model's plan as it stands. Both are rebuilt from the stored
   // events when a conversation is reopened.
   changes: ChangedFile[];
   plan: PlanStep[];
+  // Every version of the plan document, oldest first; the last is in force.
+  planDocs: PlanVersion[];
   // Screenshots the agent browser took, newest first.
   shots: ToolImage[];
   // Messages sent while a turn was running, waiting their turn, as the gateway keeps them; and whether they are held back because the last turn
@@ -51,7 +69,7 @@ import type { ActionEntry } from "./actions";
 import { MODE_LABELS } from "./modes";
 
 export const emptyConversation = (): ConversationState => {
-  return { items: [], changes: [], plan: [], shots: [], queue: [], queueHeld: false, busy: false, cursor: 0, next: 1 };
+  return { items: [], changes: [], plan: [], planDocs: [], shots: [], queue: [], queueHeld: false, busy: false, cursor: 0, next: 1 };
 };
 
 export type StreamEvent = SessionEvent | { type: "queue"; messages: QueuedInfo[]; held: boolean } | { type: "thinking-delta"; text: string } | { type: "text-delta"; text: string } | { type: "stage"; stage: StageName; detail?: string };
@@ -74,6 +92,9 @@ const settle = (items: Item[], now: number, keepGroup = false): Item[] => {
     }
     if (item.kind === "thinking" && item.live) {
       return { ...item, live: false, seconds: Math.max(0, Math.round((now - item.startedAt) / 1000)) };
+    }
+    if (item.kind === "compaction" && item.status === "running") {
+      return { ...item, status: "interrupted" };
     }
     if (item.kind === "assistant" && item.streaming) {
       return { ...item, streaming: false };
@@ -182,9 +203,25 @@ export const applyEvent = (state: ConversationState, event: StreamEvent, now: nu
         return { kind: "assistant", id, text: event.text, streaming: false, model: event.model, device: event.device, reason: event.reason, at: event.at };
       });
 
-    case "compacted":
+    case "compacting":
       return push(state.items, (id) => {
-        return { kind: "compaction", id, messages: event.messages, tokensBefore: event.tokensBefore, tokensAfter: event.tokensAfter, manual: event.manual };
+        return { kind: "compaction", id, status: "running", manual: event.manual, ...(event.percent === undefined ? {} : { percent: event.percent }) };
+      });
+
+    case "compaction-failed": {
+      const failed = (id: number): Item => {
+        return { kind: "compaction", id, status: "failed", manual: event.manual, reason: event.reason };
+      };
+      return last?.kind === "compaction" && last.status === "running" ? replaceLast(failed(last.id)) : push(state.items, failed);
+    }
+
+    case "compacted":
+      // The note that said it was compacting becomes the divider, not a second item.
+      if (last?.kind === "compaction" && last.status === "running") {
+        return replaceLast({ kind: "compaction", id: last.id, status: "done", messages: event.messages, tokensBefore: event.tokensBefore, tokensAfter: event.tokensAfter, manual: event.manual });
+      }
+      return push(state.items, (id) => {
+        return { kind: "compaction", id, status: "done", messages: event.messages, tokensBefore: event.tokensBefore, tokensAfter: event.tokensAfter, manual: event.manual };
       });
 
     case "change": {
@@ -211,6 +248,9 @@ export const applyEvent = (state: ConversationState, event: StreamEvent, now: nu
 
     case "screenshot":
       return { ...state, cursor, shots: [event.shot, ...state.shots] };
+
+    case "plan-document":
+      return { ...state, cursor, planDocs: [...state.planDocs, { version: event.version, markdown: event.markdown, by: event.by }] };
 
     case "plan":
       return { ...state, cursor, plan: event.steps };

@@ -145,7 +145,7 @@ export const NewConversation = () => {
                 key={value}
                 type="button"
                 aria-pressed={mode === value}
-                className={cn("inline-flex items-center gap-2 rounded-md px-4 py-1.5 font-semibold text-muted-foreground hover:text-foreground", mode === value && "bg-accent text-accent-foreground")}
+                className={cn("inline-flex items-center gap-2 rounded-md px-4 py-1.5 font-semibold text-muted-foreground pointer-coarse:min-h-11 hover:text-foreground", mode === value && "bg-accent text-accent-foreground")}
                 onClick={() => {
                   setMode(value);
                 }}
@@ -202,7 +202,7 @@ export const NewConversation = () => {
                               <button
                                 key={`${r.device}/${r.root}`}
                                 type="button"
-                                className="rounded-full border px-2.5 py-0.5 text-xs hover:bg-muted"
+                                className="rounded-full border px-2.5 py-0.5 text-xs pointer-coarse:min-h-11 pointer-coarse:px-4 hover:bg-muted"
                                 onClick={() => {
                                   setDevice(r.device);
                                   setRoot(r.root);
