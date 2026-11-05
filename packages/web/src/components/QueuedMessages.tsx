@@ -2,6 +2,7 @@ import { Check, Pencil, X } from "lucide-react";
 import { useState } from "react";
 import type { QueuedInfo } from "@harness/core";
 import { MarkdownEditor } from "@/components/MarkdownEditor";
+import { SentAt } from "@/components/SentAt";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
@@ -93,6 +94,7 @@ export const QueuedMessages = ({ messages, held, onEdit, onRemove, onSendNow }: 
                         {clip(m.text)}
                         {m.images > 0 ? <span className="ml-1 text-xs text-muted-foreground">({String(m.images)} image{m.images === 1 ? "" : "s"})</span> : null}
                       </span>
+                      <SentAt at={m.at} label="Queued" />
                       <Button type="button" variant="subtle" size="sm" onClick={() => {
                         onSendNow(m.id);
                       }}

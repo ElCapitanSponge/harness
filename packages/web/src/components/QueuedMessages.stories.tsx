@@ -12,8 +12,8 @@ export default meta;
 type Story = StoryObj<typeof meta>;
 
 const MESSAGES = [
-  { id: "a", text: "Also add a test for the empty case", images: 0 },
-  { id: "b", text: "And check it on Windows\nwith the long path", images: 2 },
+  { id: "a", text: "Also add a test for the empty case", images: 0, at: Date.now() - 90_000 },
+  { id: "b", text: "And check it on Windows\nwith the long path", images: 2, at: Date.now() - 30_000 },
 ];
 
 export const Empty: Story = {

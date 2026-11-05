@@ -119,6 +119,10 @@ _Avoid_: to-do list, spec
 A message the owner sends while a turn is running. The gateway keeps it, so every client shows the same queue, and starts it as the next turn when the running one finishes; several go one at a time, in order. It can be reworded, removed, or sent now, which cancels the running turn. After a turn that was declined, cancelled or failed the queue is held, not sent for the owner, and goes on after the next turn that finishes. It is lost if the gateway restarts.
 _Avoid_: pending message, draft (a draft is what is typed and not yet sent)
 
+**Sent time**:
+When the gateway recorded a message or event, stored with it as UTC (`at`, milliseconds since the epoch) and shown beside the message in the browser's own zone: the time alone for today, the date as well for an earlier day, and the full date, time and zone on hover or focus. It is the gateway's time, not the client's, so every client and a reload show the same. An imported conversation keeps the time its source gave. Events stored before times were kept have none, and show none. A queued message has the time it was queued.
+_Avoid_: timestamp (in code, `at`), received time
+
 **Tool**:
 An action a model can ask for during a coding session, such as reading a file, writing a file or running a command.
 _Avoid_: function, plugin

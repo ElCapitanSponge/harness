@@ -6,6 +6,8 @@ import type { SessionEvent } from "@harness/core";
 export interface Turn {
   role: "user" | "assistant";
   text: string;
+  // When it was sent, in milliseconds since the epoch, when the export says.
+  at?: number;
 }
 
 export interface ImportedConversation {
@@ -204,6 +206,12 @@ const time = (value: unknown): number | undefined => {
   return Number.isFinite(ms) ? ms : undefined;
 };
 
+// The `at` of a turn, when the export gave a time for it.
+const stamp = (value: unknown): { at?: number } => {
+  const at = time(value);
+  return at === undefined ? {} : { at };
+};
+
 // A Claude Code session file: one JSON object per line. Tool calls and their results are kept as short collapsed text inside the
 // reply they belong to, not as turns of their own.
 const parseClaudeCodeFile = (text: string): ParsedImport => {
@@ -243,8 +251,10 @@ const parseClaudeCodeFile = (text: string): ParsedImport => {
     const last = turns.at(-1);
     if (last?.role === role && role === "assistant") {
       last.text = `${last.text}\n\n${body}`;
+      // The reply finished with its last part.
+      Object.assign(last, stamp(entry.timestamp));
     } else {
-      turns.push({ role, text: body.slice(0, MAX_TURN_CHARS) });
+      turns.push({ role, text: body.slice(0, MAX_TURN_CHARS), ...stamp(entry.timestamp) });
     }
   }
   return { format: "claude-code", split: true, conversations: [{ title: titleOf(turns), source: "Claude Code", turns, created }] };
@@ -277,7 +287,7 @@ const chatgptConversation = (c: Json): ImportedConversation => {
       return typeof p === "string" ? p : "";
     }).filter(Boolean).join("\n\n").trim();
     if (text !== "") {
-      turns.push({ role: m.author.role, text: text.slice(0, MAX_TURN_CHARS) });
+      turns.push({ role: m.author.role, text: text.slice(0, MAX_TURN_CHARS), ...stamp(m.create_time) });
     }
   }
   const title = typeof c.title === "string" && c.title.trim() !== "" ? c.title.trim() : titleOf(turns);
@@ -294,7 +304,7 @@ const claudeAiConversation = (c: Json): ImportedConversation => {
     const role = m.sender === "human" ? "user" : m.sender === "assistant" ? "assistant" : undefined;
     const text = (typeof m.text === "string" && m.text.trim() !== "" ? m.text : textBlocks(m.content)).trim();
     if (role && text !== "") {
-      turns.push({ role, text: text.slice(0, MAX_TURN_CHARS) });
+      turns.push({ role, text: text.slice(0, MAX_TURN_CHARS), ...stamp(m.created_at) });
     }
   }
   const title = typeof c.name === "string" && c.name.trim() !== "" ? c.name.trim() : titleOf(turns);

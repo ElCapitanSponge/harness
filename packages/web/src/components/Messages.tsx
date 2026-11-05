@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/fields";
 import { Markdown } from "@/components/Markdown";
 import { copyText } from "@/lib/clipboard";
 import type { ConversationState, Item } from "@/lib/conversation";
+import { SentAt } from "@/components/SentAt";
 import { compact as compactTokens } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
@@ -132,7 +133,8 @@ export const Message = ({ item, model, onAnswer, onReply }: { item: Item; model:
   switch (item.kind) {
     case "user":
       return (
-        <div className="flex min-w-0 justify-end">
+        <div className="flex min-w-0 items-end justify-end gap-2">
+          <SentAt at={item.at} className="pb-1" />
           <div className="min-w-0 max-w-[85%] rounded-xl bg-accent px-4 py-2 text-accent-foreground group relative">
             <CopyButton text={item.text} />
             {item.images?.length
@@ -157,7 +159,7 @@ export const Message = ({ item, model, onAnswer, onReply }: { item: Item; model:
           </div>
           <div className="min-w-0 flex-1 pr-10 group relative">
             <CopyButton text={item.text} />
-            <div className="mb-0.5 text-xs font-semibold text-muted-foreground">{modelLabel(item.model ?? model)}{item.device ? <span className="font-normal"> on {item.device}</span> : null}{item.reason ? <span className="font-normal"> - Auto: {item.reason}</span> : null}</div>
+            <div className="mb-0.5 text-xs font-semibold text-muted-foreground">{modelLabel(item.model ?? model)}{item.device ? <span className="font-normal"> on {item.device}</span> : null}{item.reason ? <span className="font-normal"> - Auto: {item.reason}</span> : null}{item.at === undefined ? null : <> <SentAt at={item.at} className="ml-1" /></>}</div>
             <Markdown text={item.text} />
             {item.streaming ? <span className="ml-0.5 inline-block h-4 w-1.5 animate-pulse bg-primary align-middle" aria-hidden /> : null}
           </div>

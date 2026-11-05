@@ -154,6 +154,12 @@ The model's tool calls are folded, as its thinking is. Each run of tool activity
 
 Inside, each call is one line. A command or a file read expands to what it returned (shortened at 4,000 characters; the model was given all of it). A change to a file is a **Modified** row with the file name, and expanding it shows the same diff as the session panel. An approval or a question ends the group and is shown outside it, so it is never hidden in a fold. Reopened and imported conversations are grouped the same way; calls stored before tool names were kept are counted as other actions and show no output.
 
+## When a message was sent
+
+Each message, yours and the model's, shows its time beside it, small and muted. Today's messages show the time only (`14:32`); an earlier day also shows the date, and the year when it is not this one. Hover over the time, or tab to it, for the full date and time with the zone. The time is when the gateway recorded the message, not when your browser received it, so every browser, the desktop app and a reload show the same value. It is stored as UTC and shown in your browser's time zone. A reply shows the time it finished.
+
+A conversation saved before times were kept has none for its old messages, and shows no time there rather than a wrong one; new messages in it have one. An imported conversation keeps the time the source gave for each message when it has one (a Claude Code transcript and a Claude.ai export do; a ChatGPT export gives its message times too). A message waiting in the queue shows when it was queued.
+
 ## Markdown in the message box
 
 What you type is coloured as markdown while you write it: headings and list markers, **bold**, `code`, links, quotes, and fenced code blocks across their lines (a block you have not closed yet is styled to the end, as it will be read). It is a picture drawn behind the box: the box stays an ordinary text box, so the cursor, selection, undo, paste and input methods work as they always did, and what is sent is exactly the text you typed. Raw HTML or script in your text is shown as the characters you typed and is never turned into page elements.

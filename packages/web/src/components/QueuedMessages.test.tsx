@@ -5,7 +5,7 @@ import { QueuedMessages } from "./QueuedMessages";
 
 const show = (text: string) => {
   const onEdit = vi.fn();
-  render(<QueuedMessages messages={[{ id: "a", text, images: 0 }]} held={false} onEdit={onEdit} onRemove={vi.fn()} onSendNow={vi.fn()} />);
+  render(<QueuedMessages messages={[{ id: "a", text, images: 0, at: Date.parse("2026-11-05T14:32:00Z") }]} held={false} onEdit={onEdit} onRemove={vi.fn()} onSendNow={vi.fn()} />);
   return onEdit;
 };
 
