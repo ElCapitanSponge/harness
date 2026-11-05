@@ -84,13 +84,12 @@ export const useInstructions = (id: string) => {
 
 // One instruction file, read when it is opened. It is not refreshed behind the person's back: what they are editing stays theirs until they
 // reload it or save.
-export const useInstructionFile = (id: string, name: InstructionName | undefined) => {
+export const useInstructionFile = (id: string, name: InstructionName) => {
   return useQuery({
-    queryKey: ["instruction", id, name ?? ""],
+    queryKey: ["instruction", id, name],
     queryFn: () => {
-      return api<InstructionFile>(`/sessions/${id}/instructions/${name ?? ""}`);
+      return api<InstructionFile>(`/sessions/${id}/instructions/${name}`);
     },
-    enabled: name !== undefined,
     retry: false,
     staleTime: Infinity,
     gcTime: 0,

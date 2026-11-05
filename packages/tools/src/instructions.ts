@@ -1,6 +1,6 @@
 import type { Stats } from "node:fs";
 import fs from "node:fs/promises";
-import { INSTRUCTION_NAMES, type InstructionName } from "@harness/core";
+import { INSTRUCTION_NAMES, instructionFits, type InstructionName } from "@harness/core";
 import { MAX_OUTPUT, resolveInside, show, str, type Args, type ToolSpec } from "./helpers.js";
 
 // The project's instruction files, for the person to read and change from the page. Not offered to the model: the gateway asks for them on
@@ -50,11 +50,6 @@ const tooLong = (name: InstructionName, length: number): Error => {
   return new Error(`${name} is too long to edit here (${length} characters); edit it on the device`);
 };
 
-const fits = (name: InstructionName, text: string): boolean => {
-  // The version is counted at the length it can reach.
-  return JSON.stringify({ name, exists: true, text, version: "0".repeat(40) }).length <= MAX_OUTPUT;
-};
-
 const readInstruction: ToolSpec = {
   def: {
     type: "function",
@@ -84,7 +79,7 @@ const readInstruction: ToolSpec = {
     if (text.includes("\u0000")) {
       throw new Error(`${name} is not a text file`);
     }
-    if (!fits(name, text)) {
+    if (!instructionFits(name, text)) {
       throw tooLong(name, text.length);
     }
     return JSON.stringify({ name, exists: true, text, version: versionOf(stat) });
@@ -129,7 +124,7 @@ const writeInstruction: ToolSpec = {
     const before = stat ? await fs.readFile(file, "utf8") : "";
     const body = text.replace(/\r\n|\r|\n/g, before.includes("\r\n") ? "\r\n" : "\n");
     // What is saved must be something the page can open again.
-    if (!fits(name, body)) {
+    if (!instructionFits(name, body)) {
       throw tooLong(name, body.length);
     }
     const temp = `${file}.${process.pid}-${Date.now()}.tmp`;

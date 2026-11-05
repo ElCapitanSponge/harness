@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -177,6 +177,43 @@ describe("Project memory", () => {
     api.mockRejectedValue(new ApiError(503, "Could not reach the device: not connected"));
     show();
     expect(await screen.findByText("Could not reach the device: not connected")).toBeTruthy();
+  });
+
+  it("says once what is wrong when no file can be looked at, and does not claim the project has none", async () => {
+    const note = "This device runs an older agent that cannot read or save instruction files. Update the agent on it.";
+    api.mockReset();
+    api.mockResolvedValue([{ name: "AGENTS.md", note }, { name: "CLAUDE.md", note }]);
+    show();
+    // Found by one match: said for each file, this would find two and throw.
+    expect(await screen.findByText(note)).toBeTruthy();
+    expect(screen.queryByText("This project has no instruction file yet.")).toBeNull();
+    expect(screen.queryByRole("button", { name: /Create AGENTS/ })).toBeNull();
+  });
+
+  it("does not say the project has no file, or offer a new one, when one is there but too long to open", async () => {
+    api.mockReset();
+    api.mockResolvedValue([{ name: "AGENTS.md", note: "AGENTS.md is too long to edit here (30000 characters); edit it on the device" }, { name: "CLAUDE.md", exists: false }]);
+    show();
+    expect(await screen.findByText(/too long to edit here/)).toBeTruthy();
+    expect(screen.queryByText("This project has no instruction file yet.")).toBeNull();
+    expect(screen.queryByRole("button", { name: /Create AGENTS/ })).toBeNull();
+  });
+
+  it("does not offer to save a text the device could not send back whole, counting what escaping adds", async () => {
+    const user = userEvent.setup();
+    show();
+    await user.click(await screen.findByRole("button", { name: /AGENTS\.md/ }));
+    await screen.findByRole("textbox", { name: "AGENTS.md text" });
+    // Short as it is typed, but each line break is two characters once it is sent.
+    fireEvent.change(box("AGENTS.md"), { target: { value: "\n".repeat(11_000) } });
+    expect(await screen.findByText(/too long to save from here/)).toBeTruthy();
+    expect(screen.getByRole<HTMLButtonElement>("button", { name: "Save" }).disabled).toBe(true);
+    fireEvent.change(box("AGENTS.md"), { target: { value: "Use pnpm. Shorter." } });
+    await waitFor(() => {
+      expect(screen.queryByText(/too long to save from here/)).toBeNull();
+    });
+    expect(screen.getByRole<HTMLButtonElement>("button", { name: "Save" }).disabled).toBe(false);
+    expect(saves).toEqual([]);
   });
 
   it("goes back to the list from an open file", async () => {

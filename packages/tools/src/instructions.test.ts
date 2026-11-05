@@ -3,6 +3,7 @@ import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { ABSENT } from "./instructions.js";
+import { INSTRUCTION_LIMIT, instructionFits } from "@harness/core";
 import { MAX_OUTPUT } from "./helpers.js";
 import { findTool } from "./tools.js";
 
@@ -50,6 +51,13 @@ describe("read_instruction", () => {
     for (const name of ["package.json", "../AGENTS.md", "docs/AGENTS.md", "agents.md", "", "AGENTS.md/"]) {
       await expect(run("read_instruction", { name }), name).rejects.toThrow("can be read or changed here");
     }
+  });
+
+  it("counts the limit the page counts, which is the most a tool may return, and counts what escaping adds", () => {
+    expect(INSTRUCTION_LIMIT).toBe(MAX_OUTPUT);
+    expect(instructionFits("AGENTS.md", "x".repeat(1000))).toBe(true);
+    expect(instructionFits("AGENTS.md", "x".repeat(MAX_OUTPUT))).toBe(false);
+    expect(instructionFits("AGENTS.md", "\n".repeat(MAX_OUTPUT / 2))).toBe(false);
   });
 
   it("refuses a file too long to open whole, and does not cut it", async () => {

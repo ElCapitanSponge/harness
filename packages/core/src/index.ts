@@ -248,8 +248,17 @@ export const SessionMode = z.object({ mode: PermissionMode });
 // The project's instruction files the person can read and change from the page: these two, in the project root, and no other file.
 export const INSTRUCTION_NAMES = ["AGENTS.md", "CLAUDE.md"] as const;
 export type InstructionName = (typeof INSTRUCTION_NAMES)[number];
-// A save: the new text, and the version of the file it was opened at, so a file that changed since is not overwritten.
-export const InstructionSave = z.object({ text: z.string().max(100_000), version: z.string().min(1).max(100) });
+// The most an instruction file can come to for the page to open it again. What a device sends back for a file (its name, the text and a
+// version, as JSON) is cut at this many characters, and saving a cut file would destroy the rest of it. It is the device's own limit on what a
+// tool returns, and a test keeps the two equal.
+export const INSTRUCTION_LIMIT = 20_000;
+// Whether `text` is something the page could open again. The version is counted at the length it can reach, and escaping counts.
+export const instructionFits = (name: InstructionName, text: string): boolean => {
+  return JSON.stringify({ name, exists: true, text, version: "0".repeat(40) }).length <= INSTRUCTION_LIMIT;
+};
+// A save: the new text, and the version of the file it was opened at, so a file that changed since is not overwritten. No text over the limit
+// can fit, so the route stops one early; whether it fits once escaped is `instructionFits`.
+export const InstructionSave = z.object({ text: z.string().max(INSTRUCTION_LIMIT), version: z.string().min(1).max(100) });
 // `always` is true to allow that tool for the rest of the conversation, or "project" to remember it for that folder on that device.
 // The longest plan document, in characters.
 export const MAX_PLAN_DOCUMENT = 20_000;

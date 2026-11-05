@@ -609,8 +609,14 @@ describe("a project's instruction files, from a session", () => {
     const { code, put } = await start();
     expect((await put(code, "AGENTS.md", { text: "x" })).status).toBe(400);
     expect((await put(code, "AGENTS.md", { text: 5, version: "1-1" })).status).toBe(400);
-    expect((await put(code, "AGENTS.md", { text: "x".repeat(100_001), version: "1-1" })).status).toBe(400);
+    expect((await put(code, "AGENTS.md", { text: "x".repeat(20_001), version: "1-1" })).status).toBe(400);
     expect(relay.callTool).not.toHaveBeenCalled();
+  });
+
+  it("passes on text right up to the limit, which the device checks again for what escaping adds", async () => {
+    const { code, put } = await start();
+    relay.callTool.mockResolvedValue({ ok: true, output: JSON.stringify({ saved: true, version: "2-1", length: 20_000 }) });
+    expect((await put(code, "AGENTS.md", { text: "x".repeat(20_000), version: "1-1" })).status).toBe(200);
   });
 
   it("says why the device refused: a read-only folder, a device that does not change files, an older agent, or nothing to reach", async () => {

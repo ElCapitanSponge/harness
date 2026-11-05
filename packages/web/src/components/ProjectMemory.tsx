@@ -1,4 +1,4 @@
-import type { InstructionName } from "@harness/core";
+import { INSTRUCTION_LIMIT, instructionFits, type InstructionName } from "@harness/core";
 import { BookOpen, FilePlus2, FileText } from "lucide-react";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
@@ -20,6 +20,8 @@ const Editor = ({ id, name, onBack }: { id: string; name: InstructionName; onBac
   const original = file.data?.text.replace(/\r\n/g, "\n") ?? "";
   const text = draft ?? original;
   const changed = draft !== undefined && draft !== original;
+  // The device would refuse a text it could not send back whole, so the page does not offer to save one.
+  const fits = instructionFits(name, text);
   const conflict = save.error instanceof ApiError && save.error.status === 409;
 
   const onSave = (): void => {
@@ -64,8 +66,9 @@ const Editor = ({ id, name, onBack }: { id: string; name: InstructionName; onBac
                   setSaved(false);
                 }}
               />
+              {fits ? null : <p className="text-[13px] text-destructive" role="alert">This is too long to save from here: the most that can be opened again is about {INSTRUCTION_LIMIT} characters. Shorten it, or edit the file on the device.</p>}
               <div className="flex flex-wrap items-center gap-2">
-                <Button size="sm" disabled={!changed || save.isPending} onClick={onSave}>{save.isPending ? "Saving…" : "Save"}</Button>
+                <Button size="sm" disabled={!changed || !fits || save.isPending} onClick={onSave}>{save.isPending ? "Saving…" : "Save"}</Button>
                 {changed ? <span className="text-xs text-muted-foreground">Unsaved changes</span> : null}
               </div>
             </>
@@ -76,8 +79,14 @@ const Editor = ({ id, name, onBack }: { id: string; name: InstructionName; onBac
         ? (
             <div className="grid gap-1" role="alert">
               <p className="text-[13px] text-destructive">{save.error.message}</p>
-              {conflict ? <p className="text-xs text-muted-foreground">Your text is still here. Reloading replaces it with what is on the device.</p> : null}
-              {conflict ? <Button variant="subtle" size="sm" className="w-fit" onClick={reload}>Reload from the device</Button> : null}
+              {conflict
+                ? (
+                    <>
+                      <p className="text-xs text-muted-foreground">Your text is still here. Reloading replaces it with what is on the device.</p>
+                      <Button variant="subtle" size="sm" className="w-fit" onClick={reload}>Reload from the device</Button>
+                    </>
+                  )
+                : null}
             </div>
           )
         : null}
@@ -89,11 +98,14 @@ export const ProjectMemory = ({ id }: { id: string }) => {
   const list = useInstructions(id);
   const [open, setOpen] = useState<InstructionName | undefined>();
   const entries = list.data ?? [];
-  const present = entries.some((e) => {
-    return e.exists === true;
-  });
-  const none = entries.find((e) => {
-    return e.name === "AGENTS.md" && e.exists === false;
+  // Every file answered the same way, such as an older agent or a device that does not allow it: said once, not for each file.
+  const firstNote = entries[0]?.note;
+  const sharedNote = firstNote !== undefined && entries.every((e) => {
+    return e.note === firstNote;
+  }) ? firstNote : undefined;
+  // Looked at, and not there: only then is the project known to have no instruction file. A file that could not be opened may be there.
+  const noneYet = entries.length > 0 && entries.every((e) => {
+    return e.exists === false;
   });
 
   // A conversation with no project folder has no files.
@@ -116,8 +128,9 @@ export const ProjectMemory = ({ id }: { id: string }) => {
             <>
               {list.isPending ? <p className="text-[13px] text-muted-foreground" role="status">Looking for instruction files…</p> : null}
               {list.error ? <p className="text-[13px] text-destructive" role="alert">{list.error.message}</p> : null}
+              {sharedNote ? <p className="text-[13px] text-muted-foreground">{sharedNote}</p> : null}
               <ul className="grid gap-1">
-                {entries.map((e) => {
+                {sharedNote ? null : entries.map((e) => {
                   if (e.note) {
                     return (
                       <li key={e.name} className="grid gap-0.5 px-2 py-1.5">
@@ -143,8 +156,8 @@ export const ProjectMemory = ({ id }: { id: string }) => {
                   );
                 })}
               </ul>
-              {list.data && !present ? <p className="text-[13px] text-muted-foreground">This project has no instruction file yet.</p> : null}
-              {list.data && !present && none
+              {noneYet ? <p className="text-[13px] text-muted-foreground">This project has no instruction file yet.</p> : null}
+              {noneYet
                 ? (
                     <Button size="sm" className="w-fit" onClick={() => {
                       setOpen("AGENTS.md");
@@ -154,7 +167,7 @@ export const ProjectMemory = ({ id }: { id: string }) => {
                     </Button>
                   )
                 : null}
-              {list.data ? <p className="text-xs text-muted-foreground">These tell the model about the project. A change you save applies from your next message.</p> : null}
+              {list.data && !sharedNote ? <p className="text-xs text-muted-foreground">These tell the model about the project. A change you save applies from your next message.</p> : null}
             </>
           )}
     </section>
