@@ -196,6 +196,7 @@ describe("tool metadata", () => {
       browser_screenshot: false,
       browser_close: false,
       task_output: false,
+      task_wait: false,
       task_stop: false,
       tasks_list: false,
       tasks_stop_all: false,

@@ -17,6 +17,10 @@ interface Task extends TaskInfo {
   session: string;
   child: ChildProcess;
   output: string;
+  // How many characters have been cut from the front of output, and how many of all it ever held the model has been shown, so a read
+  // can give only what is new even after the front is trimmed.
+  dropped: number;
+  read: number;
 }
 
 const MAX_RUNNING = 8;
@@ -64,12 +68,14 @@ export const startTask = (session: string, command: string, cwd: string): TaskIn
   const shell = shellFor(process.platform, command);
   const child = spawn(shell.bin, shell.args, { cwd, env: commandEnv(), windowsHide: true, windowsVerbatimArguments: shell.verbatim === true, stdio: ["ignore", "pipe", "pipe"], detached: process.platform !== "win32" });
   counter++;
-  const task: Task = { id: `t${String(counter)}`, session, command, status: "running", startedAt: Date.now(), child, output: "" };
+  const task: Task = { id: `t${String(counter)}`, session, command, status: "running", startedAt: Date.now(), child, output: "", dropped: 0, read: 0 };
   tasks.set(task.id, task);
   const add = (d: Buffer): void => {
     task.output += d.toString("utf8");
     if (task.output.length > MAX_KEPT) {
-      task.output = task.output.slice(-MAX_KEPT / 2);
+      const cut = task.output.length - MAX_KEPT / 2;
+      task.dropped += cut;
+      task.output = task.output.slice(cut);
     }
   };
   child.stdout.on("data", add);
@@ -98,7 +104,23 @@ export const startTask = (session: string, command: string, cwd: string): TaskIn
 export const taskOutput = (session: string, id: string, tail: number): { info: TaskInfo; output: string } => {
   const task = mine(session, id);
   const lines = task.output.split("\n");
+  task.read = task.dropped + task.output.length;
   return { info: info(task), output: lines.slice(-tail).join("\n") };
+};
+
+// Waits until the task ends or the seconds pass, whichever is first, and gives the output written since the last read. The task is left
+// running when the time runs out.
+export const waitTask = async (session: string, id: string, seconds: number): Promise<{ info: TaskInfo; output: string; timedOut: boolean }> => {
+  const task = mine(session, id);
+  const deadline = Date.now() + seconds * 1000;
+  while (task.status === "running" && Date.now() < deadline) {
+    await new Promise((resolve) => {
+      return setTimeout(resolve, Math.max(1, Math.min(50, deadline - Date.now())));
+    });
+  }
+  const output = task.output.slice(Math.max(0, task.read - task.dropped));
+  task.read = task.dropped + task.output.length;
+  return { info: info(task), output, timedOut: task.status === "running" };
 };
 
 export const stopTask = (session: string, id: string): TaskInfo => {

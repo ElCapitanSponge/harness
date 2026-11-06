@@ -21,6 +21,8 @@ beforeEach(async () => {
   // A program that prints and then keeps running, like a dev server.
   await fs.writeFile(path.join(dir, "server.js"), "console.log('listening on 3000'); setInterval(() => {}, 1000);\n");
   await fs.writeFile(path.join(dir, "quick.js"), "console.log('built'); process.exit(3);\n");
+  // Prints, waits, and prints again, to see output arrive while the command is still running.
+  await fs.writeFile(path.join(dir, "slow.js"), "console.log('first'); setTimeout(() => { console.log('second'); }, 1500);\n");
 });
 
 afterEach(async () => {
@@ -126,5 +128,58 @@ describe("the task tools", () => {
     expect(toolNamesFor("change", "change")).not.toContain("tasks_stop_all");
     expect(toolNamesFor("change", "change")).not.toContain("tasks_clear_finished");
     expect(findTool("run_command")?.needsApproval).toBe(true);
+    expect(toolNamesFor("change", "off")).toContain("task_wait");
+  });
+});
+
+describe("waiting for a task", () => {
+  const start = async (command: string, session: string): Promise<string> => {
+    const started = await findTool("run_command")?.run({ command, background: true }, { cwd: dir, session });
+    return /task (t\d+)/.exec(started ?? "")?.[1] ?? "";
+  };
+  const call = (name: string, args: Record<string, unknown>, session: string): Promise<string> => {
+    return findTool(name)?.run(args, { cwd: dir, session }) ?? Promise.reject(new Error(`no tool ${name}`));
+  };
+
+  it("shows the first line at once, and task_wait returns the second when it arrives, saying the task ended", async () => {
+    const id = await start("node slow.js", "w1");
+    await until(() => {
+      return taskOutput("w1", id, 5).output.includes("first");
+    });
+    const early = await call("task_output", { id }, "w1");
+    expect(early).toContain("is running");
+    expect(early).toContain("first");
+    expect(early).not.toContain("second");
+
+    const waited = await call("task_wait", { id, timeout: 20 }, "w1");
+    expect(waited).toContain("exited");
+    expect(waited).toContain("second");
+    // Only what came since the last read.
+    expect(waited).not.toContain("first");
+  });
+
+  it("returns early when the timeout is shorter than the command, says it is still running, and leaves it running", async () => {
+    const id = await start("node server.js", "w2");
+    const began = Date.now();
+    const waited = await call("task_wait", { id, timeout: 0.5 }, "w2");
+    expect(Date.now() - began).toBeLessThan(5000);
+    expect(waited).toContain("still running");
+    expect(waited).toContain("timed out");
+    expect(taskOutput("w2", id, 5).info.status).toBe("running");
+  });
+
+  it("still lets task_stop stop a task that was waited on", async () => {
+    const id = await start("node server.js", "w3");
+    await call("task_wait", { id, timeout: 0.3 }, "w3");
+    expect(await call("task_stop", { id }, "w3")).toBe(`task ${id} is stopped`);
+    await until(() => {
+      return taskOutput("w3", id, 5).info.code !== undefined;
+    });
+    expect(taskOutput("w3", id, 5).info.status).toBe("stopped");
+  });
+
+  it("only waits for the session's own tasks", async () => {
+    const id = await start("node server.js", "w4");
+    await expect(call("task_wait", { id, timeout: 0.3 }, "other")).rejects.toThrow("no task");
   });
 });

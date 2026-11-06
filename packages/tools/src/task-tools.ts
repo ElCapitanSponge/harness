@@ -1,11 +1,18 @@
 import { num, show, str, truncate, type ToolSpec } from "./helpers.js";
-import { clearFinishedTasks, listTasks, stopSessionTasks, stopTask, taskOutput } from "./tasks.js";
+import { clearFinishedTasks, listTasks, stopSessionTasks, stopTask, taskOutput, waitTask, type TaskInfo } from "./tasks.js";
 
 // Tools for commands started with run_command's background option. They only act on the session's own tasks.
 
 const owner = (session: string | undefined): string => {
   return session ?? "local";
 };
+
+const stateOf = (info: TaskInfo): string => {
+  return info.status === "running" ? "running" : `${info.status}${info.code === undefined || info.code === null ? "" : ` with exit code ${String(info.code)}`}`;
+};
+
+const WAIT_DEFAULT = 30;
+const WAIT_MAX = 120;
 
 const taskOutputTool: ToolSpec = {
   def: {
@@ -30,8 +37,41 @@ const taskOutputTool: ToolSpec = {
   run(a, ctx) {
     return Promise.resolve().then(() => {
       const { info, output } = taskOutput(owner(ctx.session), str(a, "id"), Math.max(1, Math.floor(num(a, "lines") ?? 100)));
-      const state = info.status === "running" ? "running" : `${info.status}${info.code === undefined || info.code === null ? "" : ` with exit code ${String(info.code)}`}`;
-      return `task ${info.id} (${info.command}) is ${state}\n${truncate(output.trim() || "(no output yet)")}`;
+      return `task ${info.id} (${info.command}) is ${stateOf(info)}\n${truncate(output.trim() || "(no output yet)")}`;
+    });
+  },
+};
+
+const taskWaitTool: ToolSpec = {
+  def: {
+    type: "function",
+    function: {
+      name: "task_wait",
+      description: `Wait for a background task started with run_command to end, or for the timeout, whichever comes first, and return the output written since the last read. It says which happened. If the timeout comes first the task is left running. Use this instead of sleeping.`,
+      parameters: {
+        type: "object",
+        properties: {
+          id: { type: "string", description: "The task id, such as t1" },
+          timeout: { type: "number", description: `Seconds to wait (default ${String(WAIT_DEFAULT)}, at most ${String(WAIT_MAX)})` },
+        },
+        required: ["id"],
+      },
+    },
+  },
+  needsApproval: false,
+  group: "device",
+  level: "change",
+  describe: (a) => {
+    return `wait for task ${show(a.id)}`;
+  },
+  run(a, ctx) {
+    return Promise.resolve().then(async () => {
+      const seconds = Math.min(WAIT_MAX, Math.max(0.1, num(a, "timeout") ?? WAIT_DEFAULT));
+      const { info, output, timedOut } = await waitTask(owner(ctx.session), str(a, "id"), seconds);
+      const head = timedOut
+        ? `task ${info.id} (${info.command}) is still running: timed out after ${String(seconds)} seconds, and it was left running`
+        : `task ${info.id} (${info.command}) ${stateOf(info)}`;
+      return `${head}\n${truncate(output.trim() || "(no new output)")}`;
     });
   },
 };
@@ -106,4 +146,4 @@ const tasksClearFinishedTool: ToolSpec = {
   },
 };
 
-export const taskTools: ToolSpec[] = [taskOutputTool, taskStopTool, tasksListTool, tasksStopAllTool, tasksClearFinishedTool];
+export const taskTools: ToolSpec[] = [taskOutputTool, taskWaitTool, taskStopTool, tasksListTool, tasksStopAllTool, tasksClearFinishedTool];
