@@ -1083,12 +1083,13 @@ export class Session {
       return s.def.function.name;
     });
     try {
+      // A started skill goes in first, so Auto chooses with its instructions counted and does not pick a model too small for them.
+      if (this.starting) {
+        await this.runStartedSkill();
+      }
       this.decide();
       if (this.deps.projectContext ?? this.deps.library) {
         specs = await this.learn(specs);
-      }
-      if (this.starting) {
-        await this.runStartedSkill();
       }
       this.attachImages();
     } catch (err) {

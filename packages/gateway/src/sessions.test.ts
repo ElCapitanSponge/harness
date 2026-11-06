@@ -612,6 +612,51 @@ describe("Session in Auto mode", () => {
     })).toMatchObject({ message: expect.stringContaining("every device is busy") as string });
     expect(s.busy).toBe(false);
   });
+
+  describe("with a skill the person starts", () => {
+    const withLibrary = (skill: string): Session => {
+      registry.upsert(beat({ models: [{ id: "small-model", loaded: true, contextLength: 4_096 }, { id: "large-model", loaded: true, contextLength: 65_536 }] }));
+      sessions = new Sessions({
+        registry,
+        relay,
+        complete: complete,
+        autoPrefs: { prefer: [], avoid: [], keepFree: [] },
+        library: {
+          list: async () => {
+            return [];
+          },
+          text: async () => {
+            return skill;
+          },
+        },
+      });
+      return sessions.create({ model: "auto" });
+    };
+
+    it("sizes the choice with the skill's instructions in, so a long skill goes to the model that has room for it", async () => {
+      script({ role: "assistant", content: "ok" });
+      const s = withLibrary("x".repeat(20_000));
+      s.send("/long", undefined, undefined, { name: "long" });
+      await until(() => {
+        return types(s).includes("done") || types(s).includes("error");
+      });
+      expect(types(s)).not.toContain("error");
+      expect(complete.mock.calls[0]?.[0]).toBe("large-model");
+    });
+
+    it("still ends with Auto's reasons, and keeps nothing, when the skill fits no model", async () => {
+      const s = withLibrary("x".repeat(400_000));
+      s.send("/huge", undefined, undefined, { name: "huge" });
+      await until(() => {
+        return types(s).includes("error");
+      });
+      expect(complete).not.toHaveBeenCalled();
+      expect(s.events.find((e) => {
+        return e.type === "error";
+      })).toMatchObject({ message: expect.stringContaining("no local model has room") as string });
+      expect(s.busy).toBe(false);
+    });
+  });
 });
 
 describe("Session and the project's skills", () => {
