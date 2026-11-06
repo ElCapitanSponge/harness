@@ -1,8 +1,14 @@
 import fs from "node:fs";
 import os from "node:os";
-import { describe, expect, it } from "vitest";
+import { beforeAll, describe, expect, it } from "vitest";
 import { commandEnv, runShell, shellAdvice, shellFor, shellName } from "./shell.js";
 import { findTool } from "./tools.js";
+
+// The first look for PowerShell starts it, and a cold start can take many seconds on a busy machine. The answer is kept, so it is done
+// once here, with time to spare, and no test pays for it or times out because of it.
+beforeAll(() => {
+  shellFor("win32", "");
+}, 60_000);
 
 describe("which shell a device uses", () => {
   it("is PowerShell 7 on Windows if it is installed, then Windows PowerShell, then the command prompt", () => {
