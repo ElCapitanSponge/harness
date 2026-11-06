@@ -30,20 +30,52 @@ const MAX_FINISHED = 20;
 const tasks = new Map<string, Task>();
 let counter = 0;
 
-const kill = (child: ChildProcess): void => {
-  if (child.pid === undefined) {
+// taskkill stops the processes the shell has when it looks. A shell stopped while it was still starting its program leaves that program
+// running, with the dead shell's id as its parent, so whatever still has a stopped shell as its parent is stopped too.
+// With wait the sweep is done when this returns, which the exit hook needs; without it the sweep runs on its own and does not hold up the agent.
+const sweep = (pids: number[], wait: boolean): void => {
+  const filter = pids.map((pid) => {
+    return `ParentProcessId=${String(pid)}`;
+  }).join(" or ");
+  const script = `Get-CimInstance Win32_Process -Filter '${filter}' | ForEach-Object { taskkill /pid $_.ProcessId /T /F | Out-Null }`;
+  const args = ["-NoLogo", "-NoProfile", "-NonInteractive", "-Command", script];
+  if (wait) {
+    spawnSync("powershell.exe", args, { stdio: "ignore", windowsHide: true });
     return;
   }
+  spawn("powershell.exe", args, { stdio: "ignore", windowsHide: true }).on("error", () => {
+    return undefined;
+  }).unref();
+};
+
+const killAll = (children: ChildProcess[], wait: boolean): void => {
+  const pids = children.flatMap((child) => {
+    return child.pid === undefined ? [] : [child.pid];
+  });
   if (process.platform === "win32") {
-    // A child of the shell would be left running, so the whole tree is stopped.
-    spawnSync("taskkill", ["/pid", String(child.pid), "/T", "/F"], { stdio: "ignore", windowsHide: true });
-  } else {
+    for (const pid of pids) {
+      // A child of the shell would be left running, so the whole tree is stopped.
+      spawnSync("taskkill", ["/pid", String(pid), "/T", "/F"], { stdio: "ignore", windowsHide: true });
+    }
+    if (pids.length > 0) {
+      sweep(pids, wait);
+    }
+    return;
+  }
+  for (const child of children) {
+    if (child.pid === undefined) {
+      continue;
+    }
     try {
       process.kill(-child.pid, "SIGKILL");
     } catch {
       child.kill("SIGKILL");
     }
   }
+};
+
+const kill = (child: ChildProcess): void => {
+  killAll([child], false);
 };
 
 const info = (t: Task): TaskInfo => {
@@ -163,12 +195,14 @@ export const stopSessionTasks = (session: string): number => {
 };
 
 export const stopAllTasks = (): void => {
+  const stopping: ChildProcess[] = [];
   for (const t of tasks.values()) {
     if (t.status === "running") {
       t.status = "stopped";
-      kill(t.child);
+      stopping.push(t.child);
     }
   }
+  killAll(stopping, true);
 };
 
 process.once("exit", stopAllTasks);
