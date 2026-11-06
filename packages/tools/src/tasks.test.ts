@@ -1,3 +1,4 @@
+import { spawnSync } from "node:child_process";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -182,4 +183,33 @@ describe("waiting for a task", () => {
     const id = await start("node server.js", "w4");
     await expect(call("task_wait", { id, timeout: 0.3 }, "other")).rejects.toThrow("no task");
   });
+});
+
+describe("stopping tasks", () => {
+  // The ids of node processes whose command line names the script, found the way a person would look for a leftover.
+  const running = (script: string): number[] => {
+    const found = spawnSync("powershell.exe", ["-NoLogo", "-NoProfile", "-Command", `Get-CimInstance Win32_Process -Filter "Name='node.exe'" | Where-Object { $_.CommandLine -like '*${script}*' } | ForEach-Object { $_.ProcessId }`], { encoding: "utf8", windowsHide: true });
+    return found.stdout.split(/\s+/).filter(Boolean).map(Number);
+  };
+
+  it.skipIf(process.platform !== "win32")("leaves no process running when many tasks are stopped straight after they start", async () => {
+    const script = `leak-${String(process.pid)}-${String(Date.now())}.js`;
+    await fs.writeFile(path.join(dir, script), "setInterval(() => {}, 1000);\n");
+    // Stopped after every delay from nothing up to about a third of a second, which covers the shell still starting its program.
+    for (let i = 0; i < 40; i++) {
+      const task = startTask(`leak-${String(i)}`, `node ${script}`, dir);
+      await new Promise((resolve) => {
+        return setTimeout(resolve, i * 8);
+      });
+      stopTask(`leak-${String(i)}`, task.id);
+    }
+    await new Promise((resolve) => {
+      return setTimeout(resolve, 4000);
+    });
+    const left = running(script);
+    for (const pid of left) {
+      process.kill(pid);
+    }
+    expect(left).toEqual([]);
+  }, 60_000);
 });
