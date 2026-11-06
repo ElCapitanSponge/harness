@@ -16,7 +16,7 @@ export type ActionKind = "read" | "search" | "command" | "modified" | "other";
 
 const READS = new Set(["read_file", "list_dir"]);
 const SEARCHES = new Set(["grep"]);
-const COMMANDS = new Set(["run_command", "git_read", "git_write", "gh_read", "gh_write", "task_output", "task_stop"]);
+const COMMANDS = new Set(["run_command", "git_read", "git_write", "gh_read", "gh_write", "task_output", "task_wait", "task_stop"]);
 
 export const kindOf = (entry: ActionEntry): ActionKind => {
   if (entry.change !== undefined) {
