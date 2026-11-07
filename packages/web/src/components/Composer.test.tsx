@@ -213,17 +213,40 @@ describe("Composer images", () => {
     expect(screen.queryByRole("list", { name: "Attached images" })).not.toBeInTheDocument();
   });
 
+  // Reading a picture takes a moment, as it does for a real file, so the message after an upload is not there when the check first looks.
+  const slowReads = (): void => {
+    const read: unknown = Reflect.get(FileReader.prototype, "readAsDataURL");
+    vi.spyOn(FileReader.prototype, "readAsDataURL").mockImplementation(function (this: FileReader, blob: Blob): void {
+      setTimeout(() => {
+        if (typeof read === "function") {
+          Reflect.apply(read, this, [blob]);
+        }
+      }, 60);
+    });
+  };
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
   it("refuses another type, a picture that is too big, and more than the limit, saying why", async () => {
+    slowReads();
     render(<Composer draftKey="i" busy={false} imageNote="" onSend={vi.fn()} />);
     const input = screen.getByLabelText("Choose images");
     await userEvent.upload(input, new File(["x"], "doc.pdf", { type: "application/pdf" }), { applyAccept: false });
-    expect(await screen.findByRole("alert")).toHaveTextContent("doc.pdf is not a PNG, JPEG, GIF or WebP image.");
+    await waitFor(() => {
+      expect(screen.getByRole("alert")).toHaveTextContent("doc.pdf is not a PNG, JPEG, GIF or WebP image.");
+    });
 
     await userEvent.upload(input, png("huge.png", 6 * 1024 * 1024));
-    expect(await screen.findByRole("alert")).toHaveTextContent("huge.png is larger than 5 MB.");
+    await waitFor(() => {
+      expect(screen.getByRole("alert")).toHaveTextContent("huge.png is larger than 5 MB.");
+    });
 
     await userEvent.upload(input, [png("1.png"), png("2.png"), png("3.png"), png("4.png"), png("5.png")]);
-    expect(await screen.findByRole("alert")).toHaveTextContent("up to 4 images");
+    await waitFor(() => {
+      expect(screen.getByRole("alert")).toHaveTextContent("up to 4 images");
+    });
     expect(within(screen.getByRole("list", { name: "Attached images" })).getAllByRole("img")).toHaveLength(4);
   });
 
